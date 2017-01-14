@@ -1,0 +1,7 @@
+[package]
+name = "raildata"
+version = "0.1.0"
+authors = ["Martin Hoffmann <hn@nvnc.de>"]
+
+[dependencies]
+url = "1.2"
