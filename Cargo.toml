@@ -3,5 +3,10 @@ name = "raildata"
 version = "0.1.0"
 authors = ["Martin Hoffmann <hn@nvnc.de>"]
 
+[[bin]]
+name = "raildata"
+doc = false
+
 [dependencies]
 url = "1.2"
+yaml-rust = { git = "https://github.com/partim/yaml-rust.git" }
