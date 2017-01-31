@@ -1,6 +1,5 @@
 use std::ops;
 use ::collection::{CollectionBuilder, DocumentRef, DocumentGuard};
-use ::load::error::{ErrorGatherer};
 use ::load::yaml::{FromYaml, Item, Mapping, Sequence, ValueItem};
 use super::common::{Progress, ShortVec};
 use super::date::Date;
@@ -20,15 +19,14 @@ pub struct Line {
 
 impl Line {
     pub fn from_yaml(key: String, mut item: Item<Mapping>,
-                     collection: &mut CollectionBuilder,
-                     errors: &ErrorGatherer) -> Result<Line, ()> {
+                     builder: &CollectionBuilder) -> Result<Line, ()> {
         let progress = Progress::from_yaml(item.optional_key("progress"),
-                                           errors);
-        let label = item.parse_opt("label", collection, errors);
-        let events = Events::from_yaml(item.mandatory_key("events", errors)?
-                                           .into_sequence(errors)?,
-                                       collection, errors);
-        let points = item.parse("points", collection, errors);
+                                           builder);
+        let label = item.parse_opt("label", builder);
+        let events = Events::from_yaml(item.mandatory_key("events", builder)?
+                                           .into_sequence(builder)?,
+                                       builder);
+        let points = item.parse("points", builder);
         Ok(Line {
             key: key,
             progress: progress?,
@@ -79,11 +77,11 @@ mandatory_enum! {
 pub struct Events(Vec<Event>);
 
 impl Events {
-    fn from_yaml(item: Sequence, collection: &mut CollectionBuilder,
-                 errors: &ErrorGatherer) -> Result<Self, ()> {
+    fn from_yaml(item: Sequence, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
         let mut res = Some(Vec::new());
         for event in item {
-            if let Ok(event) = Event::from_yaml(event, collection, errors) {
+            if let Ok(event) = Event::from_yaml(event, builder) {
                 if let Some(ref mut res) = res {
                     res.push(event)
                 }
@@ -116,17 +114,20 @@ impl Event {
 }
 
 impl Event {
-    fn from_yaml(item: ValueItem, collection: &mut CollectionBuilder,
-                 errors: &ErrorGatherer) -> Result<Self, ()> {
-        let mut item = item.into_mapping(errors)?;
-        let date = item.parse_opt("date", collection, errors);
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let mut item = item.into_mapping(builder)?;
+        let date = item.parse_opt("date", builder);
+        //let sections = Section::from_yaml(item, builder);
         Ok(Event {
             date: date?,
+            //sections: sections?,
         })
     }
 }
 
 
+/*
 //------------ Section -------------------------------------------------------
 
 pub struct Section(Option<PointRef>, Option<PointRef>);
@@ -142,21 +143,14 @@ impl Section {
 }
 
 impl FromYaml for Section {
-    fn from_yaml(item: ValueItem, collection: &mut CollectionBuilder,
-                 error: &ErrorGatherer) -> Result<Self, ()> {
-        let item = item.into_sequence_item(errors)?;
-        if item.len() != 2 {
-            error.add((item.source(),
-                       String::from("expected exactly two elements")));
-            return Err(())
-        }
-        let mut item = item.into_inner().0.into_iter();
-        let start = item.next().unwrap();
-        let end = item.next().unwrap();
-        Ok(Section
+    fn from_yaml(event: &mut Item<Mapping>,
+                 collection: &CollectionBuilder,
+                 errors: &ErrorGatherer) -> Result<ShortVec<Self>, ()> {
+        let start = event.parse_opt::<String>("start", collection, errors);
+        let end = event.parse_opt::<String>("end", collection, errors);
+        let sections = event.parse_opt::<
 
 
-/*
 use ::collection::{Key, Reference};
 use super::common::{Date, LocalizedString, Progress}; 
 use super::organization::Organization;
@@ -303,11 +297,11 @@ impl LineRef {
 }
 
 impl FromYaml for LineRef {
-    fn from_yaml(item: ValueItem, collection: &mut CollectionBuilder,
-                 errs: &ErrorGatherer) -> Result<Self, ()> {
-        let item = item.into_string_item(errs)?;
-        Ok(LineRef(collection.ref_doc(item.value(), item.source(),
-                                      DocumentType::Line)))
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let item = item.into_string_item(builder)?;
+        Ok(LineRef(builder.ref_doc(item.value(), item.source(),
+                                   DocumentType::Line)))
     }
 }
 

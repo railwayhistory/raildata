@@ -1,5 +1,4 @@
 use ::collection::{CollectionBuilder, DocumentRef, DocumentGuard};
-use ::load::error::{ErrorGatherer};
 use ::load::yaml::{FromYaml, Item, Mapping, ValueItem};
 use super::document::DocumentType;
 
@@ -16,8 +15,7 @@ pub struct Path {
 
 impl Path {
     pub fn from_yaml(key: String, mut item: Item<Mapping>,
-                     collection: &mut CollectionBuilder,
-                     errors: &ErrorGatherer) -> Result<Path, ()> {
+                     builder: &CollectionBuilder) -> Result<Path, ()> {
         Ok(Path {
             key: key
         })
@@ -54,11 +52,11 @@ impl PathRef {
 }
 
 impl FromYaml for PathRef {
-    fn from_yaml(item: ValueItem, collection: &mut CollectionBuilder,
-                 errs: &ErrorGatherer) -> Result<Self, ()> {
-        let item = item.into_string_item(errs)?;
-        Ok(PathRef(collection.ref_doc(item.value(), item.source(),
-                                      DocumentType::Path)))
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let item = item.into_string_item(builder)?;
+        Ok(PathRef(builder.ref_doc(item.value(), item.source(),
+                                   DocumentType::Path)))
     }
 }
 

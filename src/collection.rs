@@ -10,11 +10,11 @@
 //! collections: `CollectionBuilder` is used while loading a collection and,
 //! once that is done, is traded in for a `Collection`.
 
-use std::{fmt, marker, ops, ptr};
+use std::{fmt, ops, ptr};
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
-use std::sync::{Arc, Weak};
-use ::load::{ErrorGatherer, Source};
+use std::sync::{Arc, Mutex, Weak};
+use ::load::{Error, Source};
 use ::documents::{Document, DocumentType};
 
 
@@ -81,27 +81,60 @@ impl<'a> Iterator for CollectionIter<'a> {
 
 //------------ CollectionBuilder ---------------------------------------------
 
-pub struct CollectionBuilder {
-    docs: HashMap<String, BuilderValue>,
-
-    /// Marker for making this type not be `Send` or `Sync`.
-    ///
-    /// Because `Rc` is neither of the two, a type built from it will not
-    /// be either. The phantom type makes us not actually contain that `Rc`.
-    /// (Any other non-sync and non-send type would do, too. `Rc` is just the
-    /// first one I could think of.
-    marker: marker::PhantomData<::std::rc::Rc<Document>>,
-}
+#[derive(Clone, Debug)]
+pub struct CollectionBuilder(Arc<Mutex<BuilderInner>>);
 
 impl CollectionBuilder {
     pub fn new() -> Self {
-        CollectionBuilder {
+        Self::with_errors(Vec::new())
+    }
+
+    pub fn with_errors(errors: Vec<Error>) -> Self {
+        CollectionBuilder(Arc::new(Mutex::new(BuilderInner::new(errors))))
+    }
+
+    pub fn error<E: Into<Error>>(&self, err: E) {
+        self.0.lock().unwrap().error(err)
+    }
+
+    pub fn ref_doc(&self, key: &str, pos: Source, t: DocumentType)
+                   -> DocumentRef {
+        self.0.lock().unwrap().ref_doc(key, pos, t)
+    }
+
+    pub fn update_doc(&self, doc: Document, pos: Source)
+                      -> Result<(), (Document, Source)> {
+        self.0.lock().unwrap().update_doc(doc, pos)
+    }
+
+    pub fn finalize(self) -> Result<Result<Collection, Vec<Error>>, Self> {
+        Arc::try_unwrap(self.0).map(|mutex| {
+            mutex.into_inner().unwrap().finalize()
+        }).map_err(CollectionBuilder)
+    }
+}
+
+
+//------------ BuilderInner -------------------------------------------------
+
+struct BuilderInner {
+    docs: HashMap<String, BuilderValue>,
+    errors: Vec<Error>,
+}
+
+impl BuilderInner {
+    fn new(errors: Vec<Error>) -> Self {
+        BuilderInner {
             docs: HashMap::new(),
-            marker: marker::PhantomData,
+            errors: errors,
         }
     }
 
-    pub fn ref_doc(&mut self, key: &str, pos: Source, t: DocumentType)
+    fn error<E: Into<Error>>(&mut self, err: E) {
+        self.errors.push(err.into())
+    }
+
+    fn ref_doc(&mut self, key: &str, pos: Source, t: DocumentType)
                    -> DocumentRef {
         if let Some(value) = self.docs.get_mut(key) {
             return value.ref_doc(pos, t);
@@ -112,7 +145,7 @@ impl CollectionBuilder {
         res
     }
 
-    pub fn update_doc(&mut self, doc: Document, pos: Source)
+    fn update_doc(&mut self, doc: Document, pos: Source)
                       -> Result<(), (Document, Source)> {
         if let Some(value) = self.docs.get_mut(doc.key()) {
             return value.update(doc, pos)
@@ -122,25 +155,23 @@ impl CollectionBuilder {
         Ok(())
     }
 
-    pub fn finalize(self, errors: &ErrorGatherer) -> Option<Collection> {
+    fn finalize(mut self) -> Result<Collection, Vec<Error>> {
         let mut res = Vec::with_capacity(self.docs.len());
-        let mut err = false;
         for (key, value) in self.docs {
-            match value.into_inner(&key, errors) {
-                Some(doc) => res.push(doc),
-                None => err = true,
+            if let Some(doc) = value.into_inner(&key, &mut self.errors) {
+                res.push(doc)
             }
         }
-        if !err {
-            Some(Collection::new(res))
+        if self.errors.is_empty() {
+            Ok(Collection::new(res))
         }
         else {
-            None
+            Err(self.errors)
         }
     }
 }
 
-impl fmt::Debug for CollectionBuilder {
+impl fmt::Debug for BuilderInner {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "CollectionBuilder{{...}}")
     }
@@ -195,14 +226,14 @@ impl BuilderValue {
         Ok(())
     }
 
-    fn into_inner(self, key: &str, errors: &ErrorGatherer)
+    fn into_inner(self, key: &str, errors: &mut Vec<Error>)
                   -> Option<Arc<Stored>> {
         if self.pos.is_none() {
             // We don’t have a document. All references are errors.
             for (pos, _) in self.refs {
-                errors.add((pos,
-                            format!("reference to missing document '{}'",
-                                    key)))
+                errors.push(Error::new(pos,
+                             format!("reference to missing document '{}'",
+                                     key)))
             }
             None
         }
@@ -212,9 +243,9 @@ impl BuilderValue {
             let mut err = false;
             for (pos, ref_type) in self.refs {
                 if doc_type != ref_type {
-                    errors.add((pos,
-                                format!("{} reference to {} document '{}'",
-                                        ref_type, doc_type, key)));
+                    errors.push(Error::new(pos,
+                                 format!("{} reference to {} document '{}'",
+                                         ref_type, doc_type, key)));
                     err = true;
                 }
             }

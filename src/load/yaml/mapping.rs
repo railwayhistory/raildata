@@ -6,7 +6,6 @@ use yaml_rust::yaml;
 use yaml_rust::scanner::Marker;
 use ::collection::CollectionBuilder;
 use ::load::path::Path;
-use ::load::error::ErrorGatherer;
 use super::stream::{FromYaml, ValueItem};
 
 
@@ -21,12 +20,11 @@ impl Mapping {
     }
 
     pub fn parse_opt<T: FromYaml>(&mut self, key: &str,
-                                  collection: &mut CollectionBuilder,
-                                  errors: &ErrorGatherer)
+                                  builder: &CollectionBuilder)
                                   -> Result<Option<T>, ()> {
         match self.0.remove(key) {
             None => Ok(None),
-            Some(item) => Ok(Some(T::from_yaml(item, collection, errors)?)),
+            Some(item) => Ok(Some(T::from_yaml(item, builder)?)),
         }
     }
 }
@@ -62,17 +60,17 @@ pub struct MappingBuilder {
     mapping: Mapping,
     path: Path,
     mark: Marker,
-    errors: ErrorGatherer,
+    builder: CollectionBuilder,
 }
 
 impl MappingBuilder {
-    pub fn new(path: Path, mark: Marker, errors: ErrorGatherer)
+    pub fn new(path: Path, mark: Marker, builder: CollectionBuilder)
                -> Self {
         MappingBuilder {
             mapping: Mapping(BTreeMap::new()),
             path: path,
             mark: mark,
-            errors: errors,
+            builder: builder,
         }
     }
 }
@@ -81,7 +79,7 @@ impl yaml::Mapping for MappingBuilder {
     type Item = ValueItem;
 
     fn insert(&mut self, key: Self::Item, value: Self::Item) {
-        let key = match key.into_string(&self.errors) {
+        let key = match key.into_string(&self.builder) {
             Ok(item) => item,
             Err(_) => return
         };
@@ -93,6 +91,5 @@ impl yaml::Mapping for MappingBuilder {
                        Some(self.mark))
     }
 }
-
 
 

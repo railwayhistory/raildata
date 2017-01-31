@@ -1,5 +1,5 @@
 
-pub use self::error::{Error, ErrorGatherer, Source};
+pub use self::error::{Error, Source};
 pub use self::tree::load_tree;
 
 pub mod error;

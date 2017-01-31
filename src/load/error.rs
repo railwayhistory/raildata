@@ -4,38 +4,6 @@ use yaml_rust::scanner::Marker;
 use ::load::path::Path;
 
 
-//------------ ErrorGatherer -------------------------------------------------
-
-#[derive(Debug)]
-pub struct ErrorGatherer(Arc<Mutex<Vec<Error>>>);
-
-impl ErrorGatherer {
-    pub fn new() -> Self {
-        ErrorGatherer(Arc::new(Mutex::new(Vec::new())))
-    }
-
-    pub fn add<E: Into<Error>>(&self, err: E) {
-        // We can unwrap the lock because a poisoned mutex means end of
-        // proceedings, anyway.
-        self.0.lock().unwrap().push(err.into())
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.lock().unwrap().is_empty()
-    }
-
-    pub fn unwrap(self) -> Vec<Error> {
-        Arc::try_unwrap(self.0).unwrap().into_inner().unwrap()
-    }
-}
-
-impl Clone for ErrorGatherer {
-    fn clone(&self) -> Self {
-        ErrorGatherer(self.0.clone())
-    }
-}
-
-
 //------------ Error ---------------------------------------------------------
 
 pub struct Error {
@@ -108,6 +76,12 @@ impl fmt::Display for Error {
 impl<E: fmt::Display + 'static> From<(Source, E)> for Error {
     fn from(err: (Source, E)) -> Error {
         Error::new(err.0, err.1)
+    }
+}
+
+impl<E: fmt::Display + 'static> From<(Path, E)> for Error {
+    fn from(err: (Path, E)) -> Error {
+        Error::file(err.0, err.1)
     }
 }
 

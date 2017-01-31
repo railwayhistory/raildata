@@ -8,7 +8,7 @@ use yaml_rust::yaml;
 use yaml_rust::scanner::{Marker, TScalarStyle, TokenType};
 use ::collection::CollectionBuilder;
 use ::documents::Document;
-use ::load::{Error, ErrorGatherer, Source};
+use ::load::{Error, Source};
 use ::load::path::Path;
 use super::mapping::{Mapping, MappingBuilder};
 use super::sequence::{Sequence, SequenceBuilder};
@@ -20,51 +20,47 @@ use super::vars::Vars;
 
 pub struct Stream {
     path: Path,
-    collection: Arc<Mutex<CollectionBuilder>>,
+    builder: CollectionBuilder,
     vars: Vars,
-    errors: ErrorGatherer,
 }
 
 impl Stream {
-    pub fn load(collection: Arc<Mutex<CollectionBuilder>>, path: Path,
-                vars: Vars, errors: ErrorGatherer) {
+    pub fn load(builder: CollectionBuilder, path: Path,
+                vars: Vars) {
         let mut file = match File::open(&path) {
             Ok(file) => file,
             Err(err) => {
-                errors.add(Error::file(path, err));
+                builder.error((path, err));
                 return;
             }
         };
         let mut data = Vec::new();
         if let Err(err) = file.read_to_end(&mut data) {
-            errors.add(Error::file(path, format!("Reading failed: {}", err)));
+            builder.error((path, format!("Reading failed: {}", err)));
             return;
         }
         let data = match String::from_utf8(data) {
             Ok(data) => data,
             Err(_) => {
-                errors.add(Error::file(path, format!("Not UTF-8 data.")));
+                builder.error((path, format!("Not UTF-8 data.")));
                 return;
             }
         };
-        let mut stream = Stream::new(collection, path.clone(), vars,
-                                     errors.clone());
+        let mut stream = Stream::new(builder, path.clone(), vars);
         if let Err(err) = yaml::GenericYamlLoader::load_from_str(&data,
                                                                  &mut stream) {
-            errors.add(Error::file(path, err))
+            stream.error((path, err))
         }
     }
 }
 
 impl Stream {
-    pub fn new(collection: Arc<Mutex<CollectionBuilder>>, path: Path,
-               vars: Vars, errors: ErrorGatherer)
-               -> Self {
+    pub fn new(builder: CollectionBuilder, path: Path,
+               vars: Vars) -> Self {
         Stream {
-            collection: collection,
+            builder: builder,
             path: path,
             vars: vars,
-            errors: errors,
         }
     }
 
@@ -83,8 +79,8 @@ impl Stream {
         self.vars.get(var)
     }
 
-    pub fn push_error(&self, error: Error) {
-        self.errors.add(error)
+    pub fn error<E: Into<Error>>(&self, err: E) {
+        self.builder.error(err)
     }
 }
 
@@ -107,7 +103,7 @@ impl yaml::Stream for Stream {
             Ok(res) => res,
             Err(err) => {
                 let pos = self.source(Some(mark));
-                self.push_error(Error::new(pos, err));
+                self.builder.error((pos, err));
                 ValueItem::new(Value::Empty, self.path(), Some(mark))
             }
         }
@@ -122,19 +118,16 @@ impl yaml::Stream for Stream {
     }
 
     fn create_mapping(&self, mark: Marker) -> Self::Mapping {
-        MappingBuilder::new(self.path.clone(), mark, self.errors.clone())
+        MappingBuilder::new(self.path.clone(), mark,
+                            self.builder.clone())
     }
 
     fn create_document(&mut self, item: Self::Item) {
         let pos = item.source(); 
-        if let Ok(doc) = Document::from_yaml(item,
-                                             &mut self.collection.lock()
-                                                                 .unwrap(),
-                                             &self.errors) {
-            if let Err((doc, org)) = self.collection.lock().unwrap()
-                                                    .update_doc(doc,
-                                                                pos.clone()) {
-                self.push_error(Error::new(pos,
+        if let Ok(doc) = Document::from_yaml(item, &self.builder) {
+            if let Err((doc, org)) = self.builder.update_doc(doc,
+                                                             pos.clone()) {
+                self.builder.error((pos,
                     format!("duplicate document '{}'. First defined at {}.",
                             doc.key(), org)))
             }
@@ -221,35 +214,37 @@ impl<V> Item<V> {
 }
 
 impl Item<Value> {
-    pub fn into_string_item(self, errors: &ErrorGatherer)
+    pub fn into_string_item(self, builder: &CollectionBuilder)
                             -> Result<Item<String>, ()> {
         match self.value {
             Value::String(s) => Ok(Item::new(s, self.path, self.mark)),
             _ => {
-                errors.add(Error::new(self.into(),
-                                      String::from("expected string")));
+                builder.error((self.source(),
+                               String::from("expected string")));
                 Err(())
             }
         }
     }
 
-    pub fn into_string(self, errors: &ErrorGatherer) -> Result<String, ()> {
+    pub fn into_string(self, builder: &CollectionBuilder)
+                       -> Result<String, ()> {
         match self.value {
             Value::String(s) => Ok(s),
             _ => {
-                errors.add(Error::new(self.into(),
-                                      String::from("expected string")));
+                builder.error((self.source(),
+                               String::from("expected string")));
                 Err(())
             }
         }
     }
 
-    pub fn into_mapping(self, errors: &ErrorGatherer)
+    pub fn into_mapping(self, builder: &CollectionBuilder)
                         -> Result<Item<Mapping>, ()> {
         match self.value {
             Value::Mapping(m) => Ok(Item::new(m, self.path, self.mark)),
             _ => {
-                errors.add((self.into(), String::from("expected mapping")));
+                builder.error((self.source(),
+                               String::from("expected mapping")));
                 Err(())
             }
         }
@@ -262,23 +257,25 @@ impl Item<Value> {
         }
     }
 
-    pub fn into_sequence_item(self, errors: &ErrorGatherer)
+    pub fn into_sequence_item(self, builder: &CollectionBuilder)
                          -> Result<Item<Sequence>, ()> {
         match self.value {
             Value::Sequence(s) => Ok(Item::new(s, self.path, self.mark)),
             _ => {
-                errors.add((self.into(), String::from("expected sequence")));
+                builder.error((self.source(),
+                               String::from("expected sequence")));
                 Err(())
             }
         }
     }
 
-    pub fn into_sequence(self, errors: &ErrorGatherer)
+    pub fn into_sequence(self, builder: &CollectionBuilder)
                          -> Result<Sequence, ()> {
         match self.value {
             Value::Sequence(s) => Ok(s),
             _ => {
-                errors.add((self.into(), String::from("expected sequence")));
+                builder.error((self.source(),
+                               String::from("expected sequence")));
                 Err(())
             }
         }
@@ -287,30 +284,28 @@ impl Item<Value> {
 
 impl Item<Mapping> {
     pub fn parse<T: FromYaml>(&mut self, key: &str,
-                              collection: &mut CollectionBuilder,
-                              errors: &ErrorGatherer)
+                              builder: &CollectionBuilder)
                               -> Result<T, ()> {
         match self.value.remove(key) {
             None => {
-                errors.add((self.source(),
-                            format!("missing key '{}'", key)));
+                builder.error((self.source(),
+                               format!("missing key '{}'", key)));
                 Err(())
             }
             Some(item) => {
-                T::from_yaml(item, collection, errors)
+                T::from_yaml(item, builder)
             }
         }
     }
 
 
-    pub fn mandatory_key(&mut self, key: &str, errors: &ErrorGatherer)
+    pub fn mandatory_key(&mut self, key: &str, builder: &CollectionBuilder)
                          -> Result<ValueItem, ()> {
         if let Some(item) = self.value.remove(key) {
             Ok(item)
         }
         else {
-            errors.add(Error::new(self.source(),
-                                  format!("missing key '{}'", key)));
+            builder.error((self.source(), format!("missing key '{}'", key)));
             Err(())
         }
     }
@@ -385,24 +380,24 @@ impl<V: PartialOrd> PartialOrd for Item<V> {
 //------------ FromYaml ------------------------------------------------------
 
 pub trait FromYaml: Sized {
-    fn from_yaml(item: ValueItem, collection: &mut CollectionBuilder,
-                 errors: &ErrorGatherer) -> Result<Self, ()>;
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()>;
 }
 
 impl FromYaml for String {
-    fn from_yaml(item: ValueItem, _: &mut CollectionBuilder,
-                 errors: &ErrorGatherer) -> Result<Self, ()> {
-        item.into_string(errors)
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        item.into_string(builder)
     }
 }
 
 impl FromYaml for Url {
-    fn from_yaml(item: ValueItem, _: &mut CollectionBuilder,
-                 errors: &ErrorGatherer) -> Result<Self, ()> {
-        let item = item.into_string_item(errors)?;
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let item = item.into_string_item(builder)?;
         Url::parse(&item.value()).map_err(|err| {
-            errors.add((item.source(),
-                        format!("illegal URL: {}", err)));
+            builder.error((item.source(),
+                           format!("illegal URL: {}", err)));
         })
     }
 }

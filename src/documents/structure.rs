@@ -1,5 +1,4 @@
 use ::collection::{CollectionBuilder, DocumentRef, DocumentGuard};
-use ::load::error::{ErrorGatherer};
 use ::load::yaml::{FromYaml, Item, Mapping, Sequence, ValueItem};
 use super::document::DocumentType;
 
@@ -12,8 +11,7 @@ pub struct Structure {
 
 impl Structure {
     pub fn from_yaml(key: String, mut item: Item<Mapping>,
-                     collection: &mut CollectionBuilder,
-                     errors: &ErrorGatherer) -> Result<Self, ()> {
+                     builder: &CollectionBuilder) -> Result<Self, ()> {
         Ok(Structure {
             key: key
         })
@@ -38,11 +36,11 @@ impl StructureRef {
 }
 
 impl FromYaml for StructureRef {
-    fn from_yaml(item: ValueItem, collection: &mut CollectionBuilder,
-                 errs: &ErrorGatherer) -> Result<Self, ()> {
-        let item = item.into_string_item(errs)?;
-        Ok(StructureRef(collection.ref_doc(item.value(), item.source(),
-                                      DocumentType::Structure)))
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let item = item.into_string_item(builder)?;
+        Ok(StructureRef(builder.ref_doc(item.value(), item.source(),
+                                        DocumentType::Structure)))
     }
 }
 

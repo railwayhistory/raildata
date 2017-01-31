@@ -5,37 +5,33 @@ use std::fs::{DirEntry, read_dir};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use ::collection::CollectionBuilder;
-use super::error::{Error, ErrorGatherer};
+use super::error::Error;
 use super::path::Path;
 use super::yaml::{Stream, Vars};
 
-pub fn load_facts_dir(base: Path,
-                      collection: Arc<Mutex<CollectionBuilder>>,
-                      vars: Vars,
-                      errors: ErrorGatherer) {
-    let vars = load_vars(&base, vars, &errors);
-    let _ = load_yamls(&base, &collection, &vars, &errors);
-    let _ = load_dirs(&base, &collection, &vars, &errors);
+pub fn load_facts_dir(base: Path, builder: &CollectionBuilder,
+                      vars: Vars) {
+    let vars = load_vars(&base, vars, &builder);
+    let _ = load_yamls(&base, &builder, &vars);
+    let _ = load_dirs(&base, &builder, &vars);
 }
 
 
-fn load_vars(base: &Path, vars: Vars, errors: &ErrorGatherer)
+fn load_vars(base: &Path, vars: Vars, builder: &CollectionBuilder)
              -> Vars {
     let path = base.join("vars.yaml");
-    Vars::load(path, Some(vars), errors.clone())
+    Vars::load(path, Some(vars), builder)
 }
 
-fn load_yamls(base: &Path, 
-              collection: &Arc<Mutex<CollectionBuilder>>,
-              vars: &Vars, errors: &ErrorGatherer)
+fn load_yamls(base: &Path, builder: &CollectionBuilder, vars: &Vars)
               -> io::Result<()> {
-    walk_dir(base, errors, |entry, errors| {
+    walk_dir(base, builder, |entry| {
         if !entry.file_type()?.is_file() {
             return Ok(())
         }
         if let Some(name) = entry.file_name().to_str() {
             if name.ends_with(".yaml") {
-                load_yaml(entry.path(), collection, vars, errors)
+                load_yaml(entry.path(), builder, vars)
             }
         }
         Ok(())
@@ -43,20 +39,15 @@ fn load_yamls(base: &Path,
     Ok(())
 }
 
-fn load_yaml(path: PathBuf,
-             collection: &Arc<Mutex<CollectionBuilder>>,
-             vars: &Vars, errors: &ErrorGatherer) {
-    Stream::load(collection.clone(), path.into(), vars.clone(), errors.clone())
+fn load_yaml(path: PathBuf, builder: &CollectionBuilder, vars: &Vars) {
+    Stream::load(builder.clone(), path.into(), vars.clone())
 }
 
-fn load_dirs(base: &Path, 
-             collection: &Arc<Mutex<CollectionBuilder>>,
-             vars: &Vars, errors: &ErrorGatherer)
+fn load_dirs(base: &Path, builder: &CollectionBuilder, vars: &Vars)
              -> io::Result<()> {
-    walk_dir(base, errors, |entry, errors| {
+    walk_dir(base, builder, |entry| {
         if entry.file_type()?.is_dir() {
-            load_facts_dir(entry.path().into(), collection.clone(),
-                           vars.clone(), errors.clone())
+            load_facts_dir(entry.path().into(), builder, vars.clone())
         }
         Ok(())
     })?;
@@ -64,14 +55,14 @@ fn load_dirs(base: &Path,
 }
 
 
-fn walk_dir<F>(base: &Path, errors: &ErrorGatherer, mut op: F)
+fn walk_dir<F>(base: &Path, builder: &CollectionBuilder, mut op: F)
                -> io::Result<()>
-            where F: FnMut(DirEntry, &ErrorGatherer) -> io::Result<()> {
+            where F: FnMut(DirEntry) -> io::Result<()> {
     let dir = match read_dir(base) {
         Ok(dir) => dir,
         Err(err) => {
-            errors.add(Error::global(format!("Cannot read directory {}: {}",
-                                              base.display(), &err)));
+            builder.error((base.clone(),
+                           format!("cannot read directory: {}", &err)));
             return Err(err);
         }
     };
@@ -79,13 +70,12 @@ fn walk_dir<F>(base: &Path, errors: &ErrorGatherer, mut op: F)
         let entry = match entry {
             Ok(entry) => entry,
             Err(err) => {
-                errors.add(Error::global(
-                        format!("Cannot read directory {}: {}",
-                        base.display(), &err)));
+                builder.error((base.clone(),
+                               format!("Cannot read directory: {}", &err)));
                 return Err(err);
             }
         };
-        op(entry, errors)?;
+        op(entry)?;
     }
     Ok(())
 }

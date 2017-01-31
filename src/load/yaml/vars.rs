@@ -5,7 +5,8 @@ use std::io::Read;
 use std::sync::{Arc, Mutex};
 use yaml_rust::yaml;
 use yaml_rust::scanner::{Marker, TScalarStyle, TokenType};
-use ::load::error::{Error, ErrorGatherer, Source};
+use ::collection::CollectionBuilder;
+use ::load::error::{Error, Source};
 use ::load::path::Path;
 use super::stream::{Item, Value, ValueItem};
 use super::mapping::MappingBuilder;
@@ -23,13 +24,13 @@ impl Vars {
         Vars(Arc::new(Mutex::new(VarsInner::new(parent))))
     }
 
-    pub fn load(path: Path, parent: Option<Vars>, errors: ErrorGatherer)
+    pub fn load(path: Path, parent: Option<Vars>, builder: &CollectionBuilder)
                 -> Vars {
         let parent = match parent {
             Some(parent) => parent,
             None => Vars::new(None),
         };
-        VarsStream::load(path, parent, errors)
+        VarsStream::load(path, parent, builder)
     }
 
     pub fn insert(&mut self, key: String, value: ValueItem) {
@@ -89,13 +90,14 @@ impl VarsInner {
 
 struct VarsStream {
     path: Path,
-    errors: ErrorGatherer,
+    builder: CollectionBuilder,
     parent: Vars,
     vars: Option<Vars>,
 }
 
 impl VarsStream {
-    pub fn load(path: Path, parent: Vars, errors: ErrorGatherer) -> Vars {
+    pub fn load(path: Path, parent: Vars, builder: &CollectionBuilder)
+                -> Vars {
         let mut file = match File::open(&path) {
             Ok(file) => file,
             Err(_) => {
@@ -105,30 +107,30 @@ impl VarsStream {
         };
         let mut data = Vec::new();
         if let Err(err) = file.read_to_end(&mut data) {
-            errors.add(Error::file(path, format!("Reading failed: {}", err)));
+            builder.error((path, format!("Reading failed: {}", err)));
             return parent;
         }
         let data = match String::from_utf8(data) {
             Ok(data) => data,
             Err(_) => {
-                errors.add(Error::file(path, format!("Not UTF-8 data.")));
+                builder.error((path, format!("Not UTF-8 data.")));
                 return parent;
             }
         };
-        let mut stream = Self::new(path, parent, errors);
+        let mut stream = Self::new(path, parent, builder);
         if let Err(err) = yaml::GenericYamlLoader::load_from_str(&data,
                                                                  &mut stream) {
-            stream.errors.add(Error::file(stream.path.clone(), err));
+            stream.builder.error((stream.path.clone(), err));
         }
         stream.unwrap()
     }
 }
 
 impl VarsStream {
-    fn new(path: Path, parent: Vars, errors: ErrorGatherer) -> Self {
+    fn new(path: Path, parent: Vars, builder: &CollectionBuilder) -> Self {
         VarsStream {
             path: path,
-            errors: errors,
+            builder: builder.clone(),
             parent: parent,
             vars: None,
         }
@@ -161,7 +163,7 @@ impl yaml::Stream for VarsStream {
             Ok(res) => res,
             Err(err) => {
                 let pos = self.source(Some(mark));
-                self.errors.add(Error::new(pos, err));
+                self.builder.error((pos, err));
                 ValueItem::new(Value::Empty, self.path.clone(), Some(mark))
             }
         }
@@ -176,23 +178,21 @@ impl yaml::Stream for VarsStream {
     }
 
     fn create_mapping(&self, mark: Marker) -> Self::Mapping {
-        MappingBuilder::new(self.path.clone(), mark, self.errors.clone())
+        MappingBuilder::new(self.path.clone(), mark, self.builder.clone())
     }
 
     fn create_document(&mut self, item: Self::Item) {
         let (item, pos) = item.into_inner();
         if let Some(_) = self.vars {
-            self.errors.add(
-                Error::new(pos,
-                        String::from("there must only be one document")));
+            self.builder.error((pos,
+                            String::from("there must only be one document")));
             return
         }
         let item = match item.into_mapping() {
             Some(item) => item,
             None => {
-                self.errors.add(
-                    Error::new(pos,
-                               String::from("document must be a mapping")));
+                self.builder.error((pos,
+                                 String::from("document must be a mapping")));
                 return
             }
         };

@@ -18,16 +18,17 @@ macro_rules! optional_enum {
         }
 
         impl $name {
-            pub fn from_yaml(item: Option<ValueItem>, errors: &ErrorGatherer)
+            pub fn from_yaml(item: Option<ValueItem>,
+                             builder: &::collection::CollectionBuilder)
                              -> Result<Self, ()> {
                 if let Some(item) = item {
-                    let item = item.into_string_item(errors)?;
+                    let item = item.into_string_item(builder)?;
                     match item.as_ref().as_ref() {
                         $( $yaml => Ok($name::$variant), )*
                         _ => {
-                            errors.add((item.source(),
-                                       format!("invalid value '{}'",
-                                               item.value())));
+                            builder.error((item.source(),
+                                           format!("invalid value '{}'",
+                                                   item.value())));
                             Err(())
                         }
                     }
@@ -39,15 +40,16 @@ macro_rules! optional_enum {
         }
 
         impl ::load::yaml::FromYaml for $name {
-            fn from_yaml(item: ValueItem, _: &mut CollectionBuilder,
-                         errors: &ErrorGatherer) -> Result<Self, ()> {
-                let item = item.into_string_item(errors)?;
+            fn from_yaml(item: ValueItem,
+                         builder: &::collection::CollectionBuilder)
+                         -> Result<Self, ()> {
+                let item = item.into_string_item(builder)?;
                 match item.as_ref().as_ref() {
                     $( $yaml => Ok($name::$variant), )*
                     _ => {
-                        errors.add((item.source(),
-                                   format!("invalid value '{}'",
-                                           item.value())));
+                        builder.error((item.source(),
+                                       format!("invalid value '{}'",
+                                               item.value())));
                         Err(())
                     }
                 }
@@ -89,16 +91,16 @@ macro_rules! mandatory_enum {
         }
 
         impl ::load::yaml::FromYaml for $name {
-            fn from_yaml(item: ValueItem, _: &mut CollectionBuilder,
-                         errors: &ErrorGatherer)
-                             -> Result<Self, ()> {
-                let item = item.into_string_item(errors)?;
+            fn from_yaml(item: ValueItem,
+                         builder: &::collection::CollectionBuilder)
+                         -> Result<Self, ()> {
+                let item = item.into_string_item(builder)?;
                 match item.as_ref().as_ref() {
                     $( $yaml => Ok($name::$variant), )*
                     _ => {
-                        errors.add((item.source(),
-                                   format!("invalid value '{}'",
-                                           item.value())));
+                        builder.error((item.source(),
+                                       format!("invalid value '{}'",
+                                               item.value())));
                         Err(())
                     }
                 }

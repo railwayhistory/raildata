@@ -1,5 +1,4 @@
 use ::collection::CollectionBuilder;
-use ::load::error::ErrorGatherer;
 use ::load::yaml::{ValueItem}; 
 use super::line::Line;
 use super::organization::Organization;
@@ -21,38 +20,32 @@ pub enum Document {
 }
 
 impl Document {
-    pub fn from_yaml(item: ValueItem, collection: &mut CollectionBuilder,
-                     errors: &ErrorGatherer) -> Result<Self, ()> {
-        let mut item = item.into_mapping(errors)?;
-        let key = item.mandatory_key("key", errors)?
-                      .into_string(errors)?;
-        let doctype = item.parse::<DocumentType>("type", collection, errors)?;
+    pub fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                     -> Result<Self, ()> {
+        let mut item = item.into_mapping(builder)?;
+        let key = item.mandatory_key("key", builder)?
+                      .into_string(builder)?;
+        let doctype = item.parse::<DocumentType>("type", builder)?;
         match doctype {
             DocumentType::Line => {
-                Ok(Document::Line(Line::from_yaml(key, item, collection,
-                                                  errors)?))
+                Ok(Document::Line(Line::from_yaml(key, item, builder)?))
             }
             DocumentType::Organization => {
                 Ok(Document::Organization(Organization::from_yaml(key, item,
-                                                                  collection,
-                                                                  errors)?))
+                                                                  builder)?))
             }
             DocumentType::Path => {
-                Ok(Document::Path(Path::from_yaml(key, item, collection,
-                                                  errors)?))
+                Ok(Document::Path(Path::from_yaml(key, item, builder)?))
             }
             DocumentType::Point => {
-                Ok(Document::Point(Point::from_yaml(key, item, collection,
-                                                    errors)?))
+                Ok(Document::Point(Point::from_yaml(key, item, builder)?))
             }
             DocumentType::Source => {
-                Ok(Document::Source(Source::from_yaml(key, item,
-                                                      collection, errors)?))
+                Ok(Document::Source(Source::from_yaml(key, item, builder)?))
             }
             DocumentType::Structure => {
                 Ok(Document::Structure(Structure::from_yaml(key, item,
-                                                            collection,
-                                                            errors)?))
+                                                            builder)?))
             }
         }
     }

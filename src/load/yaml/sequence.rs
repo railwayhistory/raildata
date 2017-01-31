@@ -4,7 +4,7 @@ use std::ops;
 use yaml_rust::yaml;
 use yaml_rust::scanner::Marker;
 use ::load::path::Path;
-use super::stream::ValueItem;
+use super::stream::{FromYaml, ValueItem};
 
 
 //------------ Sequence ------------------------------------------------------

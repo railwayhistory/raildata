@@ -2,7 +2,6 @@
 
 use std::{cmp, str};
 use ::collection::CollectionBuilder;
-use ::load::error::ErrorGatherer;
 use ::load::yaml::{FromYaml, ValueItem};
 
 
@@ -112,13 +111,13 @@ impl Date {
 }
 
 impl FromYaml for Date {
-    fn from_yaml(item: ValueItem, _collection: &mut CollectionBuilder,
-                 errors: &ErrorGatherer) -> Result<Self, ()> {
-        let item = item.into_string_item(errors)?;
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let item = item.into_string_item(builder)?;
         match str::FromStr::from_str(&item) {
             Ok(res) => Ok(res),
             Err(err) => {
-                errors.add((item.source(), err));
+                builder.error((item.source(), err));
                 Err(())
             }
         }

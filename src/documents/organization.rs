@@ -1,6 +1,5 @@
 use std::ops;
 use ::collection::{CollectionBuilder, DocumentRef, DocumentGuard};
-use ::load::error::{ErrorGatherer};
 use ::load::yaml::{FromYaml, Item, Mapping, Sequence, ValueItem};
 use super::common::{LocalizedString, Progress, ShortVec, Sources};
 use super::date::Date;
@@ -18,15 +17,15 @@ pub struct Organization {
 
 impl Organization {
     pub fn from_yaml(key: String, mut item: Item<Mapping>,
-                     collection: &mut CollectionBuilder,
-                     errors: &ErrorGatherer) -> Result<Organization, ()> {
+                     builder: &CollectionBuilder)
+                     -> Result<Organization, ()> {
         let subtype = Subtype::from_yaml(item.optional_key("subtype"),
-                                         errors);
+                                         builder);
         let progress = Progress::from_yaml(item.optional_key("progress"),
-                                           errors);
-        let events = Events::from_yaml(item.mandatory_key("events", errors)?
-                                           .into_sequence(errors)?,
-                                       collection, errors);
+                                           builder);
+        let events = Events::from_yaml(item.mandatory_key("events", builder)?
+                                           .into_sequence(builder)?,
+                                       builder);
         Ok(Organization {
             key: key,
             subtype: subtype?,
@@ -68,10 +67,10 @@ pub enum Subtype {
 }
 
 impl Subtype {
-    fn from_yaml(item: Option<ValueItem>, errors: &ErrorGatherer)
+    fn from_yaml(item: Option<ValueItem>, builder: &CollectionBuilder)
                  -> Result<Self, ()> {
         if let Some(item) = item {
-            let item = item.into_string_item(errors)?;
+            let item = item.into_string_item(builder)?;
             match item.as_ref().as_ref() {
                 "company" => Ok(Subtype::Company),
                 "country" => Ok(Subtype::Country),
@@ -80,9 +79,9 @@ impl Subtype {
                 "region" => Ok(Subtype::Region),
                 "misc" => Ok(Subtype::Misc),
                 _ => {
-                    errors.add((item.source(),
-                                format!("invalid subtype value '{}'",
-                                        item.value())));
+                    builder.error((item.source(),
+                                   format!("invalid subtype value '{}'",
+                                           item.value())));
                     Err(())
                 }
             }
@@ -105,11 +104,11 @@ impl Default for Subtype {
 pub struct Events(Vec<Event>);
 
 impl Events {
-    fn from_yaml(item: Sequence, collection: &mut CollectionBuilder,
-                 errors: &ErrorGatherer) -> Result<Self, ()> {
+    fn from_yaml(item: Sequence, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
         let mut res = Some(Vec::new());
         for event in item {
-            if let Ok(event) = Event::from_yaml(event, collection, errors) {
+            if let Ok(event) = Event::from_yaml(event, builder) {
                 if let Some(ref mut res) = res {
                     res.push(event)
                 }
@@ -194,22 +193,21 @@ impl Event {
 
 
 impl Event {
-    fn from_yaml(item: ValueItem, collection: &mut CollectionBuilder,
-                 errors: &ErrorGatherer) -> Result<Self, ()> {
-        let mut item = item.into_mapping(errors)?;
-        let date = item.parse_opt("date", collection, errors);
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let mut item = item.into_mapping(builder)?;
+        let date = item.parse_opt("date", builder);
         let sources = Sources::from_yaml(item.optional_key("sources"),
-                                         collection, errors);
-        let local_name = item.parse_opt("local_name", collection, errors);
-        let local_short_name = item.parse_opt("local_short_name", collection,
-                                              errors);
-        let master = item.parse_opt("master", collection, errors);
-        let merged = item.parse_opt("merged", collection, errors);
-        let name = item.parse_opt("name", collection, errors);
-        let note = item.parse_opt("note", collection, errors);
-        let owner = item.parse_opt("owner", collection, errors);
-        let short_name = item.parse_opt("short_name", collection, errors);
-        let status = item.parse_opt("status", collection, errors);
+                                         builder);
+        let local_name = item.parse_opt("local_name", builder);
+        let local_short_name = item.parse_opt("local_short_name", builder);
+        let master = item.parse_opt("master", builder);
+        let merged = item.parse_opt("merged", builder);
+        let name = item.parse_opt("name", builder);
+        let note = item.parse_opt("note", builder);
+        let owner = item.parse_opt("owner", builder);
+        let short_name = item.parse_opt("short_name", builder);
+        let status = item.parse_opt("status", builder);
         Ok(Event {
             date: date?,
             sources: sources?,
@@ -248,11 +246,11 @@ impl OrganizationRef {
 }
 
 impl FromYaml for OrganizationRef {
-    fn from_yaml(item: ValueItem, collection: &mut CollectionBuilder,
-                 errs: &ErrorGatherer) -> Result<Self, ()> {
-        let item = item.into_string_item(errs)?;
-        Ok(OrganizationRef(collection.ref_doc(item.value(), item.source(),
-                                              DocumentType::Organization)))
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let item = item.into_string_item(builder)?;
+        Ok(OrganizationRef(builder.ref_doc(item.value(), item.source(),
+                                           DocumentType::Organization)))
     }
 }
 

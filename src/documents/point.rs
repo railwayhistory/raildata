@@ -1,6 +1,5 @@
 use std::str;
 use ::collection::{CollectionBuilder, DocumentRef, DocumentGuard};
-use ::load::error::{ErrorGatherer};
 use ::load::yaml::{FromYaml, Item, Mapping, Sequence, ValueItem};
 use super::document::DocumentType;
 
@@ -13,8 +12,7 @@ pub struct Point {
 
 impl Point {
     pub fn from_yaml(key: String, mut item: Item<Mapping>,
-                     collection: &mut CollectionBuilder,
-                     errors: &ErrorGatherer) -> Result<Point, ()> {
+                     builder: &CollectionBuilder) -> Result<Point, ()> {
         Ok(Point {
             key: key
         })
@@ -30,7 +28,7 @@ impl Point {
 /*
 impl PointDocument {
     pub fn parse(_item: Item<Scalar>, _path: &Path,
-                 _collection: &mut CollectionBuilder,
+                 _collection: &CollectionBuilder,
                  _vars: &StackedMap<Value<Scalar>>,
                  _errors: &mut Vec<Error>)
                  -> Option<(String, Self)> {
@@ -212,11 +210,11 @@ impl PointRef {
 }
 
 impl FromYaml for PointRef {
-    fn from_yaml(item: ValueItem, collection: &mut CollectionBuilder,
-                 errs: &ErrorGatherer) -> Result<Self, ()> {
-        let item = item.into_string_item(errs)?;
-        Ok(PointRef(collection.ref_doc(item.value(), item.source(),
-                                       DocumentType::Point)))
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let item = item.into_string_item(builder)?;
+        Ok(PointRef(builder.ref_doc(item.value(), item.source(),
+                                    DocumentType::Point)))
     }
 }
 

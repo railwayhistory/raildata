@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use ::collection::CollectionBuilder;
-use ::load::error::ErrorGatherer;
 use ::load::yaml::{FromYaml, ValueItem};
 use super::source::SourceRef;
 
@@ -23,13 +22,13 @@ optional_enum! {
 pub struct LocalizedString(HashMap<String, String>);
 
 impl FromYaml for LocalizedString {
-    fn from_yaml(item: ValueItem, _collection: &mut CollectionBuilder,
-                     errors: &ErrorGatherer) -> Result<Self, ()> {
-        let (value, _) = item.into_mapping(errors)?.into_inner();
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let (value, _) = item.into_mapping(builder)?.into_inner();
         let mut res = HashMap::new();
         let mut err = false;
         for (key, value) in value {
-            let value = match value.into_string(errors) {
+            let value = match value.into_string(builder) {
                 Ok(value) => value,
                 Err(()) => {
                     err = true;
@@ -80,9 +79,8 @@ impl<T> ShortVec<T> {
 }
 
 impl<T: FromYaml> ShortVec<T> {
-    pub fn from_yaml(item: Option<ValueItem>,
-                     collection: &mut CollectionBuilder,
-                     errors: &ErrorGatherer) -> Result<Self, ()> {
+    pub fn from_yaml(item: Option<ValueItem>, builder: &CollectionBuilder)
+                     -> Result<Self, ()> {
         if let Some(item) = item {
             match item.try_into_sequence() {
                 Ok(seq) => {
@@ -90,15 +88,13 @@ impl<T: FromYaml> ShortVec<T> {
                         Ok(ShortVec::Empty)
                     }
                     else if seq.len() == 1 {
-                        Self::from_yaml(seq.into_iter().next(), collection,
-                                        errors)
+                        Self::from_yaml(seq.into_iter().next(), builder)
                     }
                     else {
                         let mut vec = Vec::new();
                         let mut err = false;
                         for item in seq {
-                            let item = match T::from_yaml(item, collection, 
-                                                          errors) {
+                            let item = match T::from_yaml(item, builder) {
                                 Ok(item) => item,
                                 Err(()) => {
                                     err = true;
@@ -118,7 +114,7 @@ impl<T: FromYaml> ShortVec<T> {
                     }
                 }
                 Err(item) => {
-                    T::from_yaml(item, collection, errors).map(ShortVec::One)
+                    T::from_yaml(item, builder).map(ShortVec::One)
                 }
             }
         }
@@ -129,9 +125,9 @@ impl<T: FromYaml> ShortVec<T> {
 }
 
 impl<T: FromYaml> FromYaml for ShortVec<T> {
-    fn from_yaml(item: ValueItem, collection: &mut CollectionBuilder,
-                 errors: &ErrorGatherer) -> Result<Self, ()> {
-        ShortVec::from_yaml(Some(item), collection, errors)
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        ShortVec::from_yaml(Some(item), builder)
     }
 }
 
