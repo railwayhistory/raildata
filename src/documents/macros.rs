@@ -117,3 +117,12 @@ macro_rules! mandatory_enum {
         }
     }
 }
+
+macro_rules! try_key {
+    ( $some:expr, $key:expr ) => {{
+        match $some {
+            Ok(some) => some,
+            Err(_) => return Err(Some($key))
+        }
+    }}
+}

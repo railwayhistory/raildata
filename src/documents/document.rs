@@ -20,33 +20,29 @@ pub enum Document {
 }
 
 impl Document {
+    /// Parses a document from its YAML representation.
+    ///
+    /// Returns `Ok(doc)` if all went well. Returns `Err(Some(key))` if
+    /// parsing failed but the YAML representation contained a key, so there
+    /// is at least in theory a document with that key. Returns `Err(None)`
+    /// if all is hopeless.
     pub fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
-                     -> Result<Self, ()> {
-        let mut item = item.into_mapping(builder)?;
-        let key = item.mandatory_key("key", builder)?
-                      .into_string(builder)?;
-        let doctype = item.parse::<DocumentType>("type", builder)?;
+                     -> Result<Self, Option<String>> {
+        let mut item = item.into_mapping(builder).map_err(|_| None)?;
+        let key = item.parse_mandatory("key", builder)
+                      .map_err(|_| None)?;
+        let doctype = try_key!(item.parse_mandatory::<DocumentType>("type",
+                                                                    builder),
+                               key);
         match doctype {
-            DocumentType::Line => {
-                Ok(Document::Line(Line::from_yaml(key, item, builder)?))
-            }
-            DocumentType::Organization => {
-                Ok(Document::Organization(Organization::from_yaml(key, item,
-                                                                  builder)?))
-            }
-            DocumentType::Path => {
-                Ok(Document::Path(Path::from_yaml(key, item, builder)?))
-            }
-            DocumentType::Point => {
-                Ok(Document::Point(Point::from_yaml(key, item, builder)?))
-            }
-            DocumentType::Source => {
-                Ok(Document::Source(Source::from_yaml(key, item, builder)?))
-            }
-            DocumentType::Structure => {
-                Ok(Document::Structure(Structure::from_yaml(key, item,
-                                                            builder)?))
-            }
+            DocumentType::Line => Line::from_yaml(key, item, builder),
+            DocumentType::Organization
+                => Organization::from_yaml(key, item, builder),
+            DocumentType::Path => Path::from_yaml(key, item, builder),
+            DocumentType::Point => Point::from_yaml(key, item, builder),
+            DocumentType::Source => Source::from_yaml(key, item, builder),
+            DocumentType::Structure
+                => Structure::from_yaml(key, item, builder),
         }
     }
 

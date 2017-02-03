@@ -2,9 +2,9 @@ use std::str::FromStr;
 use url::Url;
 use ::collection::{CollectionBuilder, DocumentRef, DocumentGuard};
 use ::load::yaml::{FromYaml, Item, Mapping, ValueItem};
-use super::common::ShortVec;
+use super::common::{ShortVec, Sources};
 use super::date::Date;
-use super::document::DocumentType;
+use super::document::{Document, DocumentType};
 use super::organization::{Organization, OrganizationRef};
 
 
@@ -35,10 +35,9 @@ impl Source {
 impl Source {
     pub fn from_yaml(key: String, mut item: Item<Mapping>,
                      builder: &CollectionBuilder)
-                     -> Result<Self, ()> {
-        let subtype = Subtype::from_yaml(item.optional_key("subtype"),
-                                         builder)?;
-        Ok(match subtype {
+                     -> Result<Document, Option<String>> {
+        let subtype = try_key!(item.parse_default("subtype", builder), key);
+        Ok(Document::Source(match subtype {
             Subtype::Article => {
                 Source::Article(Article::from_yaml(key, item, builder)?)
             }
@@ -57,7 +56,7 @@ impl Source {
             Subtype::Misc => {
                 Source::Misc(Misc::from_yaml(key, item, builder)?)
             }
-        })
+        }))
     }
 }
 
@@ -68,11 +67,14 @@ pub struct Article {
     key: String,
     author: Option<ShortVec<String>>,
     collection: Option<SourceRef>,
+    crossref: Sources,
     date: Option<Date>,
     editor: Option<ShortVec<String>>,
     pages: Option<Pages>,
+    regards: ShortVec<DocumentRef>,
+    revision: Option<String>,
+    title: String,
     url: Option<ShortVec<Url>>,
-
 }
 
 impl Article {
@@ -88,6 +90,10 @@ impl Article {
         self.collection.as_ref().map(|r| r.get())
     }
 
+    pub fn crossref(&self) -> &Sources {
+        &self.crossref
+    }
+
     pub fn date(&self) -> Option<&Date> {
         self.date.as_ref()
     }
@@ -100,6 +106,18 @@ impl Article {
         self.pages
     }
 
+    pub fn regards(&self) -> &ShortVec<DocumentRef> {
+        &self.regards
+    }
+
+    pub fn revision(&self) -> Option<&str> {
+        self.revision.as_ref().map(AsRef::as_ref)
+    }
+
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
     pub fn url(&self) -> Option<&ShortVec<Url>> {
         self.url.as_ref()
     }
@@ -107,21 +125,31 @@ impl Article {
 
 impl Article {
     fn from_yaml(key: String, mut item: Item<Mapping>,
-                 builder: &CollectionBuilder) -> Result<Self, ()> {
+                 builder: &CollectionBuilder) -> Result<Self, Option<String>> {
         let author = item.parse_opt("author", builder);
         let coll = item.parse_opt("collection", builder);
+        let crossref = item.parse_default("crossref", builder);
         let date = item.parse_opt("date", builder);
         let editor = item.parse_opt("editor", builder);
         let pages = item.parse_opt("pages", builder);
+        let regards = item.parse_default("regards", builder);
+        let revision = item.parse_opt("revision", builder);
+        let title = item.parse_mandatory("title", builder);
         let url = item.parse_opt("url", builder);
+        try_key!(item.exhausted(builder), key);
+
         Ok(Article {
+            author: try_key!(author, key),
+            collection: try_key!(coll, key),
+            crossref: try_key!(crossref, key),
+            date: try_key!(date, key),
+            editor: try_key!(editor, key),
+            pages: try_key!(pages, key),
+            regards: try_key!(regards, key),
+            revision: try_key!(revision, key),
+            title: try_key!(title, key),
+            url: try_key!(url, key),
             key: key,
-            author: author?,
-            collection: coll?,
-            date: date?,
-            editor: editor?,
-            pages: pages?,
-            url: url?,
         })
     }
 }
@@ -191,30 +219,32 @@ impl Book {
 
 impl Book {
     fn from_yaml(key: String, mut item: Item<Mapping>,
-                 builder: &CollectionBuilder) -> Result<Self, ()> {
+                 builder: &CollectionBuilder) -> Result<Self, Option<String>> {
         let author = item.parse_opt("author", builder);
         let date = item.parse_opt("date", builder);
         let edition = item.parse_opt("edition", builder);
         let editor = item.parse_opt("editor", builder);
         let howpublished = item.parse_opt("howpublised", builder);
         let institution = item.parse_opt("institution", builder);
-        let publisher = item.parse_opt("publiser", builder);
+        let publisher = item.parse_opt("publisher", builder);
         let series = item.parse_opt("series", builder);
         let title = item.mandatory_key("title", builder)
                         .and_then(|item| item.into_string(builder));
         let isbn = item.parse_opt("isbn", builder);
+        try_key!(item.exhausted(builder), key);
+
         Ok(Book {
+            author: try_key!(author, key),
+            date: try_key!(date, key),
+            edition: try_key!(edition, key),
+            editor: try_key!(editor, key),
+            howpublished: try_key!(howpublished, key),
+            institution: try_key!(institution, key),
+            publisher: try_key!(publisher, key),
+            series: try_key!(series, key),
+            title: try_key!(title, key),
+            isbn: try_key!(isbn, key),
             key: key,
-            author: author?,
-            date: date?,
-            edition: edition?,
-            editor: editor?,
-            howpublished: howpublished?,
-            institution: institution?,
-            publisher: publisher?,
-            series: series?,
-            title: title?,
-            isbn: isbn?,
         })
     }
 }
@@ -289,7 +319,7 @@ impl Issue {
 
 impl Issue {
     fn from_yaml(key: String, mut item: Item<Mapping>,
-                 builder: &CollectionBuilder) -> Result<Self, ()> {
+                 builder: &CollectionBuilder) -> Result<Self, Option<String>> {
         let date = item.parse_opt("date", builder);
         let editor = item.parse_opt("editor", builder);
         let institution = item.parse_opt("institution", builder);
@@ -301,19 +331,21 @@ impl Issue {
         let volume = item.parse_opt("volume", builder);
         let url = item.parse_opt("url", builder);
         let short_title = item.parse_opt("short_title", builder);
+        try_key!(item.exhausted(builder), key);
+
         Ok(Issue {
+            date: try_key!(date, key),
+            editor: try_key!(editor, key),
+            institution: try_key!(institution, key),
+            journal: try_key!(journal, key),
+            number: try_key!(number, key),
+            organization: try_key!(organization, key),
+            publisher: try_key!(publisher, key),
+            title: try_key!(title, key),
+            volume: try_key!(volume, key),
+            url: try_key!(url, key),
+            short_title: try_key!(short_title, key),
             key: key,
-            date: date?,
-            editor: editor?,
-            institution: institution?,
-            journal: journal?,
-            number: number?,
-            organization: organization?,
-            publisher: publisher?,
-            title: title?,
-            volume: volume?,
-            url: url?,
-            short_title: short_title?,
         })
     }
 }
@@ -383,7 +415,7 @@ impl Journal {
 
 impl Journal {
     fn from_yaml(key: String, mut item: Item<Mapping>,
-                 builder: &CollectionBuilder) -> Result<Self, ()> {
+                 builder: &CollectionBuilder) -> Result<Self, Option<String>> {
         let author = item.parse_opt("author", builder);
         let date = item.parse_opt("date", builder);
         let editor = item.parse_opt("editor", builder);
@@ -394,18 +426,20 @@ impl Journal {
         let title = item.parse_opt("title", builder);
         let url = item.parse_opt("url", builder);
         let short_title = item.parse_opt("short_title", builder);
+        try_key!(item.exhausted(builder), key);
+
         Ok(Journal {
+            author: try_key!(author, key),
+            date: try_key!(date, key),
+            editor: try_key!(editor, key),
+            howpublished: try_key!(howpublished, key),
+            institution: try_key!(institution, key),
+            organization: try_key!(organization, key),
+            publisher: try_key!(publisher, key),
+            title: try_key!(title, key),
+            url: try_key!(url, key),
+            short_title: try_key!(short_title, key),
             key: key,
-            author: author?,
-            date: date?,
-            editor: editor?,
-            howpublished: howpublished?,
-            institution: institution?,
-            organization: organization?,
-            publisher: publisher?,
-            title: title?,
-            url: url?,
-            short_title: short_title?,
         })
     }
 }
@@ -465,25 +499,27 @@ impl Online {
 
 impl Online {
     fn from_yaml(key: String, mut item: Item<Mapping>,
-                 builder: &CollectionBuilder) -> Result<Self, ()> {
+                 builder: &CollectionBuilder) -> Result<Self, Option<String>> {
         let author = item.parse_opt("author", builder);
         let date = item.parse_opt("date", builder);
         let editor = item.parse_opt("editor", builder);
         let institution = item.parse_opt("institution", builder);
         let organization = item.parse_opt("organization", builder);
         let title = item.parse_opt("title", builder);
-        let url = item.parse("url", builder);
+        let url = item.parse_mandatory("url", builder);
         let short_title = item.parse_opt("short_title", builder);
+        try_key!(item.exhausted(builder), key);
+
         Ok(Online {
+            author: try_key!(author, key),
+            date: try_key!(date, key),
+            editor: try_key!(editor, key),
+            institution: try_key!(institution, key),
+            organization: try_key!(organization, key),
+            title: try_key!(title, key),
+            url: try_key!(url, key),
+            short_title: try_key!(short_title, key),
             key: key,
-            author: author?,
-            date: date?,
-            editor: editor?,
-            institution: institution?,
-            organization: organization?,
-            title: title?,
-            url: url?,
-            short_title: short_title?,
         })
     }
 }
@@ -496,6 +532,7 @@ pub struct Misc {
     author: Option<ShortVec<String>>,
     date: Option<Date>,
     editor: Option<ShortVec<String>>,
+    edition: Option<String>,
     institution: Option<OrganizationRef>,
     organization: Option<OrganizationRef>,
     title: Option<String>,
@@ -513,6 +550,10 @@ impl Misc {
 
     pub fn date(&self) -> Option<&Date> {
         self.date.as_ref()
+    }
+
+    pub fn edition(&self) -> Option<&str> {
+        self.edition.as_ref().map(AsRef::as_ref)
     }
 
     pub fn editor(&self) -> Option<&ShortVec<String>> {
@@ -538,23 +579,26 @@ impl Misc {
 
 impl Misc {
     fn from_yaml(key: String, mut item: Item<Mapping>,
-                 builder: &CollectionBuilder) -> Result<Self, ()> {
+                 builder: &CollectionBuilder) -> Result<Self, Option<String>> {
         let author = item.parse_opt("author", builder);
         let date = item.parse_opt("date", builder);
+        let edition = item.parse_opt("edition", builder);
         let editor = item.parse_opt("editor", builder);
         let institution = item.parse_opt("institution", builder);
         let organization = item.parse_opt("organization", builder);
         let title = item.parse_opt("title", builder);
         let url = item.parse_opt("url", builder);
+        try_key!(item.exhausted(builder), key);
         Ok(Misc {
+            author: try_key!(author, key),
+            date: try_key!(date, key),
+            edition: try_key!(edition, key),
+            editor: try_key!(editor, key),
+            institution: try_key!(institution, key),
+            organization: try_key!(organization, key),
+            title: try_key!(title, key),
+            url: try_key!(url, key),
             key: key,
-            author: author?,
-            date: date?,
-            editor: editor?,
-            institution: institution?,
-            organization: organization?,
-            title: title?,
-            url: url?,
         })
     }
 }
@@ -632,7 +676,7 @@ impl FromYaml for SourceRef {
                  -> Result<Self, ()> {
         let item = item.into_string_item(builder)?;
         Ok(SourceRef(builder.ref_doc(item.value(), item.source(),
-                                     DocumentType::Source)))
+                                     Some(DocumentType::Source))))
     }
 }
 

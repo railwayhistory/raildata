@@ -97,7 +97,11 @@ impl CollectionBuilder {
         self.0.lock().unwrap().error(err)
     }
 
-    pub fn ref_doc(&self, key: &str, pos: Source, t: DocumentType)
+    pub fn str_error(&self, pos: Source, s: &str) {
+        self.error(Error::new(pos, String::from(s)))
+    }
+
+    pub fn ref_doc(&self, key: &str, pos: Source, t: Option<DocumentType>)
                    -> DocumentRef {
         self.0.lock().unwrap().ref_doc(key, pos, t)
     }
@@ -105,6 +109,10 @@ impl CollectionBuilder {
     pub fn update_doc(&self, doc: Document, pos: Source)
                       -> Result<(), (Document, Source)> {
         self.0.lock().unwrap().update_doc(doc, pos)
+    }
+
+    pub fn broken_doc(&mut self, key: String, pos: Source) {
+        self.0.lock().unwrap().broken_doc(key, pos)
     }
 
     pub fn finalize(self) -> Result<Result<Collection, Vec<Error>>, Self> {
@@ -134,7 +142,7 @@ impl BuilderInner {
         self.errors.push(err.into())
     }
 
-    fn ref_doc(&mut self, key: &str, pos: Source, t: DocumentType)
+    fn ref_doc(&mut self, key: &str, pos: Source, t: Option<DocumentType>)
                    -> DocumentRef {
         if let Some(value) = self.docs.get_mut(key) {
             return value.ref_doc(pos, t);
@@ -153,6 +161,14 @@ impl BuilderInner {
         self.docs.insert(doc.key().to_owned(),
                          BuilderValue::from_doc(doc, pos));
         Ok(())
+    }
+
+    fn broken_doc(&mut self, key: String, pos: Source) {
+        if let Some(value) = self.docs.get_mut(&key) {
+            value.mark_broken(pos);
+            return;
+        }
+        self.docs.insert(key, BuilderValue::broken(pos));
     }
 
     fn finalize(mut self) -> Result<Collection, Vec<Error>> {
@@ -184,6 +200,9 @@ struct BuilderValue {
     /// The document for the value.
     doc: Arc<Stored>,
 
+    /// If true, there is a document but it is broken.
+    broken: bool,
+
     /// The position of the document.
     pos: Option<Source>,
 
@@ -191,14 +210,24 @@ struct BuilderValue {
     /// 
     /// Each element contains the position of the reference and the document
     /// type it requested.
-    refs: Vec<(Source, DocumentType)>,
+    refs: Vec<(Source, Option<DocumentType>)>,
 }
 
 impl BuilderValue {
     fn new() -> Self {
         BuilderValue {
             doc: Arc::new(Stored::new()),
+            broken: false,
             pos: None,
+            refs: Vec::new(),
+        }
+    }
+
+    fn broken(pos: Source) -> Self {
+        BuilderValue {
+            doc: Arc::new(Stored::new()),
+            broken: true,
+            pos: Some(pos),
             refs: Vec::new(),
         }
     }
@@ -206,12 +235,14 @@ impl BuilderValue {
     fn from_doc(doc: Document, pos: Source) -> Self {
         BuilderValue {
             doc: Arc::new(Stored::from_doc(doc)),
+            broken: false,
             pos: Some(pos),
             refs: Vec::new(),
         }
     }
 
-    fn ref_doc(&mut self, pos: Source, t: DocumentType) -> DocumentRef {
+    fn ref_doc(&mut self, pos: Source, t: Option<DocumentType>)
+               -> DocumentRef {
         self.refs.push((pos, t));
         DocumentRef(Arc::downgrade(&self.doc))
     }
@@ -226,6 +257,14 @@ impl BuilderValue {
         Ok(())
     }
 
+    fn mark_broken(&mut self, pos: Source) {
+        // Quietly ignore the request if we have a document already.
+        if self.pos.is_some() {
+            self.pos = Some(pos);
+            self.broken = false;
+        }
+    }
+
     fn into_inner(self, key: &str, errors: &mut Vec<Error>)
                   -> Option<Arc<Stored>> {
         if self.pos.is_none() {
@@ -237,16 +276,18 @@ impl BuilderValue {
             }
             None
         }
-        else {
+        else if !self.broken {
             // We have a document. Check the types of all references.
             let doc_type = unsafe { self.doc.get() .doc_type() };
             let mut err = false;
             for (pos, ref_type) in self.refs {
-                if doc_type != ref_type {
-                    errors.push(Error::new(pos,
-                                 format!("{} reference to {} document '{}'",
-                                         ref_type, doc_type, key)));
-                    err = true;
+                if let Some(ref_type) = ref_type {
+                    if doc_type != ref_type {
+                        errors.push(Error::new(pos,
+                                     format!("{} reference to {} document '{}'",
+                                             ref_type, doc_type, key)));
+                        err = true;
+                    }
                 }
             }
             if err {
@@ -255,6 +296,10 @@ impl BuilderValue {
             else {
                 Some(self.doc)
             }
+        }
+        else {
+            // We have a broken document. Can’t check the references.
+            None
         }
     }
 }
@@ -326,7 +371,12 @@ impl Stored {
 
 impl Drop for Stored {
     fn drop(&mut self) {
-        unsafe { let _  = Box::from_raw(*self.0.get()); }
+        unsafe {
+            let ptr = *self.0.get();
+            if !ptr.is_null() {
+                let _  = Box::from_raw(ptr);
+            }
+        }
     }
 }
 

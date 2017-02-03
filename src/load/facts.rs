@@ -3,9 +3,7 @@
 use std::io;
 use std::fs::{DirEntry, read_dir};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use ::collection::CollectionBuilder;
-use super::error::Error;
 use super::path::Path;
 use super::yaml::{Stream, Vars};
 
@@ -30,7 +28,7 @@ fn load_yamls(base: &Path, builder: &CollectionBuilder, vars: &Vars)
             return Ok(())
         }
         if let Some(name) = entry.file_name().to_str() {
-            if name.ends_with(".yaml") {
+            if name != "vars.yaml" && name.ends_with(".yaml") {
                 load_yaml(entry.path(), builder, vars)
             }
         }

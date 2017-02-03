@@ -43,6 +43,13 @@ impl FromYaml for LocalizedString {
 }
 
 
+impl<T> Default for ShortVec<T> {
+    fn default() -> Self {
+        ShortVec::Empty
+    }
+}
+
+
 //------------ Sources -------------------------------------------------------
 
 pub type Sources = ShortVec<SourceRef>;
@@ -79,8 +86,8 @@ impl<T> ShortVec<T> {
 }
 
 impl<T: FromYaml> ShortVec<T> {
-    pub fn from_yaml(item: Option<ValueItem>, builder: &CollectionBuilder)
-                     -> Result<Self, ()> {
+    pub fn from_opt_yaml(item: Option<ValueItem>, builder: &CollectionBuilder)
+                         -> Result<Self, ()> {
         if let Some(item) = item {
             match item.try_into_sequence() {
                 Ok(seq) => {
@@ -88,7 +95,7 @@ impl<T: FromYaml> ShortVec<T> {
                         Ok(ShortVec::Empty)
                     }
                     else if seq.len() == 1 {
-                        Self::from_yaml(seq.into_iter().next(), builder)
+                        Self::from_opt_yaml(seq.into_iter().next(), builder)
                     }
                     else {
                         let mut vec = Vec::new();
@@ -127,7 +134,7 @@ impl<T: FromYaml> ShortVec<T> {
 impl<T: FromYaml> FromYaml for ShortVec<T> {
     fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
                  -> Result<Self, ()> {
-        ShortVec::from_yaml(Some(item), builder)
+        ShortVec::from_opt_yaml(Some(item), builder)
     }
 }
 

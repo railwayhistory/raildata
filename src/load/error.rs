@@ -1,5 +1,4 @@
 use std::fmt;
-use std::sync::{Arc, Mutex};
 use yaml_rust::scanner::Marker;
 use ::load::path::Path;
 
@@ -88,7 +87,7 @@ impl<E: fmt::Display + 'static> From<(Path, E)> for Error {
 
 //------------ Source --------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Source {
     Global,
     File { path: Path },

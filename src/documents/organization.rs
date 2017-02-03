@@ -1,9 +1,9 @@
 use std::ops;
 use ::collection::{CollectionBuilder, DocumentRef, DocumentGuard};
-use ::load::yaml::{FromYaml, Item, Mapping, Sequence, ValueItem};
+use ::load::yaml::{FromYaml, Item, Mapping, ValueItem};
 use super::common::{LocalizedString, Progress, ShortVec, Sources};
 use super::date::Date;
-use super::document::DocumentType;
+use super::document::{Document, DocumentType};
 
 
 //------------ Organization --------------------------------------------------
@@ -18,20 +18,17 @@ pub struct Organization {
 impl Organization {
     pub fn from_yaml(key: String, mut item: Item<Mapping>,
                      builder: &CollectionBuilder)
-                     -> Result<Organization, ()> {
-        let subtype = Subtype::from_yaml(item.optional_key("subtype"),
-                                         builder);
-        let progress = Progress::from_yaml(item.optional_key("progress"),
-                                           builder);
-        let events = Events::from_yaml(item.mandatory_key("events", builder)?
-                                           .into_sequence(builder)?,
-                                       builder);
-        Ok(Organization {
+                     -> Result<Document, Option<String>> {
+        let subtype = item.parse_default("subtype", builder);
+        let progress = item.parse_default("progress", builder);
+        let events = item.parse_mandatory("events", builder);
+        try_key!(item.exhausted(builder), key);
+        Ok(Document::Organization(Organization {
+            subtype: try_key!(subtype, key),
+            progress: try_key!(progress, key),
+            events: try_key!(events, key),
             key: key,
-            subtype: subtype?,
-            progress: progress?,
-            events: events?,
-        })
+        }))
     }
 }
 
@@ -56,45 +53,16 @@ impl Organization {
 
 //------------ Subtype -------------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Subtype {
-    Company,
-    Country,
-    Department,
-    Person,
-    Region,
-    Misc,
-}
+optional_enum! {
+    pub enum Subtype {
+        (Company => "company"),
+        (Country => "country"),
+        (Department => "department"),
+        (Person => "person"),
+        (Region => "region"),
+        (Misc => "misc"),
 
-impl Subtype {
-    fn from_yaml(item: Option<ValueItem>, builder: &CollectionBuilder)
-                 -> Result<Self, ()> {
-        if let Some(item) = item {
-            let item = item.into_string_item(builder)?;
-            match item.as_ref().as_ref() {
-                "company" => Ok(Subtype::Company),
-                "country" => Ok(Subtype::Country),
-                "department" => Ok(Subtype::Department),
-                "person" => Ok(Subtype::Person),
-                "region" => Ok(Subtype::Region),
-                "misc" => Ok(Subtype::Misc),
-                _ => {
-                    builder.error((item.source(),
-                                   format!("invalid subtype value '{}'",
-                                           item.value())));
-                    Err(())
-                }
-            }
-        }
-        else {
-            Ok(Subtype::Misc)
-        }
-    }
-}
-
-impl Default for Subtype {
-    fn default() -> Self {
-        Subtype::Misc
+        default Misc
     }
 }
 
@@ -103,9 +71,10 @@ impl Default for Subtype {
 
 pub struct Events(Vec<Event>);
 
-impl Events {
-    fn from_yaml(item: Sequence, builder: &CollectionBuilder)
+impl FromYaml for Events {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
                  -> Result<Self, ()> {
+        let item = item.into_sequence(builder)?;
         let mut res = Some(Vec::new());
         for event in item {
             if let Ok(event) = Event::from_yaml(event, builder) {
@@ -197,8 +166,8 @@ impl Event {
                  -> Result<Self, ()> {
         let mut item = item.into_mapping(builder)?;
         let date = item.parse_opt("date", builder);
-        let sources = Sources::from_yaml(item.optional_key("sources"),
-                                         builder);
+        let sources = Sources::from_opt_yaml(item.optional_key("sources"),
+                                             builder);
         let local_name = item.parse_opt("local_name", builder);
         let local_short_name = item.parse_opt("local_short_name", builder);
         let master = item.parse_opt("master", builder);
@@ -250,7 +219,7 @@ impl FromYaml for OrganizationRef {
                  -> Result<Self, ()> {
         let item = item.into_string_item(builder)?;
         Ok(OrganizationRef(builder.ref_doc(item.value(), item.source(),
-                                           DocumentType::Organization)))
+                                           Some(DocumentType::Organization))))
     }
 }
 

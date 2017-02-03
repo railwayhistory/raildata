@@ -2,17 +2,16 @@
 use std::{cmp, fmt, hash, ops};
 use std::fs::File;
 use std::io::Read;
-use std::sync::{Arc, Mutex};
 use url::Url;
 use yaml_rust::yaml;
 use yaml_rust::scanner::{Marker, TScalarStyle, TokenType};
-use ::collection::CollectionBuilder;
+use ::collection::{CollectionBuilder, DocumentRef};
 use ::documents::Document;
 use ::load::{Error, Source};
 use ::load::path::Path;
 use super::mapping::{Mapping, MappingBuilder};
 use super::sequence::{Sequence, SequenceBuilder};
-use super::scalar::{Scalar, parse_scalar};
+use super::scalar::{Float, parse_scalar};
 use super::vars::Vars;
 
 
@@ -124,13 +123,17 @@ impl yaml::Stream for Stream {
 
     fn create_document(&mut self, item: Self::Item) {
         let pos = item.source(); 
-        if let Ok(doc) = Document::from_yaml(item, &self.builder) {
-            if let Err((doc, org)) = self.builder.update_doc(doc,
-                                                             pos.clone()) {
-                self.builder.error((pos,
-                    format!("duplicate document '{}'. First defined at {}.",
-                            doc.key(), org)))
+        match Document::from_yaml(item, &self.builder) {
+            Ok(doc) => {
+                if let Err((doc, org)) = self.builder.update_doc(doc,
+                                                                 pos.clone()) {
+                    self.builder.error((pos,
+                        format!("duplicate document '{}'. First defined at {}.",
+                                doc.key(), org)))
+                }
             }
+            Err(Some(key)) => self.builder.broken_doc(key, pos),
+            Err(None) => { }
         }
     }
 }
@@ -143,10 +146,13 @@ impl yaml::Stream for Stream {
 /// Represents the data of something inside a YAML document.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Value {
-    Scalar(Scalar),
-    String(String),
     Sequence(Sequence),
     Mapping(Mapping),
+    String(String),
+    Null,
+    Bool(bool),
+    Int(i64),
+    Float(Float),
     Empty,
 }
 
@@ -155,6 +161,19 @@ impl Value {
         match self {
             Value::Mapping(m) => Some(m),
             _ => None,
+        }
+    }
+
+    pub fn style(&self) -> &'static str {
+        match *self {
+            Value::Sequence(_) => "sequence",
+            Value::Mapping(_) => "mapping",
+            Value::String(_) => "string",
+            Value::Null => "null",
+            Value::Bool(_) => "bool",
+            Value::Int(_) => "integer",
+            Value::Float(_) => "float",
+            Value::Empty => "empty",
         }
     }
 }
@@ -214,13 +233,26 @@ impl<V> Item<V> {
 }
 
 impl Item<Value> {
+    pub fn parse<T: FromYaml>(self, builder: &CollectionBuilder)
+                              -> Result<T, ()> {
+        T::from_yaml(self, builder)
+    }
+
+    pub fn is_null(&self) -> bool {
+        if let Value::Null = self.value { true }
+        else { false }
+    }
+
     pub fn into_string_item(self, builder: &CollectionBuilder)
                             -> Result<Item<String>, ()> {
         match self.value {
             Value::String(s) => Ok(Item::new(s, self.path, self.mark)),
+            Value::Int(i) => Ok(Item::new(format!("{}", i), self.path,
+                                          self.mark)),
             _ => {
                 builder.error((self.source(),
-                               String::from("expected string")));
+                               format!("expected string, got {}",
+                                       self.value.style())));
                 Err(())
             }
         }
@@ -230,9 +262,11 @@ impl Item<Value> {
                        -> Result<String, ()> {
         match self.value {
             Value::String(s) => Ok(s),
+            Value::Int(i) => Ok(format!("{}", i)),
             _ => {
                 builder.error((self.source(),
-                               String::from("expected string")));
+                               format!("expected string, got {}",
+                                       self.value.style())));
                 Err(())
             }
         }
@@ -280,12 +314,45 @@ impl Item<Value> {
             }
         }
     }
+
+    pub fn into_float(self, builder: &CollectionBuilder)
+                      -> Result<Float, ()> {
+        match self.value {
+            Value::Float(f) => Ok(f),
+            _ => {
+                builder.str_error(self.source(), "expected float");
+                Err(())
+            }
+        }
+    }
+
+    pub fn into_int_item(self, builder: &CollectionBuilder)
+                         -> Result<Item<i64>, ()> {
+        match self.value {
+            Value::Int(i) => Ok(Item::new(i, self.path, self.mark)),
+            _ => {
+                builder.str_error(self.source(), "expected integer");
+                Err(())
+            }
+        }
+    }
+
+    pub fn into_int(self, builder: &CollectionBuilder)
+                    -> Result<i64, ()> {
+        match self.value {
+            Value::Int(i) => Ok(i),
+            _ => {
+                builder.str_error(self.source(), "expected integer");
+                Err(())
+            }
+        }
+    }
 }
 
 impl Item<Mapping> {
-    pub fn parse<T: FromYaml>(&mut self, key: &str,
-                              builder: &CollectionBuilder)
-                              -> Result<T, ()> {
+    pub fn parse_mandatory<T: FromYaml>(&mut self, key: &str,
+                                        builder: &CollectionBuilder)
+                                        -> Result<T, ()> {
         match self.value.remove(key) {
             None => {
                 builder.error((self.source(),
@@ -297,7 +364,6 @@ impl Item<Mapping> {
             }
         }
     }
-
 
     pub fn mandatory_key(&mut self, key: &str, builder: &CollectionBuilder)
                          -> Result<ValueItem, ()> {
@@ -312,6 +378,25 @@ impl Item<Mapping> {
 
     pub fn optional_key(&mut self, key: &str) -> Option<ValueItem> {
         self.value.remove(key)
+    }
+
+    pub fn exhausted(&self, builder: &CollectionBuilder) -> Result<(), ()> {
+        if self.value.is_empty() {
+            Ok(())
+        }
+        else {
+            let mut s = String::from("extra elements in mapping: ");
+            let mut first = true;
+            for key in self.value.keys() {
+                if !first {
+                    s.push_str(", ");
+                }
+                s.push_str(&key);
+                first = false;
+            }
+            builder.error((self.source(), s));
+            Err(())
+        }
     }
 }
 
@@ -384,10 +469,54 @@ pub trait FromYaml: Sized {
                  -> Result<Self, ()>;
 }
 
+impl<T: FromYaml> FromYaml for Vec<T> {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let item = item.into_sequence(builder)?;
+        let mut res = Some(Vec::new());
+        for t in item {
+            if let Ok(t) = T::from_yaml(t, builder) {
+                if let Some(ref mut res) = res {
+                    res.push(t)
+                }
+            }
+            else {
+                res = None
+            }
+        }
+        match res {
+            Some(res) => Ok(res),
+            None => Err(())
+        }
+    }
+}
+
 impl FromYaml for String {
     fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
                  -> Result<Self, ()> {
         item.into_string(builder)
+    }
+}
+
+impl FromYaml for Item<String> {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        item.into_string_item(builder)
+    }
+}
+
+impl FromYaml for Option<String> {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let (value, pos) = item.into_inner();
+        match value {
+            Value::Null => Ok(None),
+            Value::String(s) => Ok(Some(s)),
+            _ => {
+                builder.str_error(pos, "expected string or null");
+                Err(())
+            }
+        }
     }
 }
 
@@ -401,4 +530,88 @@ impl FromYaml for Url {
         })
     }
 }
+
+impl FromYaml for bool {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        match *item.value() {
+            Value::Bool(v) => Ok(v),
+            _ => {
+                builder.str_error(item.source(), "expected boolean");
+                Err(())
+            }
+        }
+    }
+}
  
+impl FromYaml for f64 {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        item.into_float(builder).map(|f| f.to_f64())
+    }
+}
+
+impl FromYaml for i64 {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        item.into_int(builder)
+    }
+}
+
+impl FromYaml for u32 {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        item.into_int_item(builder).and_then(|item| {;
+            let (v, source) = item.into_inner();
+            if v >= 0 && v <= ::std::u32::MAX as i64 {
+                Ok(v as u32)
+            }
+            else {
+                builder.str_error(source, "value out of range");
+                Err(())
+            }
+        })
+    }
+}
+
+impl FromYaml for u16 {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        item.into_int_item(builder).and_then(|item| {
+            let (v, source) = item.into_inner();
+            if v >= 0 && v <= ::std::u16::MAX as i64 {
+                Ok(v as u16)
+            }
+            else {
+                builder.str_error(source, "value out of range");
+                Err(())
+            }
+        })
+    }
+}
+
+impl FromYaml for u8 {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        item.into_int_item(builder).and_then(|item| {
+            let (v, source) = item.into_inner();
+            if v >= 0 && v <= ::std::u8::MAX as i64 {
+                Ok(v as u8)
+            }
+            else {
+                builder.str_error(source, "value out of range");
+                Err(())
+            }
+        })
+    }
+}
+
+
+impl FromYaml for DocumentRef {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let item = item.into_string_item(builder)?;
+        Ok(builder.ref_doc(item.value(), item.source(), None))
+    }
+}
+

@@ -1,92 +1,416 @@
-use std::str;
+use std::{ops, str};
 use ::collection::{CollectionBuilder, DocumentRef, DocumentGuard};
-use ::load::yaml::{FromYaml, Item, Mapping, Sequence, ValueItem};
-use super::document::DocumentType;
+use ::load::error::Source;
+use ::load::yaml::{FromYaml, Item, Mapping, ValueItem};
+use super::common::{LocalizedString, Progress, ShortVec, Sources};
+use super::date::Date;
+use super::document::{Document, DocumentType};
+use super::line::{Line, LineRef};
+use super::path::{Path, PathRef};
 
 
 //------------ Point ---------------------------------------------------------
 
 pub struct Point {
     key: String,
-}
-
-impl Point {
-    pub fn from_yaml(key: String, mut item: Item<Mapping>,
-                     builder: &CollectionBuilder) -> Result<Point, ()> {
-        Ok(Point {
-            key: key
-        })
-    }
+    subtype: Subtype,
+    progress: Progress,
+    junction: Option<bool>,
+    events: Events,
 }
 
 impl Point {
     pub fn key(&self) -> &str {
         &self.key
     }
+
+    pub fn subtype(&self) -> Subtype {
+        self.subtype
+    }
+
+    pub fn progress(&self) -> Progress {
+        self.progress
+    }
+
+    pub fn junction(&self) -> Option<bool> {
+        self.junction
+    }
+
+    pub fn events(&self) -> &Events {
+        &self.events
+    }
 }
 
-/*
-impl PointDocument {
-    pub fn parse(_item: Item<Scalar>, _path: &Path,
-                 _collection: &CollectionBuilder,
-                 _vars: &StackedMap<Value<Scalar>>,
-                 _errors: &mut Vec<Error>)
-                 -> Option<(String, Self)> {
-        None
+impl Point {
+    pub fn from_yaml(key: String, mut item: Item<Mapping>,
+                     builder: &CollectionBuilder)
+                     -> Result<Document, Option<String>> {
+        let subtype = item.parse_default("subtype", builder);
+        let progress = item.parse_default("progress", builder);
+        let junction = item.parse_opt("junction", builder);
+        let events = item.parse_mandatory("events", builder);
+        try_key!(item.exhausted(builder), key);
+
+        Ok(Document::Point(Point {
+            subtype: try_key!(subtype, key),
+            progress: try_key!(progress, key),
+            junction: try_key!(junction, key),
+            events: try_key!(events, key),
+            key: key,
+        }))
     }
 }
 
 
-use ::collection::{Key, Reference};
-use super::{Line, Path, Source, Structure};
-use super::common::{Date, LocalizedString, Progress}; 
+//------------ Subtype -------------------------------------------------------
 
+optional_enum! {
+    pub enum Subtype {
+        (Border => "border"),
+        (Break => "break"),
+        (Post => "post"),
+        (Reference => "reference"),
 
-pub enum Category {
-    De(DeCategory),
-    Dk(DkCategory),
-    No(NoCategory),
+        default Post
+    }
 }
 
-pub enum DeCategory {
-    Bf, Hp, Bft, Hst, Bk, Abzw, Dkst, Uest, Uehst,
-    Awanst, Anst,
-    Ldst, Ahst, Gnst, Ga,
-    Stw, Po, Glgr,
-    EGr, LGr, Strw,
-    Tp, Gp, Ust,
-    Museum
+
+//------------ Events --------------------------------------------------------
+
+pub struct Events(Vec<Event>);
+
+impl FromYaml for Events {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let item = item.into_sequence(builder)?;
+        let mut res = Some(Vec::new());
+        for event in item {
+            if let Ok(event) = Event::from_yaml(event, builder) {
+                if let Some(ref mut res) = res {
+                    res.push(event)
+                }
+            }
+        }
+        res.ok_or(()).map(Events)
+    }
 }
 
-pub enum DkCategory {
-    St, T, Smd,
-    Gr
+impl ops::Deref for Events {
+    type Target = [Event];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-pub enum NoCategory {
-    S, Sp, Hp
+
+//------------ Event ---------------------------------------------------------
+
+pub struct Event {
+    date: Option<Date>,
+    sources: Sources,
+
+    category: Option<ShortVec<Category>>,
+    connection: Option<ShortVec<PointRef>>,
+    local_name: Option<LocalizedString>,
+    location: Option<ShortVec<Location>>,
+    master: Option<PointRef>,
+    merged: Option<PointRef>,
+    name: Option<String>,
+    note: Option<LocalizedString>,
+    public_name: Option<ShortVec<String>>,
+    service: Option<Service>,
+    site: Option<ShortVec<Site>>,
+    short_name: Option<String>,
+    split_from: Option<PointRef>,
+    staff: Option<Staff>,
+    status: Option<Status>,
+
+    de_ds100: Option<String>,
+    de_dstnr: Option<String>,
+    de_lknr: Option<String>,
+    de_rang: Option<DeRangklasse>,
+    de_vbl: Option<String>,
+
+    dk_code: Option<String>,
+
+    no_fs: Option<String>,
+    no_njk: Option<String>,
+    no_nsb: Option<String>,
 }
 
+impl Event {
+    pub fn date(&self) -> Option<&Date> {
+        self.date.as_ref()
+    }
+
+    pub fn sources(&self) -> &Sources {
+        &self.sources
+    }
+
+    pub fn category(&self) -> Option<&ShortVec<Category>> {
+        self.category.as_ref()
+    }
+
+    pub fn connection(&self) -> Option<&ShortVec<PointRef>> {
+        self.connection.as_ref()
+    }
+
+    pub fn local_name(&self) -> Option<&LocalizedString> {
+        self.local_name.as_ref()
+    }
+
+    pub fn location(&self) -> Option<&ShortVec<Location>> {
+        self.location.as_ref()
+    }
+
+    pub fn master(&self) -> Option<DocumentGuard<Point>> {
+        self.master.as_ref().map(PointRef::get)
+    }
+
+    pub fn merged(&self) -> Option<DocumentGuard<Point>> {
+        self.merged.as_ref().map(PointRef::get)
+    }
+
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_ref().map(AsRef::as_ref)
+    }
+
+    pub fn note(&self) -> Option<&LocalizedString> {
+        self.note.as_ref()
+    }
+
+    pub fn public_name(&self) -> Option<&ShortVec<String>> {
+        self.public_name.as_ref()
+    }
+
+    pub fn service(&self) -> Option<Service> {
+        self.service
+    }
+
+    pub fn site(&self) -> Option<&ShortVec<Site>> {
+        self.site.as_ref()
+    }
+
+    pub fn short_name(&self) -> Option<&str> {
+        self.short_name.as_ref().map(AsRef::as_ref)
+    }
+
+    pub fn split_from(&self) -> Option<DocumentGuard<Point>> {
+        self.split_from.as_ref().map(PointRef::get)
+    }
+
+    pub fn staff(&self) -> Option<Staff> {
+        self.staff
+    }
+
+    pub fn status(&self) -> Option<Status> {
+        self.status
+    }
+
+    pub fn de_ds100(&self) -> Option<&str> {
+        self.de_ds100.as_ref().map(AsRef::as_ref)
+    }
+
+    pub fn de_dstnr(&self) -> Option<&str> {
+        self.de_dstnr.as_ref().map(AsRef::as_ref)
+    }
+
+    pub fn de_lknr(&self) -> Option<&str> {
+        self.de_lknr.as_ref().map(AsRef::as_ref)
+    }
+
+    pub fn de_rang(&self) -> Option<DeRangklasse> {
+        self.de_rang
+    }
+
+    pub fn de_vbl(&self) -> Option<&str> {
+        self.de_vbl.as_ref().map(AsRef::as_ref)
+    }
+
+    pub fn dk_code(&self) -> Option<&str> {
+        self.dk_code.as_ref().map(AsRef::as_ref)
+    }
+
+    pub fn no_fs(&self) -> Option<&str> {
+        self.no_fs.as_ref().map(AsRef::as_ref)
+    }
+
+    pub fn no_njk(&self) -> Option<&str> {
+        self.no_njk.as_ref().map(AsRef::as_ref)
+    }
+
+    pub fn no_nsb(&self) -> Option<&str> {
+        self.no_nsb.as_ref().map(AsRef::as_ref)
+    }
+}
+
+impl FromYaml for Event {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let mut item = item.into_mapping(builder)?;
+        let date = item.parse_opt("date", builder);
+        let sources = Sources::from_opt_yaml(item.optional_key("sources"),
+                                             builder);
+        let category = item.parse_opt("category", builder);
+        let connection = item.parse_opt("connection", builder);
+        let local_name = item.parse_opt("local_name", builder);
+        let location = item.parse_opt("location", builder);
+        let master = item.parse_opt("master", builder);
+        let merged = item.parse_opt("merged", builder);
+        let name = item.parse_opt("name", builder);
+        let note = item.parse_opt("note", builder);
+        let public_name = item.parse_opt("public_name", builder);
+        let service = item.parse_opt("service", builder);
+        let site = item.parse_opt("site", builder);
+        let short_name = item.parse_opt("short_name", builder);
+        let split_from = item.parse_opt("split_from", builder);
+        let staff = item.parse_opt("staff", builder);
+        let status = item.parse_opt("status", builder);
+        let de_ds100 = item.parse_opt("de.DS100", builder);
+        let de_dstnr = item.parse_opt("de.dstnr", builder);
+        let de_lknr = item.parse_opt("de.lknr", builder);
+        let de_rang = item.parse_opt("de.Rangklasse", builder);
+        let de_vbl = item.parse_opt("de.VBL", builder);
+        let dk_code = item.parse_opt("dk.code", builder);
+        let no_fs = item.parse_opt("no.fs", builder);
+        let no_njk = item.parse_opt("no.NJK", builder);
+        let no_nsb = item.parse_opt("no.NSB", builder);
+        item.exhausted(builder)?;
+
+        Ok(Event {
+            date: date?,
+            sources: sources?,
+            category: category?,
+            connection: connection?,
+            local_name: local_name?,
+            location: location?,
+            master: master?,
+            merged: merged?,
+            name: name?,
+            note: note?,
+            public_name: public_name?,
+            service: service?,
+            site: site?,
+            short_name: short_name?,
+            split_from: split_from?,
+            staff: staff?,
+            status: status?,
+            de_ds100: de_ds100?,
+            de_dstnr: de_dstnr?,
+            de_lknr: de_lknr?,
+            de_rang: de_rang?,
+            de_vbl: de_vbl?,
+            dk_code: dk_code?,
+            no_fs: no_fs?,
+            no_njk: no_njk?,
+            no_nsb: no_nsb?,
+        })
+    }
+}
+
+
+//------------ Category ------------------------------------------------------
+
+mandatory_enum! {
+    pub enum Category {
+        (DeBf => "de.Bf"),
+        (DeHp => "de.Hp"),
+        (DeBft => "de.Bft"),
+        (DeHst => "de.Hst"),
+        (DeBk => "de.Bk"),
+        (DeAbzw => "de.Abzw"),
+        (DeDkst => "de.Dkst"),
+        (DeUest => "de.Uest"),
+        (DeUehst => "de.Uehst"),
+        (DeAwanst => "de.Awanst"),
+        (DeAnst => "de.Anst"),
+        (DeLdst => "de.Ldst"),
+        (DeAhst => "de.Ahst"),
+        (DeGnst => "de.Gnst"),
+        (DeGa => "de.Ga"),
+        (DeStw => "de.Stw"),
+        (DePo => "de.Po"),
+        (DeGlgr => "de.Glgr"),
+        (DeEGr => "de.EGr"),
+        (DeLGr => "de.LGr"),
+        (DeStrw => "de.Strw"),
+        (DeTp => "de.Tp"),
+        (DeGp => "de.Gp"),
+        (DeUst => "de.Ust"),
+        (DeMuseum => "de.Museum"),
+
+        (DkSt => "dk.St"),
+        (DkT => "dk.T"),
+        (DkSmd => "dk.Smd"),
+        (DkGr => "dk.Gr"),
+
+        (NoS => "no.S"),
+        (NoSp => "no.Sp"),
+        (NoHp => "no.Hp"),
+    }
+}
+
+
+//------------ Location ------------------------------------------------------
 
 pub struct Location {
-    pub line: Reference<Line>,
-    pub location: String
+    line: LineRef,
+    location: String
+}
+
+impl Location {
+    pub fn line(&self) -> DocumentGuard<Line> {
+        self.line.get()
+    }
+
+    pub fn location(&self) -> &str {
+        &self.location
+    }
+}
+
+impl FromYaml for Location {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let mut item = item.into_mapping(builder)?;
+        let line = item.parse_mandatory("line", builder);
+        let location = item.parse_mandatory("location", builder);
+        item.exhausted(builder)?;
+
+        Ok(Location {
+            line: line?,
+            location: location?
+        })
+    }
 }
 
 
-pub enum Service {
-    Full,
-    None,
-    Passenger,
-    Freight
-}
-*/
+//------------ Service -------------------------------------------------------
 
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum Side {
-    Left, Right, Up, Down, Center
+mandatory_enum! {
+    pub enum Service {
+        (Full => "full"),
+        (None => "none"),
+        (Passenger => "passenger"),
+        (Freight => "freight"),
+    }
 }
 
+
+//------------ Side ----------------------------------------------------------
+
+mandatory_enum! {
+    pub enum Side {
+        (Left => "left"),
+        (Right => "right"),
+        (Up => "up"),
+        (Down => "down"),
+        (Center => "center"),
+    }
+}
+
+/*
 impl str::FromStr for Side {
     type Err = String;
 
@@ -101,102 +425,81 @@ impl str::FromStr for Side {
         }
     }
 }
+*/
 
-/*
+
+//------------ Site ----------------------------------------------------------
+
 pub struct Site {
-    pub path: Reference<Path>,
-    pub node: String,
-    pub side: Side
+    path: PathRef,
+    node: String,
+    side: Option<Side>,
 }
 
+impl Site {
+    pub fn path(&self) -> DocumentGuard<Path> {
+        self.path.get()
+    }
 
-pub enum Staff {
-    Full,
-    Agent,
-    None
+    pub fn node(&self) -> &str {
+        &self.node
+    }
+
+    pub fn side(&self) -> Option<Side> {
+        self.side
+    }
 }
 
+impl FromYaml for Site {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let mut item = item.into_mapping(builder)?;
+        let path = item.parse_mandatory("path", builder);
+        let node = item.parse_mandatory("node", builder);
+        let side = item.parse_opt("side", builder);
+        item.exhausted(builder)?;
 
-pub enum Status {
-    Open,
-    Suspended,
-    Closed
-}
-
-
-pub enum Subtype {
-    Border,
-    Break,
-    Portal,
-    Post,
-    Reference
-}
-
-impl Default for Subtype {
-    fn default() -> Self {
-        Subtype::Post
+        Ok(Site{path: path?, node: node?, side: side?})
     }
 }
 
 
-pub enum DeRangklasse {
-    I, II, III, IV, V, VI, U, S
+//------------ Staff ---------------------------------------------------------
+
+mandatory_enum! {
+    pub enum Staff {
+        (Full => "full"),
+        (Agent => "agent"),
+        (None => "none"),
+    }
 }
 
 
-pub struct Event {
-    pub date: Option<Date>,
-    pub sources: Vec<Reference<Source>>,
+//------------ Status --------------------------------------------------------
 
-    pub category: Option<Vec<Category>>,
-    pub connection: Option<Vec<Point>>,
-    pub local_name: Option<LocalizedString>,
-    pub location: Option<Vec<Location>>,
-    pub master: Option<Reference<Point>>,
-    pub merged: Option<Reference<Point>>,
-    pub name: Option<String>,
-    pub note: Option<LocalizedString>,
-    pub public_name: Option<Vec<String>>,
-    pub service: Option<Vec<Service>>,
-    pub site: Option<Vec<Site>>,
-    pub short_name: Option<String>,
-    pub split_from: Option<Reference<Point>>,
-    pub staff: Option<Staff>,
-    pub status: Option<Status>,
-
-    pub de: DeEvent,
-    pub dk: DkEvent,
-    pub no: NoEvent,
-}
-
-pub struct DeEvent {
-    pub ds100: Option<String>,
-    pub dstnr: Option<String>,
-    pub lknr: Option<String>,
-    pub rangklasse: Option<DeRangklasse>,
-    pub vbl: Option<String>,
-}
-
-pub struct DkEvent {
-    pub code: Option<String>,
-}
-
-pub struct NoEvent {
-    pub fs: Option<String>,
-    pub njk: Option<String>,
-    pub nsb: Option<String>,
+mandatory_enum! {
+    pub enum Status {
+        (Open => "open"),
+        (Suspended => "suspended"),
+        (Closed => "closed"),
+    }
 }
 
 
-pub struct Point {
-    pub key: Key,
-    pub subtype: Subtype,
-    pub progress: Progress,
-    pub junction: bool,
-    pub events: Vec<Event>,
-    pub structure: Reference<Structure>,
+//------------ DeRangklasse --------------------------------------------------
+
+mandatory_enum! {
+    pub enum DeRangklasse {
+        (I => "I"),
+        (Ii => "II"),
+        (Iii => "III"),
+        (Iv => "IV"),
+        (V => "V"),
+        (Vi => "VI"),
+        (U => "U"),
+        (S => "S"),
+    }
 }
-*/
 
 
 //------------ PointRef ------------------------------------------------------
@@ -204,6 +507,10 @@ pub struct Point {
 pub struct PointRef(DocumentRef);
 
 impl PointRef {
+    pub fn new(builder: &CollectionBuilder, key: &str, pos: Source) -> Self {
+        PointRef(builder.ref_doc(key, pos, Some(DocumentType::Point)))
+    }
+
     pub fn get(&self) -> DocumentGuard<Point> {
         self.0.get()
     }
@@ -214,7 +521,15 @@ impl FromYaml for PointRef {
                  -> Result<Self, ()> {
         let item = item.into_string_item(builder)?;
         Ok(PointRef(builder.ref_doc(item.value(), item.source(),
-                                    DocumentType::Point)))
+                                    Some(DocumentType::Point))))
     }
 }
 
+impl FromYaml for Option<PointRef> {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let pos = item.source();
+        let value = item.parse::<Option<String>>(builder)?;
+        Ok(value.map(|value| PointRef::new(builder, &value, pos)))
+    }
+}

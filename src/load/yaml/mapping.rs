@@ -24,7 +24,24 @@ impl Mapping {
                                   -> Result<Option<T>, ()> {
         match self.0.remove(key) {
             None => Ok(None),
-            Some(item) => Ok(Some(T::from_yaml(item, builder)?)),
+            Some(item) => {
+                if item.is_null() {
+                    Ok(None)
+                }
+                else {
+                    T::from_yaml(item, builder).map(Some)
+                }
+            }
+        }
+    }
+
+    pub fn parse_default<T>(&mut self, key: &str,
+                            builder: &CollectionBuilder)
+                            -> Result<T, ()>
+                         where T: FromYaml + Default {
+        match self.0.remove(key) {
+            None => Ok(T::default()),
+            Some(item) => T::from_yaml(item, builder)
         }
     }
 }

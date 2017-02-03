@@ -7,7 +7,7 @@ use std::{ops, path};
 use std::sync::Arc;
 
 
-#[derive(Debug)]
+#[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Path(Arc<path::PathBuf>);
 
 impl Path {

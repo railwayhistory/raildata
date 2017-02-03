@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use yaml_rust::yaml;
 use yaml_rust::scanner::{Marker, TScalarStyle, TokenType};
 use ::collection::CollectionBuilder;
-use ::load::error::{Error, Source};
+use ::load::error::Source;
 use ::load::path::Path;
 use super::stream::{Item, Value, ValueItem};
 use super::mapping::MappingBuilder;

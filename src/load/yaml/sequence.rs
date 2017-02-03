@@ -3,6 +3,7 @@
 use std::ops;
 use yaml_rust::yaml;
 use yaml_rust::scanner::Marker;
+use ::collection::CollectionBuilder;
 use ::load::path::Path;
 use super::stream::{FromYaml, ValueItem};
 
@@ -26,6 +27,13 @@ impl IntoIterator for Sequence {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
+    }
+}
+
+impl FromYaml for Sequence {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        item.into_sequence(builder)
     }
 }
 

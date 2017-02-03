@@ -1,8 +1,9 @@
 
 use std::str::FromStr;
 use yaml_rust::scanner::{Marker, TokenType};
+use ::collection::CollectionBuilder;
 use ::load::path::Path;
-use super::stream::{Value, ValueItem};
+use super::stream::{FromYaml, Value, ValueItem};
 use super::mapping::Mapping;
 use super::vars::Vars;
 
@@ -35,19 +36,16 @@ pub fn parse_scalar(value: &str, tag: &Option<TokenType>, path: &Path,
     // Core schema types
     else if let Some(res) = null(value, tag) {
         res?;
-        Ok(ValueItem::new(Value::Scalar(Scalar::Null), path.clone(),
-                          Some(mark)))
+        Ok(ValueItem::new(Value::Null, path.clone(), Some(mark)))
     }
     else if let Some(res) = boolean(value, tag) {
-        Ok(ValueItem::new(Value::Scalar(Scalar::Bool(res?)),
-                          path.clone(), Some(mark)))
+        Ok(ValueItem::new(Value::Bool(res?), path.clone(), Some(mark)))
     }
     else if let Some(res) = int(value, tag) {
-        Ok(ValueItem::new(Value::Scalar(Scalar::Int(res?)),
-                          path.clone(), Some(mark)))
+        Ok(ValueItem::new(Value::Int(res?), path.clone(), Some(mark)))
     }
     else if let Some(res) = float(value, tag) {
-        Ok(ValueItem::new(Value::Scalar(Scalar::Float(Float::new(res?))),
+        Ok(ValueItem::new(Value::Float(Float::new(res?)),
                           path.clone(), Some(mark)))
     }
     else if let Some(res) = string(value, tag) {
@@ -147,8 +145,8 @@ fn pathref(path: &Path, value: &str, mark: Marker)
                               Some(mark)));
     if let Some(offset) = offset {
         res.insert("offset".into(),
-                   ValueItem::new(Value::Scalar(Scalar::Float(offset)),
-                                  path.clone(), Some(mark)));
+                   ValueItem::new(Value::Float(offset), path.clone(),
+                                  Some(mark)));
     }
     Ok(ValueItem::new(Value::Mapping(res), path.clone(), Some(mark)))
 }
@@ -286,17 +284,6 @@ fn is_plain(tag: &Option<TokenType>) -> bool {
 }
 
 
-//------------ Scalar --------------------------------------------------------
-
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum Scalar {
-    Null,
-    Bool(bool),
-    Int(i64),
-    Float(Float),
-}
-
-
 //------------ Float ---------------------------------------------------------
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -333,4 +320,9 @@ impl FromStr for Float {
     }
 }
 
-
+impl FromYaml for Float {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        item.into_float(builder)
+    }
+}
