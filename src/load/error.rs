@@ -107,6 +107,18 @@ impl Source {
     }
 }
 
+impl From<Path> for Source {
+    fn from(path: Path) -> Self {
+        Source::File{path: path}
+    }
+}
+
+impl<'a> From<&'a Path> for Source {
+    fn from(path: &'a  Path) -> Self {
+        Source::File{path: path.clone()}
+    }
+}
+
 impl fmt::Display for Source {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {

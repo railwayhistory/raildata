@@ -129,11 +129,12 @@ pub struct Event {
 
     de_ds100: Option<String>,
     de_dstnr: Option<String>,
-    de_lknr: Option<String>,
+    de_lknr: Option<ShortVec<String>>,
     de_rang: Option<DeRangklasse>,
     de_vbl: Option<String>,
+    de_name16: Option<String>,
 
-    dk_code: Option<String>,
+    dk_ref: Option<String>,
 
     no_fs: Option<String>,
     no_njk: Option<String>,
@@ -217,8 +218,8 @@ impl Event {
         self.de_dstnr.as_ref().map(AsRef::as_ref)
     }
 
-    pub fn de_lknr(&self) -> Option<&str> {
-        self.de_lknr.as_ref().map(AsRef::as_ref)
+    pub fn de_lknr(&self) -> Option<&ShortVec<String>> {
+        self.de_lknr.as_ref()
     }
 
     pub fn de_rang(&self) -> Option<DeRangklasse> {
@@ -229,8 +230,12 @@ impl Event {
         self.de_vbl.as_ref().map(AsRef::as_ref)
     }
 
-    pub fn dk_code(&self) -> Option<&str> {
-        self.dk_code.as_ref().map(AsRef::as_ref)
+    pub fn de_name16(&self) -> Option<&str> {
+        self.de_name16.as_ref().map(AsRef::as_ref)
+    }
+
+    pub fn dk_ref(&self) -> Option<&str> {
+        self.dk_ref.as_ref().map(AsRef::as_ref)
     }
 
     pub fn no_fs(&self) -> Option<&str> {
@@ -273,7 +278,8 @@ impl FromYaml for Event {
         let de_lknr = item.parse_opt("de.lknr", builder);
         let de_rang = item.parse_opt("de.Rangklasse", builder);
         let de_vbl = item.parse_opt("de.VBL", builder);
-        let dk_code = item.parse_opt("dk.code", builder);
+        let de_name16 = item.parse_opt("de.name16", builder);
+        let dk_ref = item.parse_opt("dk.ref", builder);
         let no_fs = item.parse_opt("no.fs", builder);
         let no_njk = item.parse_opt("no.NJK", builder);
         let no_nsb = item.parse_opt("no.NSB", builder);
@@ -302,7 +308,8 @@ impl FromYaml for Event {
             de_lknr: de_lknr?,
             de_rang: de_rang?,
             de_vbl: de_vbl?,
-            dk_code: dk_code?,
+            de_name16: de_name16?,
+            dk_ref: dk_ref?,
             no_fs: no_fs?,
             no_njk: no_njk?,
             no_nsb: no_nsb?,
@@ -319,6 +326,7 @@ mandatory_enum! {
         (DeHp => "de.Hp"),
         (DeBft => "de.Bft"),
         (DeHst => "de.Hst"),
+        (DeKr => "de.Kr"),
         (DeBk => "de.Bk"),
         (DeAbzw => "de.Abzw"),
         (DeDkst => "de.Dkst"),
@@ -346,9 +354,9 @@ mandatory_enum! {
         (DkSmd => "dk.Smd"),
         (DkGr => "dk.Gr"),
 
-        (NoS => "no.S"),
-        (NoSp => "no.Sp"),
-        (NoHp => "no.Hp"),
+        (NoS => "no.s"),
+        (NoSp => "no.sp"),
+        (NoHp => "no.hp"),
     }
 }
 

@@ -6,5 +6,6 @@ pub mod error;
 pub mod facts;
 pub mod yaml;
 pub mod path;
+pub mod paths;
 pub mod tree;
 

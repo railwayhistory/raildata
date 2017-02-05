@@ -237,6 +237,7 @@ impl Event {
         let mut item = item.into_mapping(builder)?;
         let date = item.parse_opt("date", builder);
         let sections = Section::from_event_yaml(&mut item, builder);
+        let document = item.parse_opt("document", builder);
         let sources = Sources::from_opt_yaml(item.optional_key("sources"),
                                              builder);
         let category = item.parse_opt("category", builder);
@@ -257,6 +258,7 @@ impl Event {
         let rails = item.parse_opt("rails", builder);
         let region = item.parse_opt("region", builder);
         let reused = item.parse_opt("reused", builder);
+        let service = item.parse_opt("service", builder);
         let status = item.parse_opt("status", builder);
         let tracks = item.parse_opt("tracks", builder);
         let treaty = Contract::from_yaml(item.optional_key("treaty"),
@@ -264,10 +266,11 @@ impl Event {
         let de_vzg = item.parse_opt("de.VzG", builder);
         item.exhausted(builder)?;
 
+        // Obsolete document keys in concession, contract, and treaty.
+        let mut document = document?;
         let (concession, concession_doc) = concession?;
         let (contract, contract_doc) = contract?;
         let (treaty, treaty_doc) = treaty?;
-        let mut document = None;
         if concession_doc.is_some() {
             if document.is_some() {
                 builder.str_error(item.source(),
@@ -293,6 +296,20 @@ impl Event {
             document = treaty_doc;
         }
 
+        // Obsolete "service".
+        let mut freight = freight?;
+        let mut passenger = passenger?;
+        if let Some(service) = service? {
+            let (f, p) = match service {
+                Service::None => (Freight::None, Passenger::None),
+                Service::Freight => (Freight::Full, Passenger::None),
+                Service::Passenger => (Freight::None, Passenger::Full),
+                Service::Full => (Freight::Full, Passenger::Full),
+            };
+            freight = freight.or(Some(f));
+            passenger = passenger.or(Some(p));
+        }
+
         Ok(Event {
             date: date?,
             sections: sections?,
@@ -303,14 +320,14 @@ impl Event {
             contract: contract,
             course: course?,
             electrified: electrified?,
-            freight: freight?,
+            freight: freight,
             gauge: gauge?,
             local_name: local_name?,
             name: name?,
             note: note?,
             operator: operator?,
             owner: owner?,
-            passenger: passenger?,
+            passenger: passenger,
             rails: rails?,
             region: region?,
             reused: reused?,
@@ -371,15 +388,9 @@ impl Section {
 impl FromYaml for Section {
     fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
                  -> Result<Self, ()> {
-        let item = item.into_sequence_item(builder)?;
-        if item.len() != 2 {
-            builder.str_error(item.source(),
-                              "section element must have two items");
-            return Err(())
-        }
-        let mut item = item.into_inner().0.into_iter();
-        let start = item.next().unwrap().parse(builder);
-        let end = item.next().unwrap().parse(builder);
+        let mut item = item.into_mapping(builder)?;
+        let start = item.parse_opt("start", builder);
+        let end = item.parse_opt("end", builder);
         Ok(Section(start?, end?))
     }
 }
@@ -693,6 +704,17 @@ mandatory_enum! {
     }
 }
 
+//------------ Service -------------------------------------------------------
+
+mandatory_enum! {
+    pub enum Service {
+        (None => "none"),
+        (Passenger => "passenger"),
+        (Freight => "freight"),
+        (Full => "full"),
+    }
+}
+
 
 //------------ Status --------------------------------------------------------
 
@@ -705,7 +727,7 @@ mandatory_enum! {
         (Reopened => "reopened"),
         (Closed => "closed"),
         (Removed => "removed"),
-        (Released => "releases"),
+        (Released => "released"),
     }
 }
 

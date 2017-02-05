@@ -2,7 +2,7 @@ use std::str::FromStr;
 use url::Url;
 use ::collection::{CollectionBuilder, DocumentRef, DocumentGuard};
 use ::load::yaml::{FromYaml, Item, Mapping, ValueItem};
-use super::common::{ShortVec, Sources};
+use super::common::{LocalizedString, ShortVec, Sources};
 use super::date::Date;
 use super::document::{Document, DocumentType};
 use super::organization::{Organization, OrganizationRef};
@@ -70,6 +70,7 @@ pub struct Article {
     crossref: Sources,
     date: Option<Date>,
     editor: Option<ShortVec<String>>,
+    note: Option<LocalizedString>,
     pages: Option<Pages>,
     regards: ShortVec<DocumentRef>,
     revision: Option<String>,
@@ -102,6 +103,10 @@ impl Article {
         self.editor.as_ref()
     }
 
+    pub fn note(&self) -> Option<&LocalizedString> {
+        self.note.as_ref()
+    }
+
     pub fn pages(&self) -> Option<Pages> {
         self.pages
     }
@@ -131,6 +136,7 @@ impl Article {
         let crossref = item.parse_default("crossref", builder);
         let date = item.parse_opt("date", builder);
         let editor = item.parse_opt("editor", builder);
+        let note = item.parse_opt("note", builder);
         let pages = item.parse_opt("pages", builder);
         let regards = item.parse_default("regards", builder);
         let revision = item.parse_opt("revision", builder);
@@ -144,6 +150,7 @@ impl Article {
             crossref: try_key!(crossref, key),
             date: try_key!(date, key),
             editor: try_key!(editor, key),
+            note: try_key!(note, key),
             pages: try_key!(pages, key),
             regards: try_key!(regards, key),
             revision: try_key!(revision, key),
@@ -165,9 +172,12 @@ pub struct Book {
     editor: Option<ShortVec<String>>,
     howpublished: Option<String>,
     institution: Option<OrganizationRef>,
+    note: Option<LocalizedString>,
+    organization: Option<OrganizationRef>,
     publisher: Option<OrganizationRef>,
     series: Option<SourceRef>,
     title: String,
+    volume: Option<String>,
     isbn: Option<String>,
 }
 
@@ -200,6 +210,14 @@ impl Book {
         self.institution.as_ref().map(OrganizationRef::get)
     }
 
+    pub fn note(&self) -> Option<&LocalizedString> {
+        self.note.as_ref()
+    }
+
+    pub fn organization(&self) -> Option<DocumentGuard<Organization>> {
+        self.organization.as_ref().map(OrganizationRef::get)
+    }
+
     pub fn publisher(&self) -> Option<DocumentGuard<Organization>> {
         self.publisher.as_ref().map(OrganizationRef::get)
     }
@@ -210,6 +228,10 @@ impl Book {
 
     pub fn title(&self) -> &str {
         &self.title
+    }
+
+    pub fn volume(&self) -> Option<&str> {
+        self.volume.as_ref().map(AsRef::as_ref)
     }
 
     pub fn isbn(&self) -> Option<&str> {
@@ -226,10 +248,13 @@ impl Book {
         let editor = item.parse_opt("editor", builder);
         let howpublished = item.parse_opt("howpublised", builder);
         let institution = item.parse_opt("institution", builder);
+        let note = item.parse_opt("note", builder);
+        let organization = item.parse_opt("organization", builder);
         let publisher = item.parse_opt("publisher", builder);
         let series = item.parse_opt("series", builder);
         let title = item.mandatory_key("title", builder)
                         .and_then(|item| item.into_string(builder));
+        let volume = item.parse_opt("volume", builder);
         let isbn = item.parse_opt("isbn", builder);
         try_key!(item.exhausted(builder), key);
 
@@ -240,9 +265,12 @@ impl Book {
             editor: try_key!(editor, key),
             howpublished: try_key!(howpublished, key),
             institution: try_key!(institution, key),
+            note: try_key!(note, key),
+            organization: try_key!(organization, key),
             publisher: try_key!(publisher, key),
             series: try_key!(series, key),
             title: try_key!(title, key),
+            volume: try_key!(volume, key),
             isbn: try_key!(isbn, key),
             key: key,
         })
@@ -263,7 +291,7 @@ pub struct Issue {
     publisher: Option<OrganizationRef>,
     title: Option<String>,
     volume: Option<String>,
-    url: Option<Url>,
+    url: Option<ShortVec<Url>>,
     short_title: Option<String>,
 }
 
@@ -308,7 +336,7 @@ impl Issue {
         self.volume.as_ref().map(AsRef::as_ref)
     }
 
-    pub fn url(&self) -> Option<&Url> {
+    pub fn url(&self) -> Option<&ShortVec<Url>> {
         self.url.as_ref()
     }
 
@@ -363,7 +391,7 @@ pub struct Journal {
     organization: Option<OrganizationRef>,
     publisher: Option<OrganizationRef>,
     title: Option<String>,
-    url: Option<Url>,
+    url: Option<ShortVec<Url>>,
     short_title: Option<String>,
 }
 
@@ -404,7 +432,7 @@ impl Journal {
         self.title.as_ref().map(AsRef::as_ref)
     }
 
-    pub fn url(&self) -> Option<&Url> {
+    pub fn url(&self) -> Option<&ShortVec<Url>> {
         self.url.as_ref()
     }
 
@@ -451,6 +479,7 @@ pub struct Online {
     key: String,
     author: Option<ShortVec<String>>,
     date: Option<Date>,
+    edition: Option<String>,
     editor: Option<ShortVec<String>>,
     institution: Option<OrganizationRef>,
     organization: Option<OrganizationRef>,
@@ -474,6 +503,10 @@ impl Online {
 
     pub fn editor(&self) -> Option<&ShortVec<String>> {
         self.editor.as_ref()
+    }
+
+    pub fn edition(&self) -> Option<&str> {
+        self.edition.as_ref().map(AsRef::as_ref)
     }
 
     pub fn institution(&self) -> Option<DocumentGuard<Organization>> {
@@ -502,6 +535,7 @@ impl Online {
                  builder: &CollectionBuilder) -> Result<Self, Option<String>> {
         let author = item.parse_opt("author", builder);
         let date = item.parse_opt("date", builder);
+        let edition = item.parse_opt("edition", builder);
         let editor = item.parse_opt("editor", builder);
         let institution = item.parse_opt("institution", builder);
         let organization = item.parse_opt("organization", builder);
@@ -513,6 +547,7 @@ impl Online {
         Ok(Online {
             author: try_key!(author, key),
             date: try_key!(date, key),
+            edition: try_key!(edition, key),
             editor: try_key!(editor, key),
             institution: try_key!(institution, key),
             organization: try_key!(organization, key),
@@ -534,9 +569,11 @@ pub struct Misc {
     editor: Option<ShortVec<String>>,
     edition: Option<String>,
     institution: Option<OrganizationRef>,
+    note: Option<LocalizedString>,
     organization: Option<OrganizationRef>,
+    series: Option<String>,
     title: Option<String>,
-    url: Option<Url>,
+    url: Option<ShortVec<Url>>,
 }
 
 impl Misc {
@@ -564,15 +601,23 @@ impl Misc {
         self.institution.as_ref().map(OrganizationRef::get)
     }
 
+    pub fn note(&self) -> Option<&LocalizedString> {
+        self.note.as_ref()
+    }
+
     pub fn organization(&self) -> Option<DocumentGuard<Organization>> {
         self.organization.as_ref().map(OrganizationRef::get)
+    }
+
+    pub fn series(&self) -> Option<&str> {
+        self.series.as_ref().map(AsRef::as_ref)
     }
 
     pub fn title(&self) -> Option<&str> {
         self.title.as_ref().map(AsRef::as_ref)
     }
 
-    pub fn url(&self) -> Option<&Url> {
+    pub fn url(&self) -> Option<&ShortVec<Url>> {
         self.url.as_ref()
     }
 }
@@ -584,8 +629,10 @@ impl Misc {
         let date = item.parse_opt("date", builder);
         let edition = item.parse_opt("edition", builder);
         let editor = item.parse_opt("editor", builder);
+        let note = item.parse_opt("note", builder);
         let institution = item.parse_opt("institution", builder);
         let organization = item.parse_opt("organization", builder);
+        let series = item.parse_opt("series", builder);
         let title = item.parse_opt("title", builder);
         let url = item.parse_opt("url", builder);
         try_key!(item.exhausted(builder), key);
@@ -595,7 +642,9 @@ impl Misc {
             edition: try_key!(edition, key),
             editor: try_key!(editor, key),
             institution: try_key!(institution, key),
+            note: try_key!(note, key),
             organization: try_key!(organization, key),
+            series: try_key!(series, key),
             title: try_key!(title, key),
             url: try_key!(url, key),
             key: key,

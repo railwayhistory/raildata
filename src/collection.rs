@@ -97,8 +97,16 @@ impl CollectionBuilder {
         self.0.lock().unwrap().error(err)
     }
 
-    pub fn str_error(&self, pos: Source, s: &str) {
-        self.error(Error::new(pos, String::from(s)))
+    pub fn str_error<S: Into<Source>>(&self, pos: S, s: &str) {
+        self.error(Error::new(pos.into(), String::from(s)))
+    }
+
+    pub fn warning<E: Into<Error>>(&self, err: E) {
+        self.0.lock().unwrap().error(err)
+    }
+
+    pub fn str_warning<S: Into<Source>>(&self, pos: S, s: &str) {
+        self.error(Error::new(pos.into(), String::from(s)))
     }
 
     pub fn ref_doc(&self, key: &str, pos: Source, t: Option<DocumentType>)
@@ -111,7 +119,7 @@ impl CollectionBuilder {
         self.0.lock().unwrap().update_doc(doc, pos)
     }
 
-    pub fn broken_doc(&mut self, key: String, pos: Source) {
+    pub fn broken_doc(&self, key: String, pos: Source) {
         self.0.lock().unwrap().broken_doc(key, pos)
     }
 
@@ -249,7 +257,7 @@ impl BuilderValue {
 
     fn update(&mut self, doc: Document, pos: Source)
               -> Result<(), (Document, Source)> {
-        if self.pos.is_some() {
+        if let Some(ref pos) = self.pos {
             return Err((doc, pos.clone()))
         }
         unsafe { self.doc.set(doc) }

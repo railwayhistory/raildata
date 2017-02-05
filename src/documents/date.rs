@@ -196,11 +196,11 @@ impl str::FromStr for Date {
                 s = &s[1..];
                 Precision::Circa
             }
-            else if s.starts_with('<') {
+            else if s.starts_with('<') || s.starts_with('b') {
                 s = &s[1..];
                 Precision::Before
             }
-            else if s.starts_with('>') {
+            else if s.starts_with('>') || s.starts_with('a') {
                 s = &s[1..];
                 Precision::After
             }

@@ -9,9 +9,9 @@ use super::yaml::{Stream, Vars};
 
 pub fn load_facts_dir(base: Path, builder: &CollectionBuilder,
                       vars: Vars) {
-    let vars = load_vars(&base, vars, &builder);
-    let _ = load_yamls(&base, &builder, &vars);
-    let _ = load_dirs(&base, &builder, &vars);
+    let vars = load_vars(&base, vars, builder);
+    let _ = load_yamls(&base, builder, &vars);
+    let _ = load_dirs(&base, builder, &vars);
 }
 
 

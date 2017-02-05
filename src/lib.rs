@@ -1,3 +1,4 @@
+extern crate osmxml;
 extern crate url;
 extern crate yaml_rust;
 
