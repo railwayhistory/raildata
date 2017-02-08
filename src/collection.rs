@@ -50,6 +50,9 @@ impl<'a> IntoIterator for &'a Collection {
     }
 }
 
+unsafe impl Send for Collection { }
+unsafe impl Sync for Collection { }
+
 
 //------------ CollectionIter ------------------------------------------------
 

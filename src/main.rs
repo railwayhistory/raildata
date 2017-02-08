@@ -1,7 +1,7 @@
 extern crate raildata;
 
-pub use std::path::Path;
-pub use raildata::load::load_tree;
+use std::path::Path;
+use raildata::load::load_tree;
 
 
 fn main() {
