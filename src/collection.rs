@@ -272,7 +272,7 @@ impl BuilderValue {
         // Quietly ignore the request if we have a document already.
         if self.pos.is_some() {
             self.pos = Some(pos);
-            self.broken = false;
+            self.broken = true;
         }
     }
 
@@ -289,7 +289,7 @@ impl BuilderValue {
         }
         else if !self.broken {
             // We have a document. Check the types of all references.
-            let doc_type = unsafe { self.doc.get() .doc_type() };
+            let doc_type = unsafe { self.doc.get().doc_type() };
             let mut err = false;
             for (pos, ref_type) in self.refs {
                 if let Some(ref_type) = ref_type {
