@@ -27,8 +27,9 @@ impl Tree {
     }
 
     pub fn load(&mut self) {
-        load_facts_dir(self.base.clone(), &self.collection, Vars::new(None));
-        load_paths_dir(self.base.clone(), &self.collection);
+        load_facts_dir(self.base.join("facts"), &self.collection,
+                       Vars::new(None));
+        load_paths_dir(self.base.join("paths"), &self.collection);
     }
 
     pub fn finalize(self) -> Result<Collection, Vec<Error>> {
