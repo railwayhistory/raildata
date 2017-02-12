@@ -30,6 +30,10 @@ pub struct Collection {
 }
 
 impl Collection {
+    pub fn empty() -> Self {
+        Self::new(Vec::new())
+    }
+
     fn new(docs: Vec<Arc<Stored>>) -> Self {
         Collection {
             docs: docs
