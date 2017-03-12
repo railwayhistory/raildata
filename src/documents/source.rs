@@ -213,6 +213,7 @@ optional_enum! {
         (Online => "online"),
         (Series => "series"),
         (Volume => "volume"),
+        (InArticle => "inarticle"),
         (Misc => "misc"),
 
         default Misc
