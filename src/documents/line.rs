@@ -110,6 +110,9 @@ pub struct Event {
     document: Option<Sources>,
     sources: Sources,
 
+    alternative: Option<ShortVec<Alternative>>,
+    basis: Option<ShortVec<Basis>>,
+
     category: Option<ShortVec<Category>>,
     concession: Option<Concession>,
     contract: Option<Contract>,
@@ -148,6 +151,14 @@ impl Event {
 
     pub fn sources(&self) -> &Sources {
         &self.sources
+    }
+
+    pub fn alternative(&self) -> Option<&ShortVec<Alternative>> {
+        self.alternative.as_ref()
+    }
+
+    pub fn basis(&self) -> Option<&ShortVec<Basis>> {
+        self.basis.as_ref()
     }
 
     pub fn category(&self) -> Option<&ShortVec<Category>> {
@@ -240,6 +251,8 @@ impl Event {
         let document = item.parse_opt("document", builder);
         let sources = Sources::from_opt_yaml(item.optional_key("sources"),
                                              builder);
+        let alternative = item.parse_opt("alternative", builder);
+        let basis = item.parse_opt("basis", builder);
         let category = item.parse_opt("category", builder);
         let concession = Concession::from_yaml(item.optional_key("concession"),
                                                builder);
@@ -315,6 +328,8 @@ impl Event {
             sections: sections?,
             document: document,
             sources: sources?,
+            alternative: alternative?,
+            basis: basis?,
             category: category?,
             concession: concession,
             contract: contract,
@@ -392,6 +407,111 @@ impl FromYaml for Section {
         let start = item.parse_opt("start", builder);
         let end = item.parse_opt("end", builder);
         Ok(Section(start?, end?))
+    }
+}
+
+
+//------------ Alternative ---------------------------------------------------
+
+pub struct Alternative {
+    date: Option<Date>,
+    document: Option<Sources>,
+    sources: Sources,
+}
+
+impl Alternative {
+    pub fn date(&self) -> Option<&Date> {
+        self.date.as_ref()
+    }
+
+    pub fn document(&self) -> Option<&Sources> {
+        self.document.as_ref()
+    }
+
+    pub fn sources(&self) -> &Sources {
+        &self.sources
+    }
+}
+
+impl FromYaml for Alternative {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let mut item = item.into_mapping(builder)?;
+        let date = item.parse_opt("date", builder);
+        let document = item.parse_opt("document", builder);
+        let sources = Sources::from_opt_yaml(item.optional_key("sources"),
+                                             builder);
+        item.exhausted(builder)?;
+
+        Ok(Alternative {
+            date: date?,
+            document: document?,
+            sources: sources?,
+        })
+    }
+}
+
+
+//------------ Basis ---------------------------------------------------------
+
+pub struct Basis {
+    date: Option<ShortVec<Date>>,
+    document: Option<Sources>,
+    sources: Sources,
+    contract: Option<Contract>,
+    note: Option<LocalizedString>,
+    treaty: Option<Contract>,
+}
+
+impl Basis {
+    pub fn date(&self) -> Option<&ShortVec<Date>> {
+        self.date.as_ref()
+    }
+
+    pub fn document(&self) -> Option<&Sources> {
+        self.document.as_ref()
+    }
+
+    pub fn sources(&self) -> &Sources {
+        &self.sources
+    }
+
+    pub fn contract(&self) -> Option<&Contract> {
+        self.contract.as_ref()
+    }
+
+    pub fn note(&self) -> Option<&LocalizedString> {
+        self.note.as_ref()
+    }
+
+    pub fn treaty(&self) -> Option<&Contract> {
+        self.treaty.as_ref()
+    }
+}
+
+impl FromYaml for Basis {
+    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
+                 -> Result<Self, ()> {
+        let mut item = item.into_mapping(builder)?;
+        let date = item.parse_opt("date", builder);
+        let document = item.parse_opt("document", builder);
+        let sources = Sources::from_opt_yaml(item.optional_key("sources"),
+                                             builder);
+        let contract = Contract::from_yaml(item.optional_key("contract"),
+                                           builder);
+        let note = item.parse_opt("note", builder);
+        let treaty = Contract::from_yaml(item.optional_key("treaty"),
+                                         builder);
+        item.exhausted(builder)?;
+
+        Ok(Basis {
+            date: date?,
+            document: document?,
+            sources: sources?,
+            contract: contract?.0,
+            note: note?,
+            treaty: treaty?.0,
+        })
     }
 }
 
