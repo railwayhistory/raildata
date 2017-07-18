@@ -1,6 +1,7 @@
 use ::collection::CollectionBuilder;
 use ::load::yaml::{ValueItem}; 
 use super::line::Line;
+use super::local::is_valid_key;
 use super::organization::Organization;
 use super::path::Path;
 use super::point::Point;
@@ -29,11 +30,24 @@ impl Document {
     pub fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
                      -> Result<Self, Option<String>> {
         let mut item = item.into_mapping(builder).map_err(|_| None)?;
-        let key = item.parse_mandatory("key", builder)
-                      .map_err(|_| None)?;
-        let doctype = try_key!(item.parse_mandatory::<DocumentType>("type",
-                                                                    builder),
-                               key);
+        let doctype = match item.parse_mandatory::<DocumentType>("type",
+                                                                 builder) {
+            Ok(doctype) => doctype,
+            Err(()) => {
+                match item.parse_mandatory("key", builder) {
+                    Ok(key) => return Err(Some(key)),
+                    Err(()) => return Err(None)
+                }
+            }
+        };
+        let key = item.mandatory_key("key", builder).map_err(|_| None)?;
+        let (key, source) = key.into_string_item(builder)
+                               .map_err(|_| None)?
+                               .into_inner();
+        if !is_valid_key(&key, doctype) {
+            builder.string_error(source, format!("invalid key: {}", key));
+            return Err(Some(key))
+        }
         match doctype {
             DocumentType::Line => Line::from_yaml(key, item, builder),
             DocumentType::Organization
@@ -128,12 +142,27 @@ impl AsRef<Structure> for Document {
 
 mandatory_enum! {
     pub enum DocumentType {
-        (Organization => "organization"),
         (Line => "line"),
+        (Organization => "organization"),
         (Path => "path"),
         (Point => "point"),
         (Source => "source"),
         (Structure => "structure"),
+    }
+}
+
+impl DocumentType {
+    pub fn key_prefix(self) -> &'static str {
+        use self::DocumentType::*;
+
+        match self {
+            Line => "line.",
+            Organization => "org.",
+            Path => "path.",
+            Point => "point.",
+            Source => "src.",
+            Structure => "struct.",
+        }
     }
 }
 

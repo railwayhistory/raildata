@@ -108,6 +108,10 @@ impl CollectionBuilder {
         self.error(Error::new(pos.into(), String::from(s)))
     }
 
+    pub fn string_error<S: Into<Source>>(&self, pos: S, s: String) {
+        self.error(Error::new(pos.into(), s))
+    }
+
     pub fn warning<E: Into<Error>>(&self, err: E) {
         self.0.lock().unwrap().error(err)
     }
