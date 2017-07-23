@@ -119,6 +119,7 @@ pub struct Event {
     merged: Option<PointRef>,
     name: Option<String>,
     note: Option<LocalizedString>,
+    plc: Option<String>,
     public_name: Option<ShortVec<String>>,
     service: Option<Service>,
     site: Option<ShortVec<Site>>,
@@ -180,6 +181,10 @@ impl Event {
 
     pub fn note(&self) -> Option<&LocalizedString> {
         self.note.as_ref()
+    }
+
+    pub fn plc(&self) -> Option<&str> {
+        self.plc.as_ref().map(AsRef::as_ref)
     }
 
     pub fn public_name(&self) -> Option<&ShortVec<String>> {
@@ -266,6 +271,7 @@ impl FromYaml for Event {
         let merged = item.parse_opt("merged", builder);
         let name = item.parse_opt("name", builder);
         let note = item.parse_opt("note", builder);
+        let plc = item.parse_opt("PLC", builder);
         let public_name = item.parse_opt("public_name", builder);
         let service = item.parse_opt("service", builder);
         let site = item.parse_opt("site", builder);
@@ -296,6 +302,7 @@ impl FromYaml for Event {
             merged: merged?,
             name: name?,
             note: note?,
+            plc: plc?,
             public_name: public_name?,
             service: service?,
             site: site?,
@@ -330,7 +337,7 @@ mandatory_enum! {
         (DeBk => "de.Bk"),
         (DeAbzw => "de.Abzw"),
         (DeDkst => "de.Dkst"),
-        (DeUest => "de.Uest"),
+        (DeUest => "de.Üst"),
         (DeUehst => "de.Uehst"),
         (DeAwanst => "de.Awanst"),
         (DeAnst => "de.Anst"),
@@ -442,6 +449,7 @@ pub struct Site {
     path: PathRef,
     node: String,
     side: Option<Side>,
+    distance: f64
 }
 
 impl Site {
@@ -456,6 +464,10 @@ impl Site {
     pub fn side(&self) -> Option<Side> {
         self.side
     }
+
+    pub fn distance(&self) -> f64 {
+        self.distance
+    }
 }
 
 impl FromYaml for Site {
@@ -465,9 +477,10 @@ impl FromYaml for Site {
         let path = item.parse_mandatory("path", builder);
         let node = item.parse_mandatory("node", builder);
         let side = item.parse_opt("side", builder);
+        let distance = item.parse_mandatory("distance", builder);
         item.exhausted(builder)?;
 
-        Ok(Site{path: path?, node: node?, side: side?})
+        Ok(Site{path: path?, node: node?, side: side?, distance: distance?})
     }
 }
 

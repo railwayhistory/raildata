@@ -89,15 +89,21 @@ fn noderef(path: &Path, value: &str, mark: Marker)
     let mut value = value.split_whitespace();
     let path_key = value.next().ok_or("invalid !noderef value")?;
     let node = value.next().ok_or("invalid !noderef value")?;
-    let side = match value.next() {
-        Some(side) => {
-            if value.next().is_some() {
-                return Err("invalid !noderef value".into())
+    let side = value.next();
+    let distance = match side {
+        Some(_) => match value.next() {
+            Some(side) => {
+                if value.next().is_some() {
+                    return Err("invalid !noderef value".into())
+                }
+                side
             }
-            Some(side)
-        }
-        None => None
+            None => "0",
+        },
+        None => "0"
     };
+    let distance = f64::from_str(distance)
+                       .map_err(|_| "invalid distance in !noderef")?;
 
     let mut res = Mapping::new();
     res.insert("path".into(),
@@ -111,6 +117,9 @@ fn noderef(path: &Path, value: &str, mark: Marker)
                    ValueItem::new(Value::String(side.into()), path.clone(),
                                   Some(mark)));
     }
+    res.insert("distance".into(),
+               ValueItem::new(Value::Float(Float::new(distance)), path.clone(),
+                              Some(mark)));
     Ok(ValueItem::new(Value::Mapping(res), path.clone(), Some(mark)))
 }
 
