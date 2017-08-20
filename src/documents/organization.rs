@@ -102,6 +102,7 @@ pub struct Event {
     date: Option<Date>,
     sources: Sources,
 
+    domicile: Option<OrganizationRef>,
     local_name: Option<LocalizedString>,
     local_short_name: Option<LocalizedString>,
     master: Option<OrganizationRef>,
@@ -121,6 +122,10 @@ impl Event {
 
     pub fn sources(&self) -> &Sources {
         &self.sources
+    }
+
+    pub fn domicile(&self) -> Option<&OrganizationRef> {
+        self.domicile.as_ref()
     }
 
     pub fn local_name(&self) -> Option<&LocalizedString> {
@@ -168,6 +173,7 @@ impl Event {
         let date = item.parse_opt("date", builder);
         let sources = Sources::from_opt_yaml(item.optional_key("sources"),
                                              builder);
+        let domicile = item.parse_opt("domicile", builder);
         let local_name = item.parse_opt("local_name", builder);
         let local_short_name = item.parse_opt("local_short_name", builder);
         let master = item.parse_opt("master", builder);
@@ -180,6 +186,7 @@ impl Event {
         Ok(Event {
             date: date?,
             sources: sources?,
+            domicile: domicile?,
             local_name: local_name?,
             local_short_name: local_short_name?,
             master: master?,
@@ -198,6 +205,7 @@ impl Event {
 
 mandatory_enum! {
     pub enum Status {
+        (Forming => "forming"),
         (Open => "open"),
         (Closed => "closed"),
     }

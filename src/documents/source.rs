@@ -18,6 +18,8 @@ pub struct Source {
     collection: Option<SourceRef>,
     crossref: Sources,
     date: Option<Date>,
+    designation: Option<String>,
+    digital: Option<ShortVec<Url>>,
     edition: Option<String>,
     editor: Option<ShortVec<String>>,
     howpublished: Option<String>,
@@ -65,6 +67,14 @@ impl Source {
 
     pub fn date(&self) -> Option<&Date> {
         self.date.as_ref()
+    }
+
+    pub fn designation(&self) -> Option<&str> {
+        self.designation.as_ref().map(AsRef::as_ref)
+    }
+
+    pub fn digital(&self) -> Option<&ShortVec<Url>> {
+        self.digital.as_ref()
     }
 
     pub fn edition(&self) -> Option<&str> {
@@ -151,6 +161,8 @@ impl Source {
         let coll = item.parse_opt("collection", builder);
         let crossref = item.parse_default("crossref", builder);
         let date = item.parse_opt("date", builder);
+        let designation = item.parse_opt("designation", builder);
+        let digital = item.parse_opt("digital", builder);
         let edition = item.parse_opt("edition", builder);
         let editor = item.parse_opt("editor", builder);
         let howpublished = item.parse_opt("howpublised", builder);
@@ -178,6 +190,8 @@ impl Source {
             collection: try_key!(coll, key),
             crossref: try_key!(crossref, key),
             date: try_key!(date, key),
+            designation: try_key!(designation, key),
+            digital: try_key!(digital, key),
             edition: try_key!(edition, key),
             editor: try_key!(editor, key),
             howpublished: try_key!(howpublished, key),
