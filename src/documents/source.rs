@@ -14,6 +14,7 @@ pub struct Source {
     subtype: Subtype,
     progress: Progress,
 
+    attribution: Option<String>,
     author: Option<ShortVec<String>>,
     collection: Option<SourceRef>,
     crossref: Sources,
@@ -51,6 +52,10 @@ impl Source {
 
     pub fn progress(&self) -> Progress {
         self.progress
+    }
+
+    pub fn attribution(&self) -> Option<&str> {
+        self.attribution.as_ref().map(AsRef::as_ref)
     }
 
     pub fn author(&self) -> Option<&ShortVec<String>> {
@@ -157,6 +162,7 @@ impl Source {
         let subtype = item.parse_default("subtype", builder);
         let progress = item.parse_default("progress", builder);
 
+        let attribution = item.parse_opt("attribution", builder);
         let author = item.parse_opt("author", builder);
         let coll = item.parse_opt("collection", builder);
         let crossref = item.parse_default("crossref", builder);
@@ -186,6 +192,7 @@ impl Source {
         Ok(Document::Source(Source {
             subtype: try_key!(subtype, key),
             progress: try_key!(progress, key),
+            attribution: try_key!(attribution, key),
             author: try_key!(author, key),
             collection: try_key!(coll, key),
             crossref: try_key!(crossref, key),
