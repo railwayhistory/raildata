@@ -1,233 +1,257 @@
 use std::ops;
-use ::collection::{CollectionBuilder, DocumentRef, DocumentGuard};
-use ::load::yaml::{FromYaml, Item, Mapping, ValueItem};
-use super::common::{LocalizedString, Progress, ShortVec, Sources};
-use super::date::Date;
-use super::document::{Document, DocumentType};
+use ::load::construct::{Constructable, Context, Failed};
+use ::load::yaml::{MarkedMapping, Value};
+use super::common::{Basis, Common};
+use super::links::{OrganizationLink, SourceLink};
+use super::types::{EventDate, List, LanguageText, LocalText};
 
 
 //------------ Organization --------------------------------------------------
 
+#[derive(Clone, Debug)]
 pub struct Organization {
-    key: String,
+    common: Common,
     subtype: Subtype,
-    progress: Progress,
-    events: Events,
+    events: List<Event>,
 }
 
 impl Organization {
-    pub fn from_yaml(key: String, mut item: Item<Mapping>,
-                     builder: &CollectionBuilder)
-                     -> Result<Document, Option<String>> {
-        let subtype = item.parse_default("subtype", builder);
-        let progress = item.parse_default("progress", builder);
-        let events = item.parse_mandatory("events", builder);
-        try_key!(item.exhausted(builder), key);
-        Ok(Document::Organization(Organization {
-            subtype: try_key!(subtype, key),
-            progress: try_key!(progress, key),
-            events: try_key!(events, key),
-            key: key,
-        }))
-    }
-}
-
-impl Organization {
-    pub fn key(&self) -> &str {
-        &self.key
-    }
-
     pub fn subtype(&self) -> Subtype {
         self.subtype
     }
 
-    pub fn progress(&self) -> Progress {
-        self.progress
+    pub fn events(&self) -> &List<Event> {
+        &self.events
     }
+}
 
-    pub fn events(&self) -> &[Event] {
-        &self.events.0
+impl Organization {
+    pub fn construct<C>(common: Common, mut doc: MarkedMapping,
+                        context: &mut C) -> Result<Self, Failed>
+                     where C: Context {
+        let subtype = doc.take("subtype", context);
+        let events = doc.take("events", context);
+        doc.exhausted(context)?;
+        Ok(Organization { common,
+            subtype: subtype?,
+            events: events?,
+        })
+    }
+}
+
+
+impl ops::Deref for Organization {
+    type Target = Common;
+
+    fn deref(&self) -> &Common {
+        &self.common
+    }
+}
+
+impl ops::DerefMut for Organization {
+    fn deref_mut(&mut self) -> &mut Common {
+        &mut self.common
     }
 }
 
 
 //------------ Subtype -------------------------------------------------------
 
-optional_enum! {
+data_enum! {
     pub enum Subtype {
-        (Company => "company"),
-        (Country => "country"),
-        (Department => "department"),
-        (Person => "person"),
-        (Region => "region"),
-        (Misc => "misc"),
-
-        default Misc
-    }
-}
-
-
-//------------ Events --------------------------------------------------------
-
-pub struct Events(Vec<Event>);
-
-impl FromYaml for Events {
-    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
-                 -> Result<Self, ()> {
-        let item = item.into_sequence(builder)?;
-        let mut res = Some(Vec::new());
-        for event in item {
-            if let Ok(event) = Event::from_yaml(event, builder) {
-                if let Some(ref mut res) = res {
-                    res.push(event)
-                }
-            }
-        }
-        res.ok_or(()).map(Events)
-    }
-}
-
-impl ops::Deref for Events {
-    type Target = [Event];
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+        { Company: "company" }
+        { Country: "country" }
+        { Person: "person" }
+        { Place: "place" }
+        { Region: "region" }
     }
 }
 
 
 //------------ Event ---------------------------------------------------------
 
+#[derive(Clone, Debug)]
 pub struct Event {
-    date: Option<Date>,
-    sources: Sources,
+    // Meta attributes
+    date: EventDate,
+    document: List<SourceLink>,
+    source: List<SourceLink>,
+    basis: List<Basis>,
+    note: Option<LanguageText>,
 
-    domicile: Option<OrganizationRef>,
-    local_name: Option<LocalizedString>,
-    local_short_name: Option<LocalizedString>,
-    master: Option<OrganizationRef>,
-    merged: Option<OrganizationRef>,
-    name: Option<String>,
-    note: Option<LocalizedString>,
-    owner: Option<ShortVec<OrganizationRef>>,
-    short_name: Option<String>,
+    // Organization property attributes
+    domicile: List<OrganizationLink>,
+    master: Option<OrganizationLink>,
+    name: Option<LocalText>,
+    owner: List<OrganizationLink>,
+    property: Option<Property>,
+    short_name: Option<LocalText>,
     status: Option<Status>,
+    successor: Option<OrganizationLink>,
 }
 
-
+/// # Event Metadata Attributes
+///
 impl Event {
-    pub fn date(&self) -> Option<&Date> {
-        self.date.as_ref()
+    pub fn date(&self) -> &EventDate {
+        &self.date
     }
 
-    pub fn sources(&self) -> &Sources {
-        &self.sources
+    pub fn document(&self) -> &List<SourceLink> {
+        &self.document
     }
 
-    pub fn domicile(&self) -> Option<&OrganizationRef> {
-        self.domicile.as_ref()
+    pub fn source(&self) -> &List<SourceLink> {
+        &self.source
     }
 
-    pub fn local_name(&self) -> Option<&LocalizedString> {
-        self.local_name.as_ref()
+    pub fn basis(&self) -> &List<Basis> {
+        &self.basis
     }
 
-    pub fn local_short_name(&self) -> Option<&LocalizedString> {
-        self.local_short_name.as_ref()
+    pub fn note(&self) -> Option<&LanguageText> {
+        self.note.as_ref()
+    }
+}
+
+/// # Organization Property Attributes
+///
+impl Event {
+    pub fn domicile(&self) -> &List<OrganizationLink> {
+        &self.domicile
     }
 
-    pub fn master(&self) -> Option<&OrganizationRef> {
+    pub fn master(&self) -> Option<&OrganizationLink> {
         self.master.as_ref()
     }
 
-    pub fn merged(&self) -> Option<&OrganizationRef> {
-        self.merged.as_ref()
+    pub fn name(&self) -> Option<&LocalText> {
+        self.name.as_ref()
     }
 
-    pub fn name(&self) -> Option<&str> {
-        self.name.as_ref().map(ops::Deref::deref)
+    pub fn owner(&self) -> &List<OrganizationLink> {
+        &self.owner
     }
 
-    pub fn note(&self) -> Option<&LocalizedString> {
-        self.note.as_ref()
+    pub fn property(&self) -> Option<&Property> {
+        self.property.as_ref()
     }
 
-    pub fn owner(&self) -> Option<&ShortVec<OrganizationRef>> {
-        self.owner.as_ref()
-    }
-
-    pub fn short_name(&self) -> Option<&str> {
-        self.short_name.as_ref().map(ops::Deref::deref)
+    pub fn short_name(&self) -> Option<&LocalText> {
+        self.short_name.as_ref()
     }
 
     pub fn status(&self) -> Option<Status> {
         self.status
     }
+
+    pub fn successor(&self) -> Option<&OrganizationLink> {
+        self.successor.as_ref()
+    }
 }
 
 
-impl Event {
-    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
-                 -> Result<Self, ()> {
-        let mut item = item.into_mapping(builder)?;
-        let date = item.parse_opt("date", builder);
-        let sources = Sources::from_opt_yaml(item.optional_key("sources"),
-                                             builder);
-        let domicile = item.parse_opt("domicile", builder);
-        let local_name = item.parse_opt("local_name", builder);
-        let local_short_name = item.parse_opt("local_short_name", builder);
-        let master = item.parse_opt("master", builder);
-        let merged = item.parse_opt("merged", builder);
-        let name = item.parse_opt("name", builder);
-        let note = item.parse_opt("note", builder);
-        let owner = item.parse_opt("owner", builder);
-        let short_name = item.parse_opt("short_name", builder);
-        let status = item.parse_opt("status", builder);
+impl Constructable for Event {
+    fn construct<C: Context>(value: Value, context: &mut C)
+                             -> Result<Self, Failed> {
+        let mut value = value.into_mapping(context)?;
+        let date = value.take("date", context);
+        let document = value.take_default("document", context);
+        let source = value.take_default("source", context);
+        let basis = value.take_default("basis", context);
+        let note = value.take_opt("note", context);
+        let domicile = value.take_default("domicile", context);
+        let master = value.take_opt("master", context);
+        let name = value.take_opt("name", context);
+        let owner = value.take_default("owner", context);
+        let property = value.take_opt("property", context);
+        let short_name = value.take_opt("short_name", context);
+        let status = value.take_opt("status", context);
+        let successor = value.take_opt("successor", context);
+        value.exhausted(context)?;
         Ok(Event {
             date: date?,
-            sources: sources?,
-            domicile: domicile?,
-            local_name: local_name?,
-            local_short_name: local_short_name?,
-            master: master?,
-            merged: merged?,
-            name: name?,
+            document: document?,
+            source: source?,
+            basis: basis?,
             note: note?,
+            domicile: domicile?,
+            master: master?,
+            name: name?,
             owner: owner?,
+            property: property?,
             short_name: short_name?,
             status: status?,
+            successor: successor?,
         })
+    }
+}
+
+
+//------------ Property ------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct Property {
+    role: PropertyRole,
+    constructor: List<OrganizationLink>,
+    owner: List<OrganizationLink>,
+    operator: List<OrganizationLink>
+}
+
+impl Property {
+    pub fn role(&self) -> PropertyRole {
+        self.role
+    }
+
+    pub fn constructor(&self) -> &List<OrganizationLink> {
+        &self.constructor
+    }
+
+    pub fn owner(&self) -> &List<OrganizationLink> {
+        &self.owner
+    }
+
+    pub fn operator(&self) -> &List<OrganizationLink> {
+        &self.operator
+    }
+}
+
+impl Constructable for Property {
+    fn construct<C: Context>(value: Value, context: &mut C)
+                             -> Result<Self, Failed> {
+        let mut value = value.into_mapping(context)?;
+        let role = value.take("role", context);
+        let constructor = value.take_default("constructor", context);
+        let owner = value.take_default("owner", context);
+        let operator = value.take_default("operator", context);
+        value.exhausted(context)?;
+        Ok(Property {
+            role: role?,
+            constructor: constructor?,
+            owner: owner?,
+            operator: operator?,
+        })
+    }
+}
+
+
+//------------ PropertyRole --------------------------------------------------
+
+data_enum! {
+    pub enum PropertyRole {
+        { Constructur: "constructor" }
+        { Owner: "owner" }
+        { Operator: "operator" }
     }
 }
 
 
 //------------ Status --------------------------------------------------------
 
-mandatory_enum! {
+data_enum! {
     pub enum Status {
-        (Forming => "forming"),
-        (Open => "open"),
-        (Closed => "closed"),
+        { Forming: "forming" }
+        { Open: "open" }
+        { Closed: "closed" }
     }
 }
-
-
-//------------ OrganizationRef -----------------------------------------------
-
-pub struct OrganizationRef(DocumentRef);
-
-impl OrganizationRef {
-    pub fn get(&self) -> DocumentGuard<Organization> {
-        self.0.get()
-    }
-}
-
-impl FromYaml for OrganizationRef {
-    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
-                 -> Result<Self, ()> {
-        let item = item.into_string_item(builder)?;
-        Ok(OrganizationRef(builder.ref_doc(item.value(), item.source(),
-                                           Some(DocumentType::Organization))))
-    }
-}
-

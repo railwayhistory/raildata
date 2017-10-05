@@ -1,8 +1,37 @@
 //! The date type.
 
-use std::{cmp, str};
-use ::collection::CollectionBuilder;
-use ::load::yaml::{FromYaml, ValueItem};
+use std::{cmp, fmt, str};
+use std::str::FromStr;
+use ::load::yaml::Value;
+use ::load::construct::{Constructable, Context, Failed};
+use super::marked::Marked;
+
+
+//------------ Temporary: Stand-in Dates -------------------------------------
+
+fn stand_in_dates(key: &str) -> Option<Date> {
+    match key {
+        "de.Bft"
+            => Some(Date::new(1990, None, None, Precision::Circa, false)),
+        "dd.rkl.65"
+            => Some(Date::new(1965, None, None, Precision::Circa, false)),
+        "de.lknr.30"
+            => Some(Date::new(1930, None, None, Precision::Circa, false)),
+        "de.lknr.kb"
+            => Some(Date::new(1935, None, None, Precision::Circa, false)),
+        "de.vzg.dr"
+            => Some(Date::new(1990, None, None, Precision::Circa, false)),
+        "de.ds100.dr"
+            => Some(Date::new(1992, Some(1), Some(1),
+                              Precision::Exact, false)),
+        "org.de.DB.start"
+            => Some(Date::new(1949, Some(7), Some(1),
+                              Precision::Exact, false)),
+        "org.dd.DR.start"
+            => Some(Date::new(1949, None, None, Precision::Exact, false)),
+        _ => None,
+    }
+}
 
 
 //------------ Precision -----------------------------------------------------
@@ -65,8 +94,15 @@ pub struct Date {
 impl Date {
     pub fn new(year: i16, month: Option<u8>, day: Option<u8>,
                precision: Precision, doubt: bool) -> Self {
-        Date{year: year, month: month, day: day, precision: precision,
-             doubt: doubt}
+        Date { year, month, day, precision, doubt }
+    }
+
+    pub fn from_year(year: i16) -> Self {
+        Date {
+            year, month: None, day: None,
+            precision: Precision::Exact,
+            doubt: false
+        }
     }
 
     pub fn year(&self) -> i16 { self.year }
@@ -110,19 +146,33 @@ impl Date {
     }
 }
 
-impl FromYaml for Date {
-    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
-                 -> Result<Self, ()> {
-        let item = item.into_string_item(builder)?;
-        match str::FromStr::from_str(&item) {
-            Ok(res) => Ok(res),
-            Err(err) => {
-                builder.error((item.source(), err));
-                Err(())
+impl Constructable for Marked<Date> {
+    fn construct<C>(value: Value, context: &mut C) -> Result<Self, Failed>
+                 where C: Context {
+        let value = match value.try_into_integer() {
+            Ok(year) => {
+                return year.try_map(|year| {
+                    if year <= ::std::u16::MAX as i64
+                    && year >= ::std::u16::MIN as i64 {
+                        Ok(Date::from_year(year as i16))
+                    }
+                    else { Err(FromStrError) }
+                }).map_err(|err| { context.push_error(err); Failed });
             }
-        }
+            Err(value) => value
+        };
+        let value = value.into_string(context)?;
+        value.try_map(|plain| {
+            if let Some(date) = stand_in_dates(&plain) {
+                Ok(date)
+            }
+            else {
+                Date::from_str(&plain)
+            }
+        }).map_err(|err| { context.push_error(err); Failed })
     }
 }
+
 
 impl Ord for Date {
     /// Returns the ordering between `self` and `other`.
@@ -183,11 +233,11 @@ impl PartialOrd for Date {
 }
 
 impl str::FromStr for Date {
-    type Err = String;
+    type Err = FromStrError;
     
     /// Converts the string representation of a date into a date.
     ///
-    /// The format is `[c|<|>]year[-month[-day]][?]`
+    /// The format is `[abc]?\d{4}(\d{2}-(\d{2})?)?[?]?`
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         fn parse(mut s: &str) -> Result<Date, ::std::num::ParseIntError> {
             // Precision
@@ -245,16 +295,48 @@ impl str::FromStr for Date {
             Ok(Date::new(year, month, Some(u8::from_str(s)?), prec, doubt))
         }
         
-        let date = match parse(s) {
-            Ok(date) => date,
-            Err(_) => return Err("invalid date".into())
-        };
-
+        let date = parse(s)?;
         if date.is_valid() {
             Ok(date)
         }
         else {
-            Err("invalid date".into())
+            Err(FromStrError)
         }
     }
 }
+
+
+//------------ EventDate -----------------------------------------------------
+
+pub type EventDate = Marked<Option<Date>>;
+
+impl Constructable for EventDate {
+    fn construct<C: Context>(value: Value, context: &mut C)
+                             -> Result<Self, Failed> {
+        if value.is_null() {
+            Ok(value.map(|_| None))
+        }
+        else {
+            Ok(<Marked<Date>>::construct(value, context)?
+                              .map(Some))
+        }
+    }
+}
+
+//------------ DateError -----------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+pub struct FromStrError;
+
+impl fmt::Display for FromStrError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("invalid date")
+    }
+}
+
+impl From<::std::num::ParseIntError> for FromStrError {
+    fn from(_: ::std::num::ParseIntError) -> FromStrError {
+        FromStrError
+    }
+}
+

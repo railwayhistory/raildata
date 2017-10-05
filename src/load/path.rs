@@ -3,7 +3,7 @@
 //! We really only have this to (a) have a shorter name and (b) so we can
 //! change it later more easily.
 
-use std::{ops, path};
+use std::{fmt, ops, path};
 use std::sync::Arc;
 
 
@@ -53,6 +53,12 @@ impl ops::Deref for Path {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl fmt::Display for Path {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&self.0.display(), f)
     }
 }
 

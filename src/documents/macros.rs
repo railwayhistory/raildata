@@ -1,67 +1,23 @@
 
-macro_rules! optional_enum {
+macro_rules! data_enum {
     (
         $(#[$attr:meta])*
         pub enum $name:ident {
             $(
-                $(#[$variant_attr:meta])*
-                ( $variant:ident => $yaml:expr ),
+                $( #[$variant_attr:meta] )*
+                {$variant:ident: $yaml:expr}
             )*
 
             default $default:ident
         }
     ) => {
-        $(#[$attr])*
-        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-        pub enum $name {
-            $( $(#[$variant_attr])* $variant ),*,
-        }
-
-        impl $name {
-            pub fn from_yaml(item: Option<ValueItem>,
-                             builder: &::collection::CollectionBuilder)
-                             -> Result<Self, ()> {
-                if let Some(item) = item {
-                    let item = item.into_string_item(builder)?;
-                    match item.as_ref().as_ref() {
-                        $( $yaml => Ok($name::$variant), )*
-                        _ => {
-                            builder.error((item.source(),
-                                           format!("invalid value '{}'",
-                                                   item.value())));
-                            Err(())
-                        }
-                    }
-                }
-                else {
-                    Ok($name::$default)
-                }
-            }
-        }
-
-        impl ::load::yaml::FromYaml for $name {
-            fn from_yaml(item: ValueItem,
-                         builder: &::collection::CollectionBuilder)
-                         -> Result<Self, ()> {
-                let item = item.into_string_item(builder)?;
-                match item.as_ref().as_ref() {
-                    $( $yaml => Ok($name::$variant), )*
-                    _ => {
-                        builder.error((item.source(),
-                                       format!("invalid value '{}'",
-                                               item.value())));
-                        Err(())
-                    }
-                }
-            }
-        }
-
-        impl ::std::fmt::Display for $name {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter)
-                   -> ::std::fmt::Result {
-                match *self {
-                    $( $name::$variant => f.write_str($yaml), )*
-                }
+        data_enum! {
+            $(#[$attr])*
+            pub enum $name {
+                $(
+                    $(#[$variant_attr])*
+                    { $variant: $yaml }
+                )*
             }
         }
 
@@ -70,17 +26,14 @@ macro_rules! optional_enum {
                 $name::$default
             }
         }
-    }
-}
+    };
 
-
-macro_rules! mandatory_enum {
     (
         $(#[$attr:meta])*
         pub enum $name:ident {
             $(
-                $(#[$variant_attr:meta])*
-                ( $variant:ident => $yaml:expr ),
+                $( #[$variant_attr:meta] )*
+                {$variant:ident: $yaml:expr}
             )*
         }
     ) => {
@@ -90,39 +43,38 @@ macro_rules! mandatory_enum {
             $( $(#[$variant_attr])* $variant ),*,
         }
 
-        impl ::load::yaml::FromYaml for $name {
-            fn from_yaml(item: ValueItem,
-                         builder: &::collection::CollectionBuilder)
-                         -> Result<Self, ()> {
-                let item = item.into_string_item(builder)?;
-                match item.as_ref().as_ref() {
-                    $( $yaml => Ok($name::$variant), )*
-                    _ => {
-                        builder.error((item.source(),
-                                       format!("invalid value '{}'",
-                                               item.value())));
-                        Err(())
-                    }
-                }
+        impl $crate::load::construct::Constructable for $name {
+            fn construct<C>(value: $crate::load::yaml::Value,
+                            context: &mut C)
+                            -> Result<Self,
+                                      $crate::load::construct::Failed>
+                         where C: $crate::load::construct::Context {
+                $crate::documents::types::Marked::construct(value, context)
+                       .map(|res: $crate::documents::types::Marked<$name>|
+                                    res.into_value())
             }
         }
 
-        impl ::std::fmt::Display for $name {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter)
-                   -> ::std::fmt::Result {
-                match *self {
-                    $( $name::$variant => f.write_str($yaml), )*
-                }
+        impl $crate::load::construct::Constructable
+                         for $crate::documents::types::Marked<$name> {
+            fn construct<C>(value: $crate::load::yaml::Value,
+                            context: &mut C)
+                            -> Result<Self,
+                                      $crate::load::construct::Failed>
+                         where C: $crate::load::construct ::Context {
+                let text = value.into_string(context)?;
+                let res = text.try_map(|plain| match plain.as_ref() {
+                    $(
+                        $yaml => Ok($name::$variant),
+                    )*
+                    _ => Err($crate::documents::types::EnumError::new(plain))
+                });
+                res.map_err(|err| {
+                    context.push_error(err);
+                    $crate::load::construct::Failed
+                })
             }
         }
-    }
+    };
 }
 
-macro_rules! try_key {
-    ( $some:expr, $key:expr ) => {{
-        match $some {
-            Ok(some) => some,
-            Err(_) => return Err(Some($key))
-        }
-    }}
-}

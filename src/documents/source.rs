@@ -1,321 +1,271 @@
-use url::Url;
-use ::collection::{CollectionBuilder, DocumentRef, DocumentGuard};
-use ::load::yaml::{FromYaml, Item, Mapping, ValueItem};
-use super::common::{LocalizedString, Progress, ShortVec, Sources};
-use super::date::Date;
-use super::document::{Document, DocumentType};
-use super::organization::{Organization, OrganizationRef};
+//! A source document.
+
+use std::ops;
+use ::load::construct::{Constructable, Context, Failed};
+use ::load::yaml::{MarkedMapping, Value};
+use super::common::Common;
+use super::links::{DocumentLink, OrganizationLink, SourceLink};
+use super::types::{Date, LanguageText, List, Marked, Text, Url};
 
 
 //------------ Source --------------------------------------------------------
 
 pub struct Source {
-    key: String,
+    common: Common,
     subtype: Subtype,
-    progress: Progress,
-
-    attribution: Option<String>,
-    author: Option<ShortVec<String>>,
-    collection: Option<SourceRef>,
-    crossref: Sources,
-    date: Option<Date>,
-    designation: Option<String>,
-    digital: Option<ShortVec<Url>>,
-    edition: Option<String>,
-    editor: Option<ShortVec<String>>,
-    howpublished: Option<String>,
-    institution: Option<OrganizationRef>,
-    journal: Option<SourceRef>,
-    note: Option<LocalizedString>,
-    number: Option<String>,
-    organization: Option<OrganizationRef>,
+    
+    // Type-dependent attributes
+    author: List<OrganizationLink>,
+    collection: Option<SourceLink>,
+    date: Option<Marked<Date>>,
+    designation: Option<Text>,
+    digital: List<Url>,
+    edition: Option<Text>,
+    editor: List<OrganizationLink>,
+    isbn: Option<Isbn>,
+    number: Option<Text>,
+    organization: List<OrganizationLink>,
     pages: Option<Pages>,
-    publisher: Option<OrganizationRef>,
-    regards: ShortVec<DocumentRef>,
-    revision: Option<String>,
-    series: Option<SourceRef>,
-    short_title: Option<String>,
-    title: Option<String>,
-    volume: Option<String>,
-    url: Option<ShortVec<Url>>,
-    isbn: Option<String>,
+    publisher: List<OrganizationLink>,
+    revision: Option<Text>,
+    short_title: Option<Text>,
+    title: Option<Text>,
+    url: Option<Url>,
+    volume: Option<Text>,
+
+    // Additional attributes
+    attribution: Option<Text>,
+    crossref: List<SourceLink>,
+    note: Option<LanguageText>,
+    regards: List<DocumentLink>,
 }
 
 impl Source {
-    pub fn key(&self) -> &str {
-        &self.key
-    }
-
     pub fn subtype(&self) -> Subtype {
         self.subtype
     }
-
-    pub fn progress(&self) -> Progress {
-        self.progress
+    
+    pub fn author(&self) -> &List<OrganizationLink> {
+        &self.author
     }
 
-    pub fn attribution(&self) -> Option<&str> {
-        self.attribution.as_ref().map(AsRef::as_ref)
+    pub fn collection(&self) -> Option<&SourceLink> {
+        self.collection.as_ref()
     }
 
-    pub fn author(&self) -> Option<&ShortVec<String>> {
-        self.author.as_ref()
-    }
-
-    pub fn collection(&self) -> Option<DocumentGuard<Source>> {
-        self.collection.as_ref().map(|r| r.get())
-    }
-
-    pub fn crossref(&self) -> &Sources {
-        &self.crossref
-    }
-
-    pub fn date(&self) -> Option<&Date> {
+    pub fn date(&self) -> Option<&Marked<Date>> {
         self.date.as_ref()
     }
-
-    pub fn designation(&self) -> Option<&str> {
-        self.designation.as_ref().map(AsRef::as_ref)
+    
+    pub fn designation(&self) -> Option<&Text> {
+        self.designation.as_ref()
     }
 
-    pub fn digital(&self) -> Option<&ShortVec<Url>> {
-        self.digital.as_ref()
+    pub fn digital(&self) -> &List<Url> {
+        &self.digital
     }
 
-    pub fn edition(&self) -> Option<&str> {
-        self.edition.as_ref().map(AsRef::as_ref)
+    pub fn edition(&self) -> Option<&Text> {
+        self.edition.as_ref()
     }
 
-    pub fn editor(&self) -> Option<&ShortVec<String>> {
-        self.editor.as_ref()
+    pub fn editor(&self) -> &List<OrganizationLink> {
+        &self.editor
     }
 
-    pub fn howpublished(&self) -> Option<&str> {
-        self.howpublished.as_ref().map(AsRef::as_ref)
+    pub fn isbn(&self) -> Option<&Isbn> {
+        self.isbn.as_ref()
     }
 
-    pub fn institution(&self) -> Option<DocumentGuard<Organization>> {
-        self.institution.as_ref().map(OrganizationRef::get)
+    pub fn number(&self) -> Option<&Text> {
+        self.number.as_ref()
     }
 
-    pub fn journal(&self) -> Option<DocumentGuard<Source>> {
-        self.journal.as_ref().map(SourceRef::get)
-    }
-
-    pub fn note(&self) -> Option<&LocalizedString> {
-        self.note.as_ref()
-    }
-
-    pub fn number(&self) -> Option<&str> {
-        self.number.as_ref().map(AsRef::as_ref)
-    }
-
-    pub fn organization(&self) -> Option<DocumentGuard<Organization>> {
-        self.organization.as_ref().map(OrganizationRef::get)
+    pub fn organization(&self) -> &List<OrganizationLink> {
+        &self.organization
     }
 
     pub fn pages(&self) -> Option<&Pages> {
         self.pages.as_ref()
     }
 
-    pub fn publisher(&self) -> Option<DocumentGuard<Organization>> {
-        self.publisher.as_ref().map(OrganizationRef::get)
+    pub fn publisher(&self) -> &List<OrganizationLink> {
+        &self.publisher
     }
 
-    pub fn regards(&self) -> &ShortVec<DocumentRef> {
-        &self.regards
+    pub fn revision(&self) -> Option<&Text> {
+        self.revision.as_ref()
     }
 
-    pub fn revision(&self) -> Option<&str> {
-        self.revision.as_ref().map(AsRef::as_ref)
+    pub fn short_title(&self) -> Option<&Text> {
+        self.short_title.as_ref()
     }
 
-    pub fn series(&self) -> Option<DocumentGuard<Source>> {
-        self.series.as_ref().map(SourceRef::get)
+    pub fn title(&self) -> Option<&Text> {
+        self.title.as_ref()
     }
 
-    pub fn short_title(&self) -> Option<&str> {
-        self.short_title.as_ref().map(AsRef::as_ref)
-    }
-
-    pub fn title(&self) -> Option<&str> {
-        self.title.as_ref().map(AsRef::as_ref)
-    }
-
-    pub fn url(&self) -> Option<&ShortVec<Url>> {
+    pub fn url(&self) -> Option<&Url> {
         self.url.as_ref()
     }
 
-    pub fn volume(&self) -> Option<&str> {
-        self.volume.as_ref().map(AsRef::as_ref)
+    pub fn volume(&self) -> Option<&Text> {
+        self.volume.as_ref()
     }
 
-    pub fn isbn(&self) -> Option<&str> {
-        self.isbn.as_ref().map(AsRef::as_ref)
+    pub fn attribution(&self) -> Option<&Text> {
+        self.attribution.as_ref()
+    }
+
+    pub fn crossref(&self) -> &List<SourceLink> {
+        &self.crossref
+    }
+
+    pub fn note(&self) -> Option<&LanguageText> {
+        self.note.as_ref()
+    }
+
+    pub fn regards(&self) -> &List<DocumentLink> {
+        &self.regards
     }
 }
 
 impl Source {
-    pub fn from_yaml(key: String, mut item: Item<Mapping>,
-                     builder: &CollectionBuilder)
-                     -> Result<Document, Option<String>> {
-        let subtype = item.parse_default("subtype", builder);
-        let progress = item.parse_default("progress", builder);
+    pub fn construct<C>(common: Common, mut doc: MarkedMapping,
+                        context: &mut C) -> Result<Self, Failed>
+                     where C: Context {
+        let subtype = doc.take_default("subtype", context);
+        let author = doc.take_opt("author", context);
+        let collection = doc.take_opt("collection", context);
+        let date = doc.take_opt("date", context);
+        let designation = doc.take_opt("designation", context);
+        let digital = doc.take_default("digital", context);
+        let edition = doc.take_opt("edition", context);
+        let editor = doc.take_default("editor", context);
+        let isbn = doc.take_opt("isbn", context);
+        let number = doc.take_opt("number", context);
+        let organization = doc.take_default("organization", context);
+        let pages = doc.take_opt("pages", context);
+        let publisher = doc.take_default("publisher", context);
+        let revision = doc.take_opt("revision", context);
+        let short_title = doc.take_opt("short_title", context);
+        let title = doc.take_opt("title", context);
+        let url = doc.take_opt("url", context);
+        let volume = doc.take_opt("volume", context);
+        let attribution = doc.take_opt("attribution", context);
+        let crossref = doc.take_default("crossref", context);
+        let note = doc.take_opt("note", context);
+        let regards = doc.take_default("regards", context);
+        doc.exhausted(context)?;
+        Ok(Source { common,
+            subtype: subtype?,
+            author: author?.into(),
+            collection: collection?,
+            date: date?,
+            designation: designation?,
+            digital: digital?,
+            edition: edition?,
+            editor: editor?,
+            isbn: isbn?,
+            number: number?,
+            organization: organization?,
+            pages: pages?,
+            publisher: publisher?,
+            revision: revision?,
+            short_title: short_title?,
+            title: title?,
+            url: url?,
+            volume: volume?,
+            attribution: attribution?,
+            crossref: crossref?,
+            note: note?,
+            regards: regards?,
+        })
+    }
+}
 
-        let attribution = item.parse_opt("attribution", builder);
-        let author = item.parse_opt("author", builder);
-        let coll = item.parse_opt("collection", builder);
-        let crossref = item.parse_default("crossref", builder);
-        let date = item.parse_opt("date", builder);
-        let designation = item.parse_opt("designation", builder);
-        let digital = item.parse_opt("digital", builder);
-        let edition = item.parse_opt("edition", builder);
-        let editor = item.parse_opt("editor", builder);
-        let howpublished = item.parse_opt("howpublised", builder);
-        let institution = item.parse_opt("institution", builder);
-        let journal = item.parse_opt("journal", builder);
-        let note = item.parse_opt("note", builder);
-        let number = item.parse_opt("number", builder);
-        let organization = item.parse_opt("organization", builder);
-        let pages = item.parse_opt("pages", builder);
-        let publisher = item.parse_opt("publisher", builder);
-        let regards = item.parse_default("regards", builder);
-        let revision = item.parse_opt("revision", builder);
-        let series = item.parse_opt("series", builder);
-        let short_title = item.parse_opt("short_title", builder);
-        let title = item.parse_opt("title", builder);
-        let url = item.parse_opt("url", builder);
-        let volume = item.parse_opt("volume", builder);
-        let isbn = item.parse_opt("isbn", builder);
-        try_key!(item.exhausted(builder), key);
 
-        Ok(Document::Source(Source {
-            subtype: try_key!(subtype, key),
-            progress: try_key!(progress, key),
-            attribution: try_key!(attribution, key),
-            author: try_key!(author, key),
-            collection: try_key!(coll, key),
-            crossref: try_key!(crossref, key),
-            date: try_key!(date, key),
-            designation: try_key!(designation, key),
-            digital: try_key!(digital, key),
-            edition: try_key!(edition, key),
-            editor: try_key!(editor, key),
-            howpublished: try_key!(howpublished, key),
-            institution: try_key!(institution, key),
-            isbn: try_key!(isbn, key),
-            journal: try_key!(journal, key),
-            note: try_key!(note, key),
-            number: try_key!(number, key),
-            organization: try_key!(organization, key),
-            pages: try_key!(pages, key),
-            publisher: try_key!(publisher, key),
-            regards: try_key!(regards, key),
-            revision: try_key!(revision, key),
-            series: try_key!(series, key),
-            short_title: try_key!(short_title, key),
-            title: try_key!(title, key),
-            volume: try_key!(volume, key),
-            url: try_key!(url, key),
-            key: key
-        }))
+impl ops::Deref for Source {
+    type Target = Common;
+
+    fn deref(&self) -> &Common {
+        &self.common
+    }
+}
+
+impl ops::DerefMut for Source {
+    fn deref_mut(&mut self) -> &mut Common {
+        &mut self.common
     }
 }
 
 
 //------------ Subtype -------------------------------------------------------
 
-optional_enum! {
+data_enum! {
     pub enum Subtype {
-        (Article => "article"),
-        (Book =>  "book"),
-        (Issue => "issue"),
-        (Journal => "journal"),
-        (Online => "online"),
-        (Series => "series"),
-        (Volume => "volume"),
-        (InArticle => "inarticle"),
-        (Misc => "misc"),
-
+        { Article: "article" }
+        { Book: "book" }
+        { Inarticle: "inarticle" }
+        { Issue: "issue" }
+        { Journal: "journal" }
+        { Map: "map" }
+        { Online: "online" }
+        { Series: "series" }
+        { Volume: "volume" }
+        { Misc: "misc" }
+        
         default Misc
     }
+
 }
 
 
 //------------ Pages ---------------------------------------------------------
+//
+// XXX Temporary type. Replace with a type encoding the actual specification.
 
-/// A range of pages.
-///
-/// This is either a string of alphanumeric characters for a single page,
-/// two such strings connected by a dash for a range of pages, or the
-/// literal "insert" followed by white-space and one such string indicating
-/// an insert after the given page.
 #[derive(Clone, Debug)]
-pub enum Pages {
-    Single(String),
-    Range(String, String),
-    Insert(String),
-}
+pub struct Pages(Text);
 
-impl FromYaml for Pages {
-    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
-                 -> Result<Self, ()> {
-        let item = item.into_string_item(builder)?;
-        
-        let mut split = item.split_whitespace();
-        if let Some("insert") = split.next() {
-            let page = match split.next() {
-                Some(page) => page,
-                None => {
-                    builder.error((item.source(), "illegal pages value"));
-                    return Err(())
-                }
-            };
-            if let Some(_) = split.next() {
-                builder.error((item.source(), "illegal pages value"));
-                return Err(())
+impl Constructable for Pages {
+    fn construct<C: Context>(value: Value, context: &mut C)
+                             -> Result<Self, Failed> {
+        match value.try_into_integer() {
+            Ok(int) => {
+                Ok(Pages(int.map(|int| format!("{}", int))))
             }
-            return Ok(Pages::Insert(page.into()))
-        }
-
-        let mut split = item.splitn(2, '-');
-        let lower = match split.next() {
-            Some(lower) => lower,
-            None => {
-                builder.error((item.source(), "illegal pages value"));
-                return Err(())
-            }
-        };
-        let upper = split.next();
-        if let Some(_) = split.next() {
-            builder.error((item.source(), "illegal pages value"));
-            return Err(())
-        }
-        match upper {
-            Some(upper) => Ok(Pages::Range(lower.into(), upper.into())),
-            None => Ok(Pages::Single(lower.into()))
+            Err(value) => Text::construct(value, context).map(Pages)
         }
     }
 }
 
+impl ops::Deref for Pages {
+    type Target = Text;
 
-//------------ SourceRef -----------------------------------------------------
-
-pub struct SourceRef(DocumentRef);
-
-impl SourceRef {
-    pub fn get(&self) -> DocumentGuard<Source> {
-        self.0.get()
+    fn deref(&self) -> &Text {
+        &self.0
     }
 }
 
-impl FromYaml for SourceRef {
-    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
-                 -> Result<Self, ()> {
-        let item = item.into_string_item(builder)?;
-        Ok(SourceRef(builder.ref_doc(item.value(), item.source(),
-                                     Some(DocumentType::Source))))
+
+//------------ Isbn ----------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct Isbn(Text);
+
+impl Constructable for Isbn {
+    fn construct<C: Context>(value: Value, context: &mut C)
+                             -> Result<Self, Failed> {
+        Text::construct(value, context).map(Isbn)
     }
 }
 
+impl ops::Deref for Isbn {
+    type Target = Text;
+
+    fn deref(&self) -> &Text {
+        &self.0
+    }
+}
 

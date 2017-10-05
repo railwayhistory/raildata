@@ -1,166 +1,111 @@
 use std::ops;
-use ::collection::{CollectionBuilder, DocumentRef, DocumentGuard};
-use ::load::yaml::{FromYaml, Item, Mapping, ValueItem};
-use super::common::{LocalizedString, Progress, Sources};
-use super::date::Date;
-use super::document::{Document, DocumentType};
+use ::load::construct::{Constructable, Context, Failed};
+use ::load::yaml::{MarkedMapping, Value};
+use super::common::Common;
+use super::links::SourceLink;
+use super::types::{EventDate, Float, LanguageText, List, LocalText};
 
 
 //------------ Structure -----------------------------------------------------
 
+#[derive(Clone, Debug)]
 pub struct Structure {
-    key: String,
+    common: Common,
     subtype: Subtype,
-    progress: Progress,
-    events: Events,
+    events: List<Event>,
 }
 
 impl Structure {
-    pub fn from_yaml(key: String, mut item: Item<Mapping>,
-                     builder: &CollectionBuilder)
-                     -> Result<Document, Option<String>> {
-        let subtype = item.parse_mandatory("subtype", builder);
-        let progress = item.parse_default("progress", builder);
-        let events = item.parse_mandatory("events", builder);
-        try_key!(item.exhausted(builder), key);
-
-        Ok(Document::Structure(Structure {
-            subtype: try_key!(subtype, key),
-            progress: try_key!(progress, key),
-            events: try_key!(events, key),
-            key: key,
-        }))
-    }
-}
-
-impl Structure {
-    pub fn key(&self) -> &str {
-        &self.key
-    }
-
     pub fn subtype(&self) -> Subtype {
         self.subtype
     }
 
-    pub fn progress(&self) -> Progress {
-        self.progress
-    }
-
-    pub fn events(&self) -> &Events {
+    pub fn events(&self) -> &List<Event> {
         &self.events
+    }
+}
+
+impl Structure {
+    pub fn construct<C>(common: Common, mut doc: MarkedMapping,
+                        context: &mut C) -> Result<Self, Failed>
+                     where C: Context {
+        let subtype = doc.take("subtype", context);
+        let events = doc.take("events", context);
+        doc.exhausted(context)?;
+        Ok(Structure { common,
+            subtype: subtype?,
+            events: events?,
+        })
+    }
+}
+
+impl ops::Deref for Structure {
+    type Target = Common;
+
+    fn deref(&self) -> &Common {
+        &self.common
+    }
+}
+
+impl ops::DerefMut for Structure {
+    fn deref_mut(&mut self) -> &mut Common {
+        &mut self.common
     }
 }
 
 
 //------------ Subtype -------------------------------------------------------
 
-mandatory_enum! {
+data_enum! {
     pub enum Subtype {
-        (Tunnel => "tunnel"),
-        (Bridge => "bridge"),
-    }
-}
-
-
-//------------ Events --------------------------------------------------------
-
-pub struct Events(Vec<Event>);
-
-impl FromYaml for Events {
-    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
-                 -> Result<Self, ()> {
-        let item = item.into_sequence(builder)?;
-        let mut res = Some(Vec::new());
-        for event in item {
-            if let Ok(event) = Event::from_yaml(event, builder) {
-                if let Some(ref mut res) = res {
-                    res.push(event)
-                }
-            }
-        }
-        res.ok_or(()).map(Events)
-    }
-}
-
-impl ops::Deref for Events {
-    type Target = [Event];
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+        { Bridge: "bridge" }
+        { Tunnel: "tunnel" }
     }
 }
 
 
 //------------ Event ---------------------------------------------------------
 
+#[derive(Clone, Debug)]
 pub struct Event {
-    date: Option<Date>,
-    sources: Sources,
-    local_name: Option<LocalizedString>,
-    length: Option<u32>,
-    name: Option<String>,
+    // Meta attributes
+    date: EventDate,
+    document: List<SourceLink>,
+    source: List<SourceLink>,
+    note: Option<LanguageText>,
+
+    length: Option<Float>,
+    name: Option<LocalText>,
 }
 
 impl Event {
-    pub fn date(&self) -> Option<&Date> {
-        self.date.as_ref()
-    }
+    pub fn date(&self) -> &EventDate { &self.date }
+    pub fn document(&self) -> &List<SourceLink> { &self.document }
+    pub fn source(&self) -> &List<SourceLink> { &self.source }
+    pub fn note(&self) -> Option<&LanguageText> { self.note.as_ref() }
 
-    pub fn sources(&self) -> &Sources {
-        &self.sources
-    }
-
-    pub fn local_name(&self) -> Option<&LocalizedString> {
-        self.local_name.as_ref()
-    }
-
-    pub fn length(&self) -> Option<u32> {
-        self.length
-    }
-
-    pub fn name(&self) -> Option<&str> {
-        self.name.as_ref().map(AsRef::as_ref)
-    }
+    pub fn length(&self) -> Option<Float> { self.length }
+    pub fn name(&self) -> Option<&LocalText> { self.name.as_ref() }
 }
 
-impl FromYaml for Event {
-    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
-                 -> Result<Self, ()> {
-        let mut item = item.into_mapping(builder)?;
-        let date = item.parse_opt("date", builder);
-        let sources = item.parse_default("sources", builder);
-        let local_name = item.parse_opt("local_name", builder);
-        let length = item.parse_opt("length", builder);
-        let name = item.parse_opt("name", builder);
-        item.exhausted(builder)?;
-
+impl Constructable for Event {
+    fn construct<C: Context>(value: Value, context: &mut C)
+                             -> Result<Self, Failed> {
+        let mut value = value.into_mapping(context)?;
+        let date = value.take("date", context);
+        let document = value.take_default("document", context);
+        let source = value.take_default("source", context);
+        let note = value.take_opt("note", context);
+        let length = value.take_opt("length", context);
+        let name = value.take_opt("name", context);
+        value.exhausted(context)?;
         Ok(Event {
             date: date?,
-            sources: sources?,
-            local_name: local_name?,
+            document: document?,
+            source: source?,
+            note: note?,
             length: length?,
             name: name?,
         })
     }
 }
-
-
-//------------ StructureRef --------------------------------------------------
-
-pub struct StructureRef(DocumentRef);
-
-impl StructureRef {
-    pub fn get(&self) -> DocumentGuard<Structure> {
-        self.0.get()
-    }
-}
-
-impl FromYaml for StructureRef {
-    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
-                 -> Result<Self, ()> {
-        let item = item.into_string_item(builder)?;
-        Ok(StructureRef(builder.ref_doc(item.value(), item.source(),
-                                        Some(DocumentType::Structure))))
-    }
-}
-

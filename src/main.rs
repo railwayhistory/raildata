@@ -8,11 +8,9 @@ fn main() {
     match load_tree(Path::new("../data").into()) {
         Ok(_) => println!("Ok."),
         Err(mut err) => {
+            err.sort();
             println!("{} errors.", err.len());
-            err.sort_by(|a, b| a.source().cmp(b.source()));
-            for line in err {
-                println!("{}", line)
-            }
+            println!("{}", err)
         }
     }
 }

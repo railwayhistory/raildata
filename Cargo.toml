@@ -10,4 +10,5 @@ doc = false
 [dependencies]
 osmxml = { git = "https://github.com/partim/osmxml.git" }
 url = "1.2"
-yaml-rust = { git = "https://github.com/partim/yaml-rust.git" }
+ignore = "0.2"
+yaml-rust = { git = "https://github.com/partim/yaml-rust.git", branch="pub-marker" }

@@ -1,168 +1,202 @@
-use ::collection::CollectionBuilder;
-use ::load::yaml::{ValueItem}; 
-use super::line::Line;
-use super::local::is_valid_key;
-use super::organization::Organization;
-use super::path::Path;
-use super::point::Point;
-use super::source::Source;
-use super::structure::Structure;
+//! The compound document.
+
+use std::hash;
+use ::load::construct::Context;
+use ::load::yaml::Value;
+use ::load::path;
+use ::store::{ItemPermalink, Store, Variant};
+use super::common::Common;
+use super::types::{Key, Location, Marked};
+use super::{Line, Organization, Path, Point, Source, Structure};
 
 
 //------------ Document ------------------------------------------------------
 
-pub enum Document {
-    Line(Line),
-    Organization(Organization),
-    Path(Path),
-    Point(Point),
-    Source(Source),
-    Structure(Structure),
-}
+/// This macro defines the `Document` type from a list of variants.
+macro_rules! document {
+    (
+        $( $v:ident, )+
+    ) => {
 
-impl Document {
-    /// Parses a document from its YAML representation.
-    ///
-    /// Returns `Ok(doc)` if all went well. Returns `Err(Some(key))` if
-    /// parsing failed but the YAML representation contained a key, so there
-    /// is at least in theory a document with that key. Returns `Err(None)`
-    /// if all is hopeless.
-    pub fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
-                     -> Result<Self, Option<String>> {
-        let mut item = item.into_mapping(builder).map_err(|_| None)?;
-        let doctype = match item.parse_mandatory::<DocumentType>("type",
-                                                                 builder) {
-            Ok(doctype) => doctype,
-            Err(()) => {
-                match item.parse_mandatory("key", builder) {
-                    Ok(key) => return Err(Some(key)),
-                    Err(()) => return Err(None)
+        pub enum Document {
+            $( $v($v), )*
+            Nonexisting(Nonexisting),
+            Broken(Nonexisting),
+        }
+
+        impl Document {
+            pub fn nonexisting(key: Key) -> Self {
+                Document::Nonexisting(Nonexisting::new(key))
+            }
+
+            pub fn broken(key: Key) -> Self {
+                Document::Broken(Nonexisting::new(key))
+            }
+
+            pub fn key(&self) -> &Key {
+                match *self {
+                    $( Document::$v(ref doc) => doc.key(), )*
+                    Document::Nonexisting(ref doc) => doc.key(),
+                    Document::Broken(ref doc) => doc.key(),
                 }
             }
-        };
-        let key = item.mandatory_key("key", builder).map_err(|_| None)?;
-        let (key, source) = key.into_string_item(builder)
-                               .map_err(|_| None)?
-                               .into_inner();
-        if !is_valid_key(&key, doctype) {
-            builder.string_error(source, format!("invalid key: {}", key));
-            return Err(Some(key))
-        }
-        match doctype {
-            DocumentType::Line => Line::from_yaml(key, item, builder),
-            DocumentType::Organization
-                => Organization::from_yaml(key, item, builder),
-            DocumentType::Path => Path::from_yaml(key, item, builder),
-            DocumentType::Point => Point::from_yaml(key, item, builder),
-            DocumentType::Source => Source::from_yaml(key, item, builder),
-            DocumentType::Structure
-                => Structure::from_yaml(key, item, builder),
-        }
-    }
 
-    pub fn key(&self) -> &str {
-        match *self {
-            Document::Line(ref doc) => doc.key(),
-            Document::Organization(ref doc) => doc.key(),
-            Document::Path(ref doc) => doc.key(),
-            Document::Point(ref doc) => doc.key(),
-            Document::Source(ref doc) => doc.key(),
-            Document::Structure(ref doc) => doc.key(),
-        }
-    }
+            pub fn is_nonexisting(&self) -> bool {
+                if let Document::Nonexisting(_) = *self { true }
+                else { false }
+            }
 
-    pub fn doc_type(&self) -> DocumentType {
-        match *self {
-            Document::Line(_) => DocumentType::Line,
-            Document::Organization(_) => DocumentType::Organization,
-            Document::Path(_) => DocumentType::Path,
-            Document::Point(_) => DocumentType::Point,
-            Document::Source(_) => DocumentType::Source,
-            Document::Structure(_) => DocumentType::Structure,
+            pub fn construct<C>(doc: Value, path: path::Path, context: &mut C)
+                                -> Option<(Self, Key)>
+                             where C: Context {
+                let mut doc = match doc.into_mapping(context) {
+                    Ok(doc) => doc,
+                    Err(_) => return None,
+                };
+                let key: Key = match doc.take("key", context) {
+                    Ok(key) => key,
+                    Err(_) => return None,
+                };
+                let doctype: Marked<DocumentType>
+                                = match doc.take("type", context) {
+                    Ok(doctype) => doctype,
+                    Err(_) => {
+                        return Some((Document::broken(key.clone()), key))
+                    }
+                };
+                let common = match Common::construct(&key, &mut doc, path,
+                                                     context) {
+                    Ok(common) => common,
+                    Err(_) => {
+                        return Some((Document::broken(key.clone()), key))
+                    }
+                };
+                let doc = match doctype.to() {
+                    $(
+                        DocumentType::$v => {
+                            $v::construct(common, doc, context)
+                               .map(Document::$v)
+                        }
+                    )*
+                };
+                match doc {
+                    Ok(doc) => Some((doc, key)),
+                    Err(_) => Some((Document::broken(key.clone()), key)),
+                }
+            }
+
+            pub fn location(&self) -> (path::Path, Location) {
+                unimplemented!()
+            }
         }
+
+
+        impl PartialEq for Document {
+            fn eq(&self, other: &Self) -> bool {
+                self.key() == other.key()
+            }
+        }
+
+        impl hash::Hash for Document {
+            fn hash<H: hash::Hasher>(&self, state: &mut H) {
+                self.key().hash(state)
+            }
+        }
+
+        impl Variant for Document {
+            type Item = Self;
+            type Err = ();
+
+            fn from_doc(doc: &Self) -> Result<&Self, ()> {
+                Ok(doc)
+            }
+
+            fn from_doc_mut(doc: &mut Self) -> Result<&mut Self, ()> {
+                Ok(doc)
+            }
+        }
+
+        $(
+            impl Variant for $v {
+                type Item = Document;
+                type Err = VariantError;
+
+                fn from_doc(doc: &Document) -> Result<&$v, VariantError> {
+                    match *doc {
+                        Document::$v(ref doc) => Ok(doc),
+                        _ => Err(VariantError(DocumentType::$v)),
+                    }
+                }
+
+                fn from_doc_mut(doc: &mut Document)
+                                -> Result<&mut $v, VariantError> {
+                    match *doc {
+                        Document::$v(ref mut doc) => Ok(doc),
+                        _ => Err(VariantError(DocumentType::$v)),
+                    }
+                }
+            }
+
+            impl From<$v> for Document {
+                fn from(var: $v) -> Document {
+                    Document::$v(var)
+                }
+            }
+        )*
     }
 }
 
-impl AsRef<Line> for Document {
-    fn as_ref(&self) -> &Line {
-        match *self {
-            Document::Line(ref doc) => doc,
-            _ => panic!("not an organization")
-        }
-    }
+document! {
+    Line,
+    Organization,
+    Path,
+    Point,
+    Source,
+    Structure,
 }
 
-impl AsRef<Organization> for Document {
-    fn as_ref(&self) -> &Organization {
-        match *self {
-            Document::Organization(ref doc) => doc,
-            _ => panic!("not an organization")
-        }
-    }
+
+//------------ DocumentLink and DocumentStore --------------------------------
+
+pub type DocumentLink = ItemPermalink<Document>;
+
+pub type DocumentStore = Store<Document>;
+
+
+//------------ Nonexisting ---------------------------------------------------
+
+/// A document that doesn’t actually exist.
+pub struct Nonexisting {
+    key: Key
 }
 
-impl AsRef<Path> for Document {
-    fn as_ref(&self) -> &Path {
-        match *self {
-            Document::Path(ref doc) => doc,
-            _ => panic!("not an organization")
-        }
+impl Nonexisting {
+    pub fn new(key: Key) -> Self {
+        Nonexisting { key }
     }
-}
 
-impl AsRef<Point> for Document {
-    fn as_ref(&self) -> &Point{
-        match *self {
-            Document::Point(ref doc) => doc,
-            _ => panic!("not an organization")
-        }
-    }
-}
-
-impl AsRef<Source> for Document {
-    fn as_ref(&self) -> &Source {
-        match *self {
-            Document::Source(ref source) => source,
-            _ => panic!("not a source")
-        }
-    }
-}
-
-impl AsRef<Structure> for Document {
-    fn as_ref(&self) -> &Structure {
-        match *self {
-            Document::Structure(ref source) => source,
-            _ => panic!("not a source")
-        }
+    pub fn key(&self) -> &Key {
+        &self.key
     }
 }
 
 
-//------------ DocumentType --------------------------------------------------
+//------------ DocumentType -------------------------------------------------
 
-mandatory_enum! {
+data_enum! {
     pub enum DocumentType {
-        (Line => "line"),
-        (Organization => "organization"),
-        (Path => "path"),
-        (Point => "point"),
-        (Source => "source"),
-        (Structure => "structure"),
+        { Line: "line" }
+        { Organization: "organization" }
+        { Path: "path" }
+        { Point: "point" }
+        { Source: "source" }
+        { Structure: "structure" }
     }
 }
 
-impl DocumentType {
-    pub fn key_prefix(self) -> &'static str {
-        use self::DocumentType::*;
 
-        match self {
-            Line => "line.",
-            Organization => "org.",
-            Path => "path.",
-            Point => "point.",
-            Source => "src.",
-            Structure => "struct.",
-        }
-    }
-}
+//------------ VariantError --------------------------------------------------
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct VariantError(DocumentType);
 

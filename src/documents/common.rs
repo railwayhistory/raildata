@@ -1,189 +1,159 @@
-use std::collections::HashMap;
-use ::collection::CollectionBuilder;
-use ::load::yaml::{FromYaml, ValueItem};
-use super::source::SourceRef;
+//! The attributes common to all documents.
+//! 
+
+use ::load::construct::{Constructable, Context, Failed};
+use ::load::yaml::Value;
+use ::load::path::Path;
+use ::load::yaml::Mapping;
+use super::links::{OrganizationLink, SourceLink};
+use super::types::{Date, EventDate, Key, LanguageText, List, Location, Marked};
+
+
+//------------ Common --------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct Common {
+    key: Key,
+    progress: Marked<Progress>,
+    path: Path,
+    location: Location,
+}
+
+impl Common {
+    pub fn key(&self) -> &Key {
+        &self.key
+    }
+
+    pub fn progress(&self) -> Progress {
+        self.progress.to()
+    }
+
+    pub fn location(&self) -> (Path, Location) {
+        (self.path.clone(), self.location)
+    }
+}
+
+impl Common {
+    pub fn construct<C>(key: &Key, doc: &mut Marked<Mapping>, path: Path,
+                        context: &mut C) -> Result<Self, Failed>
+                     where C: Context {
+        Ok(Common {
+            key: key.clone(),
+            progress: doc.take_default("progress", context)?,
+            path,
+            location: doc.location()
+        })
+    }
+}
 
 
 //------------ Progress ------------------------------------------------------
 
-optional_enum! {
+data_enum! {
     pub enum Progress {
-        (Stub => "stub"),
-        (InProgress => "in-progress"),
-        (Complete => "complete"),
+        { Stub: "stub" }
+        { InProgress: "in-progress" }
+        { Complete: "complete" }
 
         default InProgress
     }
 }
 
 
-//------------ LocalizedString -----------------------------------------------
+//------------ Alternative ---------------------------------------------------
 
-pub struct LocalizedString(HashMap<String, String>);
+#[derive(Clone, Debug)]
+pub struct Alternative {
+    date: EventDate,
+    document: List<SourceLink>,
+    source: List<SourceLink>,
+}
 
-impl FromYaml for LocalizedString {
-    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
-                 -> Result<Self, ()> {
-        let (value, _) = item.into_mapping(builder)?.into_inner();
-        let mut res = HashMap::new();
-        let mut err = false;
-        for (key, value) in value {
-            let value = match value.into_string(builder) {
-                Ok(value) => value,
-                Err(()) => {
-                    err = true;
-                    continue
-                }
-            };
-            res.insert(key, value);
-        }
-        if err { Err(()) }
-        else { Ok(LocalizedString(res)) }
+impl Alternative {
+    pub fn date(&self) -> &EventDate { &self.date }
+    pub fn document(&self) -> &List<SourceLink> { &self.document }
+    pub fn source(&self) -> &List<SourceLink> { &self.source }
+}
+
+impl Constructable for Alternative {
+    fn construct<C: Context>(value: Value, context: &mut C)
+                             -> Result<Self, Failed> {
+        let mut value = value.into_mapping(context)?;
+        let date = value.take("date", context);
+        let document = value.take_default("document", context);
+        let source = value.take_default("source", context);
+        value.exhausted(context)?;
+        Ok(Alternative {
+            date: date?,
+            document: document?,
+            source: source?,
+        })
     }
 }
 
 
-impl<T> Default for ShortVec<T> {
-    fn default() -> Self {
-        ShortVec::Empty
+//------------ Basis ---------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct Basis {
+    date: Option<List<Marked<Date>>>,
+    document: List<SourceLink>,
+    source: List<SourceLink>,
+    contract: Option<Contract>,
+    treaty: Option<Contract>,
+    note: Option<LanguageText>,
+}
+
+impl Basis {
+    pub fn date(&self) -> Option<&List<Marked<Date>>> { self.date.as_ref() }
+    pub fn document(&self) -> &List<SourceLink> { &self.document }
+    pub fn source(&self) -> &List<SourceLink> { &self.source }
+    pub fn contract(&self) -> Option<&Contract> { self.contract.as_ref() }
+    pub fn treaty(&self) -> Option<&Contract> { self.treaty.as_ref() }
+    pub fn note(&self) -> Option<&LanguageText> { self.note.as_ref() }
+}
+
+impl Constructable for Basis {
+    fn construct<C: Context>(value: Value, context: &mut C)
+                             -> Result<Self, Failed> {
+        let mut value = value.into_mapping(context)?;
+        let date = value.take_opt("date", context);
+        let document = value.take_default("document", context);
+        let source = value.take_default("source", context);
+        let contract = value.take_opt("contract", context);
+        let treaty = value.take_opt("treaty", context);
+        let note = value.take_opt("note", context);
+        value.exhausted(context)?;
+        Ok(Basis {
+            date: date?,
+            document: document?,
+            source: source?,
+            contract: contract?,
+            treaty: treaty?,
+            note: note?,
+        })
     }
 }
 
 
-//------------ Sources -------------------------------------------------------
+//------------ Contract ------------------------------------------------------
 
-pub type Sources = ShortVec<SourceRef>;
-
-
-//------------ ShortVec ------------------------------------------------------
-
-pub enum ShortVec<T> {
-    Empty,
-    One(T),
-    Many(Vec<T>),
+#[derive(Clone, Debug)]
+pub struct Contract {
+    parties: List<OrganizationLink>,
 }
 
-impl<T> ShortVec<T> {
-    pub fn iter(&self) -> ShortVecIter<T> {
-        ShortVecIter::new(self)
-    }
-
-    pub fn len(&self) -> usize {
-        match *self {
-            ShortVec::Empty => 0,
-            ShortVec::One(_) => 1,
-            ShortVec::Many(ref vec) => vec.len()
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        match *self {
-            ShortVec::Empty => true,
-            ShortVec::One(_) => false,
-            ShortVec::Many(ref vec) => vec.is_empty(),
-        }
-    }
+impl Contract {
+    pub fn parties(&self) -> &List<OrganizationLink> { &self.parties }
 }
 
-impl<T: FromYaml> ShortVec<T> {
-    pub fn from_opt_yaml(item: Option<ValueItem>, builder: &CollectionBuilder)
-                         -> Result<Self, ()> {
-        if let Some(item) = item {
-            match item.try_into_sequence() {
-                Ok(seq) => {
-                    if seq.len() == 0 {
-                        Ok(ShortVec::Empty)
-                    }
-                    else if seq.len() == 1 {
-                        Self::from_opt_yaml(seq.into_iter().next(), builder)
-                    }
-                    else {
-                        let mut vec = Vec::new();
-                        let mut err = false;
-                        for item in seq {
-                            let item = match T::from_yaml(item, builder) {
-                                Ok(item) => item,
-                                Err(()) => {
-                                    err = true;
-                                    continue
-                                }
-                            };
-                            if !err {
-                                vec.push(item);
-                            }
-                        }
-                        if err {
-                            Err(())
-                        }
-                        else {
-                            Ok(ShortVec::Many(vec))
-                        }
-                    }
-                }
-                Err(item) => {
-                    T::from_yaml(item, builder).map(ShortVec::One)
-                }
-            }
-        }
-        else {
-            Ok(ShortVec::Empty)
-        }
-    }
-}
-
-impl<T: FromYaml> FromYaml for ShortVec<T> {
-    fn from_yaml(item: ValueItem, builder: &CollectionBuilder)
-                 -> Result<Self, ()> {
-        ShortVec::from_opt_yaml(Some(item), builder)
-    }
-}
-
-impl<'a, T> IntoIterator for &'a ShortVec<T> {
-    type Item = &'a T;
-    type IntoIter = ShortVecIter<'a, T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        ShortVecIter::new(self)
-    }
-}
-
-
-//------------ ShortVecIter --------------------------------------------------
-
-pub enum ShortVecIter<'a, T: 'a> {
-    Empty,
-    One(&'a T),
-    Many(&'a [T]),
-}
-
-impl<'a, T: 'a> ShortVecIter<'a, T> {
-    fn new(vec: &'a ShortVec<T>) -> Self {
-        match *vec {
-            ShortVec::Empty => ShortVecIter::Empty,
-            ShortVec::One(ref item) => ShortVecIter::One(item),
-            ShortVec::Many(ref vec) => ShortVecIter::Many(vec)
-        }
-    }
-}
-
-impl<'a, T: 'a> Iterator for ShortVecIter<'a, T> {
-    type Item = &'a T;
-
-    fn next(&mut self) -> Option<&'a T> {
-        let res = match *self {
-            ShortVecIter::Empty => return None,
-            ShortVecIter::One(t) => t,
-            ShortVecIter::Many(ref mut slice) => {
-                let (first, rest) = match slice.split_first() {
-                    None => return None,
-                    Some(some) => some,
-                };
-                *slice = rest;
-                return Some(first)
-            }
-        };
-        *self = ShortVecIter::Empty;
-        Some(res)
+impl Constructable for Contract {
+    fn construct<C: Context>(value: Value, context: &mut C)
+                             -> Result<Self, Failed> {
+        let mut value = value.into_mapping(context)?;
+        let parties = value.take("parties", context);
+        value.exhausted(context)?;
+        Ok(Contract { parties: parties? })
     }
 }
 
