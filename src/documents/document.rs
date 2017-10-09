@@ -85,6 +85,15 @@ macro_rules! document {
                 }
             }
 
+            pub fn crosslink<C: Context>(&mut self, context: &mut C) {
+                match *self {
+                    $(
+                        Document::$v(ref mut doc) => doc.crosslink(context),
+                    )*
+                    _ => { }
+                }
+            }
+
             pub fn location(&self) -> (path::Path, Location) {
                 unimplemented!()
             }

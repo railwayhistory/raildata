@@ -15,18 +15,18 @@ pub struct Source {
     subtype: Subtype,
     
     // Type-dependent attributes
-    author: List<OrganizationLink>,
-    collection: Option<SourceLink>,
+    author: List<Marked<OrganizationLink>>,
+    collection: Option<Marked<SourceLink>>,
     date: Option<Marked<Date>>,
     designation: Option<Text>,
     digital: List<Url>,
     edition: Option<Text>,
-    editor: List<OrganizationLink>,
+    editor: List<Marked<OrganizationLink>>,
     isbn: Option<Isbn>,
     number: Option<Text>,
-    organization: List<OrganizationLink>,
+    organization: List<Marked<OrganizationLink>>,
     pages: Option<Pages>,
-    publisher: List<OrganizationLink>,
+    publisher: List<Marked<OrganizationLink>>,
     revision: Option<Text>,
     short_title: Option<Text>,
     title: Option<Text>,
@@ -35,9 +35,9 @@ pub struct Source {
 
     // Additional attributes
     attribution: Option<Text>,
-    crossref: List<SourceLink>,
+    crossref: List<Marked<SourceLink>>,
     note: Option<LanguageText>,
-    regards: List<DocumentLink>,
+    regards: List<Marked<DocumentLink>>,
 }
 
 impl Source {
@@ -45,11 +45,11 @@ impl Source {
         self.subtype
     }
     
-    pub fn author(&self) -> &List<OrganizationLink> {
+    pub fn author(&self) -> &List<Marked<OrganizationLink>> {
         &self.author
     }
 
-    pub fn collection(&self) -> Option<&SourceLink> {
+    pub fn collection(&self) -> Option<&Marked<SourceLink>> {
         self.collection.as_ref()
     }
 
@@ -69,7 +69,7 @@ impl Source {
         self.edition.as_ref()
     }
 
-    pub fn editor(&self) -> &List<OrganizationLink> {
+    pub fn editor(&self) -> &List<Marked<OrganizationLink>> {
         &self.editor
     }
 
@@ -81,7 +81,7 @@ impl Source {
         self.number.as_ref()
     }
 
-    pub fn organization(&self) -> &List<OrganizationLink> {
+    pub fn organization(&self) -> &List<Marked<OrganizationLink>> {
         &self.organization
     }
 
@@ -89,7 +89,7 @@ impl Source {
         self.pages.as_ref()
     }
 
-    pub fn publisher(&self) -> &List<OrganizationLink> {
+    pub fn publisher(&self) -> &List<Marked<OrganizationLink>> {
         &self.publisher
     }
 
@@ -117,7 +117,7 @@ impl Source {
         self.attribution.as_ref()
     }
 
-    pub fn crossref(&self) -> &List<SourceLink> {
+    pub fn crossref(&self) -> &List<Marked<SourceLink>> {
         &self.crossref
     }
 
@@ -125,7 +125,7 @@ impl Source {
         self.note.as_ref()
     }
 
-    pub fn regards(&self) -> &List<DocumentLink> {
+    pub fn regards(&self) -> &List<Marked<DocumentLink>> {
         &self.regards
     }
 }
@@ -181,6 +181,9 @@ impl Source {
             note: note?,
             regards: regards?,
         })
+    }
+
+    pub fn crosslink<C: Context>(&mut self, _context: &mut C) {
     }
 }
 

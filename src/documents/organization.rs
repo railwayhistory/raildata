@@ -3,7 +3,7 @@ use ::load::construct::{Constructable, Context, Failed};
 use ::load::yaml::{MarkedMapping, Value};
 use super::common::{Basis, Common};
 use super::links::{OrganizationLink, SourceLink};
-use super::types::{EventDate, List, LanguageText, LocalText};
+use super::types::{EventDate, List, LanguageText, LocalText, Marked};
 
 
 //------------ Organization --------------------------------------------------
@@ -36,6 +36,9 @@ impl Organization {
             subtype: subtype?,
             events: events?,
         })
+    }
+
+    pub fn crosslink<C: Context>(&mut self, _context: &mut C) {
     }
 }
 
@@ -74,20 +77,20 @@ data_enum! {
 pub struct Event {
     // Meta attributes
     date: EventDate,
-    document: List<SourceLink>,
-    source: List<SourceLink>,
+    document: List<Marked<SourceLink>>,
+    source: List<Marked<SourceLink>>,
     basis: List<Basis>,
     note: Option<LanguageText>,
 
     // Organization property attributes
-    domicile: List<OrganizationLink>,
-    master: Option<OrganizationLink>,
+    domicile: List<Marked<OrganizationLink>>,
+    master: Option<Marked<OrganizationLink>>,
     name: Option<LocalText>,
-    owner: List<OrganizationLink>,
+    owner: List<Marked<OrganizationLink>>,
     property: Option<Property>,
     short_name: Option<LocalText>,
     status: Option<Status>,
-    successor: Option<OrganizationLink>,
+    successor: Option<Marked<OrganizationLink>>,
 }
 
 /// # Event Metadata Attributes
@@ -97,11 +100,11 @@ impl Event {
         &self.date
     }
 
-    pub fn document(&self) -> &List<SourceLink> {
+    pub fn document(&self) -> &List<Marked<SourceLink>> {
         &self.document
     }
 
-    pub fn source(&self) -> &List<SourceLink> {
+    pub fn source(&self) -> &List<Marked<SourceLink>> {
         &self.source
     }
 
@@ -117,11 +120,11 @@ impl Event {
 /// # Organization Property Attributes
 ///
 impl Event {
-    pub fn domicile(&self) -> &List<OrganizationLink> {
+    pub fn domicile(&self) -> &List<Marked<OrganizationLink>> {
         &self.domicile
     }
 
-    pub fn master(&self) -> Option<&OrganizationLink> {
+    pub fn master(&self) -> Option<&Marked<OrganizationLink>> {
         self.master.as_ref()
     }
 
@@ -129,7 +132,7 @@ impl Event {
         self.name.as_ref()
     }
 
-    pub fn owner(&self) -> &List<OrganizationLink> {
+    pub fn owner(&self) -> &List<Marked<OrganizationLink>> {
         &self.owner
     }
 
@@ -145,7 +148,7 @@ impl Event {
         self.status
     }
 
-    pub fn successor(&self) -> Option<&OrganizationLink> {
+    pub fn successor(&self) -> Option<&Marked<OrganizationLink>> {
         self.successor.as_ref()
     }
 }
@@ -193,9 +196,9 @@ impl Constructable for Event {
 #[derive(Clone, Debug)]
 pub struct Property {
     role: PropertyRole,
-    constructor: List<OrganizationLink>,
-    owner: List<OrganizationLink>,
-    operator: List<OrganizationLink>
+    constructor: List<Marked<OrganizationLink>>,
+    owner: List<Marked<OrganizationLink>>,
+    operator: List<Marked<OrganizationLink>>
 }
 
 impl Property {
@@ -203,15 +206,15 @@ impl Property {
         self.role
     }
 
-    pub fn constructor(&self) -> &List<OrganizationLink> {
+    pub fn constructor(&self) -> &List<Marked<OrganizationLink>> {
         &self.constructor
     }
 
-    pub fn owner(&self) -> &List<OrganizationLink> {
+    pub fn owner(&self) -> &List<Marked<OrganizationLink>> {
         &self.owner
     }
 
-    pub fn operator(&self) -> &List<OrganizationLink> {
+    pub fn operator(&self) -> &List<Marked<OrganizationLink>> {
         &self.operator
     }
 }

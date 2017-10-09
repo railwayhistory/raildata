@@ -3,7 +3,7 @@ use ::load::construct::{Constructable, Context, Failed};
 use ::load::yaml::{MarkedMapping, Value};
 use super::common::Common;
 use super::links::SourceLink;
-use super::types::{EventDate, Float, LanguageText, List, LocalText};
+use super::types::{EventDate, Float, LanguageText, List, LocalText, Marked};
 
 
 //------------ Structure -----------------------------------------------------
@@ -36,6 +36,9 @@ impl Structure {
             subtype: subtype?,
             events: events?,
         })
+    }
+
+    pub fn crosslink<C: Context>(&mut self, _context: &mut C) {
     }
 }
 
@@ -70,8 +73,8 @@ data_enum! {
 pub struct Event {
     // Meta attributes
     date: EventDate,
-    document: List<SourceLink>,
-    source: List<SourceLink>,
+    document: List<Marked<SourceLink>>,
+    source: List<Marked<SourceLink>>,
     note: Option<LanguageText>,
 
     length: Option<Float>,
@@ -80,8 +83,8 @@ pub struct Event {
 
 impl Event {
     pub fn date(&self) -> &EventDate { &self.date }
-    pub fn document(&self) -> &List<SourceLink> { &self.document }
-    pub fn source(&self) -> &List<SourceLink> { &self.source }
+    pub fn document(&self) -> &List<Marked<SourceLink>> { &self.document }
+    pub fn source(&self) -> &List<Marked<SourceLink>> { &self.source }
     pub fn note(&self) -> Option<&LanguageText> { self.note.as_ref() }
 
     pub fn length(&self) -> Option<Float> { self.length }

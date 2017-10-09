@@ -18,7 +18,7 @@ pub struct Line {
     label: Set<Label>,
     note: Option<LanguageText>,
     events: EventList,
-    points: List<PointLink>,
+    points: List<Marked<PointLink>>,
 }
 
 impl Line {
@@ -34,7 +34,7 @@ impl Line {
         &self.events
     }
 
-    pub fn points(&self) -> &List<PointLink> {
+    pub fn points(&self) -> &List<Marked<PointLink>> {
         &self.points
     }
 }
@@ -53,6 +53,17 @@ impl Line {
             events: events?,
             points: points?,
         })
+    }
+
+    pub fn crosslink<C: Context>(&mut self, context: &mut C) {
+        self.events.crosslink(context);
+        /*
+        for (n, point) in self.points.iter_mut().enumerate() {
+            context.ok(point.with(|point| {
+                point.lines_mut().push((context.get_link(self.key()), n));
+            }))
+        }
+        */
     }
 }
 
@@ -88,14 +99,21 @@ data_enum! {
 
 pub type EventList = List<Event>;
 
+impl EventList {
+    fn crosslink<C: Context>(&mut self, context: &mut C) {
+        for event in self {
+            event.crosslink(context)
+        }
+    }
+}
 
 //------------ Event ---------------------------------------------------------
 
 pub struct Event {
     date: EventDate,
     sections: List<Section>,
-    document: List<SourceLink>,
-    source: List<SourceLink>,
+    document: List<Marked<SourceLink>>,
+    source: List<Marked<SourceLink>>,
     alternative: List<Alternative>,
     basis: List<Basis>,
     note: Option<LanguageText>,
@@ -105,19 +123,19 @@ pub struct Event {
     treaty: Option<Contract>,
 
     category: Option<Set<Category>>,
-    constructor: Option<List<OrganizationLink>>,
+    constructor: Option<List<Marked<OrganizationLink>>>,
     course: List<CourseSegment>,
     electrified: Option<Set<Electrified>>,
     freight: Option<Freight>,
     gauge: Option<Set<Gauge>>,
     local_name: Option<LocalText>,
     name: Option<Text>,
-    operator: Option<List<OrganizationLink>>,
-    owner: Option<List<OrganizationLink>>,
+    operator: Option<List<Marked<OrganizationLink>>>,
+    owner: Option<List<Marked<OrganizationLink>>>,
     passenger: Option<Passenger>,
     rails: Option<Uint8>,
-    region: Option<List<OrganizationLink>>,
-    reused: Option<List<LineLink>>,
+    region: Option<List<Marked<OrganizationLink>>>,
+    reused: Option<List<Marked<LineLink>>>,
     status: Option<Status>,
     tracks: Option<Uint8>,
 
@@ -128,8 +146,8 @@ pub struct Event {
 impl Event {
     pub fn date(&self) -> &EventDate { &self.date } 
     pub fn sections(&self) -> &List<Section> { &self.sections }
-    pub fn document(&self) -> &List<SourceLink> { &self.document }
-    pub fn source(&self) -> &List<SourceLink> { &self.source }
+    pub fn document(&self) -> &List<Marked<SourceLink>> { &self.document }
+    pub fn source(&self) -> &List<Marked<SourceLink>> { &self.source }
     pub fn alternative(&self) -> &List<Alternative> { &self.alternative }
     pub fn basis(&self) -> &List<Basis> { &self.basis }
     pub fn note(&self) -> Option<&LanguageText> { self.note.as_ref() }
@@ -139,7 +157,7 @@ impl Event {
     pub fn treaty(&self) -> Option<&Contract> { self.treaty.as_ref() }
 
     pub fn category(&self) -> Option<&Set<Category>> { self.category.as_ref() }
-    pub fn constructor(&self) -> Option<&List<OrganizationLink>> {
+    pub fn constructor(&self) -> Option<&List<Marked<OrganizationLink>>> {
         self.constructor.as_ref()
     }
     pub fn course(&self) -> &List<CourseSegment> { &self.course }
@@ -150,18 +168,20 @@ impl Event {
     pub fn gauge(&self) -> Option<&Set<Gauge>> { self.gauge.as_ref() }
     pub fn local_name(&self) -> Option<&LocalText> { self.local_name.as_ref() }
     pub fn name(&self) -> Option<&Text> { self.name.as_ref() }
-    pub fn operator(&self) -> Option<&List<OrganizationLink>> {
+    pub fn operator(&self) -> Option<&List<Marked<OrganizationLink>>> {
         self.operator.as_ref()
     }
-    pub fn owner(&self) -> Option<&List<OrganizationLink>> {
+    pub fn owner(&self) -> Option<&List<Marked<OrganizationLink>>> {
         self.owner.as_ref()
     }
     pub fn passenger(&self) -> Option<Passenger> { self.passenger }
     pub fn rails(&self) -> Option<Uint8> { self.rails }
-    pub fn region(&self) -> Option<&List<OrganizationLink>> {
+    pub fn region(&self) -> Option<&List<Marked<OrganizationLink>>> {
         self.region.as_ref()
     }
-    pub fn reused(&self) -> Option<&List<LineLink>> { self.reused.as_ref() }
+    pub fn reused(&self) -> Option<&List<Marked<LineLink>>> {
+        self.reused.as_ref()
+    }
     pub fn status(&self) -> Option<Status> { self.status }
     pub fn tracks(&self) -> Option<Uint8> { self.tracks }
 
@@ -208,8 +228,8 @@ impl Constructable for Event {
         value.exhausted(context)?;
 
         let mut sections: List<Section> = sections?;
-        let start: Option<PointLink> = start?;
-        let end: Option<PointLink> = end?;
+        let start: Option<Marked<PointLink>> = start?;
+        let end: Option<Marked<PointLink>> = end?;
         match (start, end) {
             (None, None) => { },
             (start, end) => {
@@ -262,21 +282,26 @@ impl Constructable for Event {
     }
 }
 
+impl Event {
+    fn crosslink<C: Context>(&mut self, _context: &mut C) {
+    }
+}
+
 
 //------------ Section -------------------------------------------------------
 
 #[derive(Clone, Debug)]
 pub struct Section {
-    start: Option<PointLink>,
-    end: Option<PointLink>,
+    start: Option<Marked<PointLink>>,
+    end: Option<Marked<PointLink>>,
 }
 
 impl Section {
-    pub fn start(&self) -> Option<&PointLink> {
+    pub fn start(&self) -> Option<&Marked<PointLink>> {
         self.start.as_ref()
     }
 
-    pub fn end(&self) -> Option<&PointLink> {
+    pub fn end(&self) -> Option<&Marked<PointLink>> {
         self.end.as_ref()
     }
 }
@@ -315,14 +340,14 @@ data_enum! {
 
 #[derive(Clone, Debug)]
 pub struct Concession {
-    by: List<OrganizationLink>,
-    to: List<OrganizationLink>,
+    by: List<Marked<OrganizationLink>>,
+    to: List<Marked<OrganizationLink>>,
     until: Option<Marked<Date>>,
 }
 
 impl Concession {
-    pub fn by(&self) -> &List<OrganizationLink> { &self.by }
-    pub fn to(&self) -> &List<OrganizationLink> { &self.to }
+    pub fn by(&self) -> &List<Marked<OrganizationLink>> { &self.by }
+    pub fn to(&self) -> &List<Marked<OrganizationLink>> { &self.to }
     pub fn until(&self) -> Option<&Marked<Date>> { self.until.as_ref() }
 }
 
@@ -343,13 +368,13 @@ impl Constructable for Concession {
 
 #[derive(Clone, Debug)]
 pub struct CourseSegment {
-    path: PathLink,
+    path: Marked<PathLink>,
     start: Text,
     end: Text,
 }
 
 impl CourseSegment {
-    pub fn path(&self) -> &PathLink { &self.path }
+    pub fn path(&self) -> &Marked<PathLink> { &self.path }
     pub fn start(&self) -> &Text { &self.start }
     pub fn end(&self) -> &Text { &self.end }
 }

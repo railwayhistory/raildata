@@ -43,6 +43,10 @@ impl<T: Variant> Link<T> {
         Ok(Permalink::new(arc))
     }
 
+    pub fn check(&self) -> Result<(), LinkError<T::Err>> {
+        self.with(|_| ())
+    }
+
     pub fn with<F, U>(&self, f: F) -> Result<U, LinkError<T::Err>>
                 where F: FnOnce(&T) -> U {
         let arc = self.link.upgrade().ok_or(LinkError::Gone)?;

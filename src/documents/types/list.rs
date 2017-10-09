@@ -45,6 +45,10 @@ impl<T> List<T> {
         Iter::new(self)
     }
 
+    pub fn iter_mut(&mut self) -> IterMut<T> {
+        IterMut::new(self)
+    }
+
     pub fn len(&self) -> usize {
         match self.inner {
             Inner::Empty => 0,
@@ -123,6 +127,15 @@ impl<'a, T> IntoIterator for &'a List<T> {
     }
 }
 
+impl<'a, T> IntoIterator for &'a mut List<T> {
+    type Item = &'a mut T;
+    type IntoIter = IterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IterMut::new(self)
+    }
+}
+
 
 //------------ Iter ----------------------------------------------------------
 
@@ -143,6 +156,34 @@ impl<'a, T: 'a> Iterator for Iter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
+        match self.0 {
+            Inner::Empty => None,
+            Inner::One(ref mut item) => item.take(),
+            Inner::Many(ref mut iter) => iter.next(),
+        }
+    }
+}
+
+
+//------------ IterMut -------------------------------------------------------
+
+#[derive(Debug)]
+pub struct IterMut<'a, T: 'a>(Inner<Option<&'a mut T>, slice::IterMut<'a, T>>);
+
+impl<'a, T: 'a> IterMut<'a, T> {
+    fn new(list: &'a mut List<T>) -> Self {
+        match list.inner {
+            Inner::Empty => IterMut(Inner::Empty),
+            Inner::One(ref mut item) => IterMut(Inner::One(Some(item))),
+            Inner::Many(ref mut vec) => IterMut(Inner::Many(vec.iter_mut()))
+        }
+    }
+}
+
+impl<'a, T: 'a> Iterator for IterMut<'a, T> {
+    type Item = &'a mut T;
+
+    fn next(&mut self) -> Option<Self::Item> {
         match self.0 {
             Inner::Empty => None,
             Inner::One(ref mut item) => item.take(),

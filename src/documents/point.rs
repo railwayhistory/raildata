@@ -11,16 +11,22 @@ use super::types::{Boolean, EventDate, LanguageText, List, LocalText,
 
 #[derive(Clone, Debug)]
 pub struct Point {
+    // Attributes
     common: Common,
     events: List<Event>,
     junction: Option<Boolean>,
     subtype: Marked<Subtype>,
+
+    // Cross-links
+    lines: List<(LineLink, usize)>,
 }
 
 impl Point {
     pub fn events(&self) -> &List<Event> { &self.events }
     pub fn junction(&self) -> Option<Boolean> { self.junction }
     pub fn subtype(&self) -> Marked<Subtype> { self.subtype }
+
+    pub fn lines(&self) -> &List<(LineLink, usize)> { &self.lines }
 }
 
 impl Point {
@@ -33,8 +39,19 @@ impl Point {
         Ok(Point { common,
             events: events?,
             junction: junction?,
-            subtype: subtype?
+            subtype: subtype?,
+
+            lines: List::default(),
         })
+    }
+
+    pub fn crosslink<C: Context>(&mut self, _context: &mut C) {
+    }
+}
+
+impl Point {
+    pub fn lines_mut(&mut self) -> &mut List<(LineLink, usize)> {
+        &mut self.lines
     }
 }
 
@@ -73,16 +90,16 @@ data_enum! {
 #[derive(Clone, Debug)]
 pub struct Event {
     date: EventDate,
-    document: List<SourceLink>,
-    source: List<SourceLink>,
+    document: List<Marked<SourceLink>>,
+    source: List<Marked<SourceLink>>,
     note: Option<LanguageText>,
 
     category: Option<Set<Category>>,
-    connection: Option<List<PointLink>>,
+    connection: Option<List<Marked<PointLink>>>,
     designation: Option<Text>,
     location: Option<Location>,
-    master: Option<Option<PointLink>>,
-    merged: Option<PointLink>,
+    master: Option<Option<Marked<PointLink>>>,
+    merged: Option<Marked<PointLink>>,
     name: Option<LocalText>,
     plc: Option<Plc>,
     public_name: Option<List<LocalText>>,
@@ -92,7 +109,7 @@ pub struct Event {
     status: Option<Status>,
 
     service: Option<Service>,
-    split_from: Option<PointLink>,
+    split_from: Option<Marked<PointLink>>,
 
     de_ds100: Option<DeDs100>,
     de_dstnr: Option<DeDstnr>,
@@ -110,22 +127,22 @@ pub struct Event {
 
 impl Event {
     pub fn date(&self) -> &EventDate { &self.date }
-    pub fn document(&self) -> &List<SourceLink> { &self.document }
-    pub fn source(&self) -> &List<SourceLink> { &self.source }
+    pub fn document(&self) -> &List<Marked<SourceLink>> { &self.document }
+    pub fn source(&self) -> &List<Marked<SourceLink>> { &self.source }
     pub fn note(&self) -> Option<&LanguageText> { self.note.as_ref() }
 
     pub fn category(&self) -> Option<&Set<Category>> {
         self.category.as_ref()
     }
-    pub fn connection(&self) -> Option<&List<PointLink>> {
+    pub fn connection(&self) -> Option<&List<Marked<PointLink>>> {
         self.connection.as_ref()
     }
     pub fn designation(&self) -> Option<&Text> { self.designation.as_ref() }
     pub fn location(&self) -> Option<&Location> { self.location.as_ref() }
-    pub fn master(&self) -> Option<Option<&PointLink>> {
+    pub fn master(&self) -> Option<Option<&Marked<PointLink>>> {
         self.master.as_ref().map(Option::as_ref)
     }
-    pub fn merged(&self) -> Option<&PointLink> { self.merged.as_ref() }
+    pub fn merged(&self) -> Option<&Marked<PointLink>> { self.merged.as_ref() }
     pub fn name(&self) -> Option<&LocalText> { self.name.as_ref() }
     pub fn plc(&self) -> Option<&Plc> { self.plc.as_ref() }
     pub fn public_name(&self) -> Option<&List<LocalText>> {
@@ -139,7 +156,7 @@ impl Event {
     pub fn status(&self) -> Option<Status> { self.status }
 
     pub fn service(&self) -> Option<Service> { self.service }
-    pub fn split_from(&self) -> Option<&PointLink> {
+    pub fn split_from(&self) -> Option<&Marked<PointLink>> {
         self.split_from.as_ref()
     }
 
@@ -279,7 +296,7 @@ data_enum! {
 //------------ Location ------------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Location(List<(LineLink, Option<Text>)>);
+pub struct Location(List<(Marked<LineLink>, Option<Text>)>);
 
 impl Constructable for Location {
     fn construct<C: Context>(value: Value, context: &mut C)
@@ -342,12 +359,12 @@ data_enum! {
 
 #[derive(Clone, Debug)]
 pub struct Site {
-    path: PathLink,
+    path: Marked<PathLink>,
     node: Text,
 }
 
 impl Site {
-    pub fn path(&self) -> &PathLink { &self.path }
+    pub fn path(&self) -> &Marked<PathLink> { &self.path }
     pub fn node(&self) -> &Text { &self.node }
 }
 

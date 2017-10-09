@@ -47,6 +47,9 @@ impl Path {
         })
         */
     }
+
+    pub fn crosslink<C: Context>(&mut self, _context: &mut C) {
+    }
 }
 
 

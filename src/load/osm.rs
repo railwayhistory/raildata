@@ -182,7 +182,7 @@ fn load_point(value: Option<&str>, context: &mut TreeContext)
               -> Option<Vec<PointLink>> {
     value.map(|value| {
         value.split_whitespace().map(|key| {
-            PointLink::from_value(context.get_link(&String::from(key).into()))
+            context.get_link(&String::from(key).into())
         }).collect()
     })
 }
@@ -191,7 +191,7 @@ fn load_source(value: Option<&str>, context: &mut TreeContext)
                -> Option<Vec<SourceLink>> {
     value.map(|value| {
         value.split_whitespace().map(|key| {
-            SourceLink::from_value(context.get_link(&String::from(key).into()))
+            context.get_link(&String::from(key).into())
         }).collect()
     })
 }

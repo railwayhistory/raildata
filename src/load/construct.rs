@@ -11,6 +11,16 @@ pub trait Context {
     fn get_link<T>(&mut self, key: &Key) -> Link<T>
                 where T: Variant<Item=Document>;
     fn push_error<E: Into<Error>>(&mut self, error: E);
+
+    fn ok<T, E: Into<Error>>(&mut self, result: Result<T, E>) -> Option<T> {
+        match result {
+            Ok(t) => Some(t),
+            Err(err) => {
+                self.push_error(err);
+                None
+            }
+        }
+    }
 }
 
 

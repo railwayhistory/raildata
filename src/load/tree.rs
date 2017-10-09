@@ -23,7 +23,7 @@ pub fn load_tree(path: &path::Path) -> Result<PrimaryIndex, ErrorStore> {
 
     load_facts(path, docs.clone(), errors.clone());
     load_paths(path, docs.clone(), errors.clone());
-    
+ 
     let docs = Arc::try_unwrap(docs).unwrap().into_inner().unwrap();
     let errors = Arc::try_unwrap(errors).unwrap().into_inner().unwrap();
     if errors.is_empty() {

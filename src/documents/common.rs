@@ -65,14 +65,14 @@ data_enum! {
 #[derive(Clone, Debug)]
 pub struct Alternative {
     date: EventDate,
-    document: List<SourceLink>,
-    source: List<SourceLink>,
+    document: List<Marked<SourceLink>>,
+    source: List<Marked<SourceLink>>,
 }
 
 impl Alternative {
     pub fn date(&self) -> &EventDate { &self.date }
-    pub fn document(&self) -> &List<SourceLink> { &self.document }
-    pub fn source(&self) -> &List<SourceLink> { &self.source }
+    pub fn document(&self) -> &List<Marked<SourceLink>> { &self.document }
+    pub fn source(&self) -> &List<Marked<SourceLink>> { &self.source }
 }
 
 impl Constructable for Alternative {
@@ -97,8 +97,8 @@ impl Constructable for Alternative {
 #[derive(Clone, Debug)]
 pub struct Basis {
     date: Option<List<Marked<Date>>>,
-    document: List<SourceLink>,
-    source: List<SourceLink>,
+    document: List<Marked<SourceLink>>,
+    source: List<Marked<SourceLink>>,
     contract: Option<Contract>,
     treaty: Option<Contract>,
     note: Option<LanguageText>,
@@ -106,8 +106,8 @@ pub struct Basis {
 
 impl Basis {
     pub fn date(&self) -> Option<&List<Marked<Date>>> { self.date.as_ref() }
-    pub fn document(&self) -> &List<SourceLink> { &self.document }
-    pub fn source(&self) -> &List<SourceLink> { &self.source }
+    pub fn document(&self) -> &List<Marked<SourceLink>> { &self.document }
+    pub fn source(&self) -> &List<Marked<SourceLink>> { &self.source }
     pub fn contract(&self) -> Option<&Contract> { self.contract.as_ref() }
     pub fn treaty(&self) -> Option<&Contract> { self.treaty.as_ref() }
     pub fn note(&self) -> Option<&LanguageText> { self.note.as_ref() }
@@ -140,11 +140,11 @@ impl Constructable for Basis {
 
 #[derive(Clone, Debug)]
 pub struct Contract {
-    parties: List<OrganizationLink>,
+    parties: List<Marked<OrganizationLink>>,
 }
 
 impl Contract {
-    pub fn parties(&self) -> &List<OrganizationLink> { &self.parties }
+    pub fn parties(&self) -> &List<Marked<OrganizationLink>> { &self.parties }
 }
 
 impl Constructable for Contract {
