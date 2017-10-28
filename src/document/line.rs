@@ -3,8 +3,10 @@
 use std::{fmt, ops};
 use std::str::FromStr;
 use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::crosslink::CrosslinkContext;
 use ::load::yaml::{Mapping, Value};
-use ::links::{LineLink, OrganizationLink, PathLink, PointLink, SourceLink};
+use ::links::{DocumentLink, LineLink, OrganizationLink, PathLink, PointLink,
+              SourceLink};
 use ::types::{Date, EventDate, Key, LanguageText, List, LocalText, Location,
               Marked, Set};
 use super::common::{Alternative, Basis, Contract, Common};
@@ -56,20 +58,15 @@ impl Line {
         })
     }
 
-    /*
-    pub fn crosslink<C: Context>(&mut self, context: &mut C) {
-        self.events.crosslink(context);
+    pub fn crosslink(&self, link: DocumentLink,
+                     _context: &mut CrosslinkContext) {
+        //self.events.crosslink(context);
+        let link = link.convert();
         for (n, point) in self.points.iter().enumerate() {
-            let link = match context.try_get_link(self.key()) {
-                Some(link) => link,
-                None => continue
-            };
-            context.ok(point.with_mut(|point| {
-                point.lines_mut().push((link, n));
-            }).map_err(|err| (err, point.location())));
+            point.with_mut(|point| point.push_line(link.clone(), n))
+                 .unwrap()
         }
     }
-    */
 }
 
 

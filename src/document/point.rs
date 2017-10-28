@@ -1,7 +1,8 @@
 use std::{fmt, ops};
 use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::crosslink::CrosslinkContext;
 use ::load::yaml::{Mapping, Value};
-use ::links::{LineLink, PathLink, PointLink, SourceLink};
+use ::links::{DocumentLink, LineLink, PathLink, PointLink, SourceLink};
 use ::types::{EventDate, Key, LanguageText, List, LocalText, Marked, Set};
 use super::common::Common;
 
@@ -47,11 +48,15 @@ impl Point {
             lines: List::default(),
         })
     }
+
+    pub fn crosslink(&self, _link: DocumentLink,
+                     _context: &mut CrosslinkContext) {
+    }
 }
 
 impl Point {
-    pub fn lines_mut(&mut self) -> &mut List<(LineLink, usize)> {
-        &mut self.lines
+    pub fn push_line(&mut self, link: LineLink, n: usize) {
+        self.lines.push((link, n))
     }
 }
 

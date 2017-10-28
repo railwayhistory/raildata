@@ -2,8 +2,10 @@
 
 use std::{fmt, hash};
 use ::types::{Key, Location, Marked};
+use ::links::DocumentLink;
 use ::load::path;
 use ::load::construct::{ConstructContext, Failed};
+use ::load::crosslink::CrosslinkContext;
 use ::load::yaml::{Value};
 use super::{Line, Organization, Path, Point, Source, Structure};
 use super::broken::Broken;
@@ -56,6 +58,16 @@ macro_rules! document {  ( $( $v:ident, )* ) => {
                 Err(_) => Self::broken(key.clone(), Some(doc_type)),
             };
             Ok((res, key.into_value()))
+        }
+
+        pub fn crosslink(&self, link: DocumentLink,
+                         context: &mut CrosslinkContext) {
+            match *self {
+                $(
+                    Document::$v(ref doc) => doc.crosslink(link, context),
+                )*
+                _ => { /* XXX Should we panic here? */ }
+            }
         }
     }
 

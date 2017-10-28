@@ -6,6 +6,7 @@ use ignore::types::TypesBuilder;
 use ::index::PrimaryIndex;
 use ::types::Location;
 use super::construct::ConstructContext;
+use super::crosslink::CrosslinkContext;
 use super::error::{ErrorStore, SharedErrorStore};
 use super::path::Path;
 use super::read::Utf8Chars;
@@ -19,18 +20,32 @@ pub fn load_tree(path: &path::Path) -> Result<PrimaryIndex, ErrorStore> {
     let docs = Arc::new(RwLock::new(PrimaryIndex::new()));
     let errors = SharedErrorStore::new();
 
+    // Phase 1: Construct all documents and check that they are all present
+    //          and accounted for.
     load_facts(path, docs.clone(), errors.clone());
     load_paths(path, docs.clone(), errors.clone());
  
-    let docs = Arc::try_unwrap(docs).unwrap().into_inner().unwrap();
-    for value in docs.values() {
+    for value in docs.read().unwrap().values() {
         if let Some(doc) = value.read().unwrap().as_nonexisting() {
             doc.complain(&errors)
         }
     }
-    let errors = errors.try_unwrap().unwrap();
     if errors.is_empty() {
-        Ok(docs)
+        return Err(errors.unwrap())
+    }
+
+    // Phase 2: Create crosslinks between documents.
+    //
+    // These need to be in place for verification.
+    let mut context = CrosslinkContext::new(docs.clone(), errors.clone());
+    for value in docs.read().unwrap().values() {
+        let link = value.link();
+        value.read().unwrap().crosslink(link, &mut context);
+    }
+
+    let errors = errors.unwrap();
+    if errors.is_empty() {
+        Ok(Arc::try_unwrap(docs).unwrap().into_inner().unwrap())
     }
     else {
         Err(errors)

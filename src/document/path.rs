@@ -1,8 +1,9 @@
 use std::fmt;
 use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::crosslink::CrosslinkContext;
 use ::load::path;
 use ::load::yaml::{Mapping, Value};
-use ::links::{PointLink, SourceLink};
+use ::links::{DocumentLink, PointLink, SourceLink};
 use ::types::{Key, Location, Marked};
 
 
@@ -53,6 +54,10 @@ impl Path {
             nodes: nodes?,
             source: source?,
         })
+    }
+
+    pub fn crosslink(&self, _link: DocumentLink,
+                     _context: &mut CrosslinkContext) {
     }
 }
 

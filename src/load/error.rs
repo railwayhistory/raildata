@@ -117,11 +117,19 @@ impl SharedErrorStore {
         self.0.lock().unwrap().push(path, err)
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.0.lock().unwrap().is_empty()
+    }
+
     pub fn try_unwrap(self) -> Result<ErrorStore, Self> {
         match Arc::try_unwrap(self.0) {
             Ok(store) => Ok(store.into_inner().unwrap()),
             Err(err) => Err(SharedErrorStore(err))
         }
+    }
+
+    pub fn unwrap(self) -> ErrorStore {
+        self.try_unwrap().unwrap()
     }
 }
 

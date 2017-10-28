@@ -22,8 +22,7 @@ pub struct ConstructContext {
 
 impl ConstructContext {
     pub fn new(path: Path, docs: Arc<RwLock<PrimaryIndex>>,
-               errors: SharedErrorStore)
-               -> Self {
+               errors: SharedErrorStore) -> Self {
         ConstructContext { path, docs, errors }
     }
 }

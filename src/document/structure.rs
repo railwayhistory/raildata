@@ -1,7 +1,9 @@
 use std::ops;
 use ::links::SourceLink;
 use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::crosslink::CrosslinkContext;
 use ::load::yaml::{Mapping, Value};
+use ::links::DocumentLink;
 use ::types::{EventDate, Key, LanguageText, List, LocalText, Marked};
 use super::common::Common;
 
@@ -37,6 +39,10 @@ impl Structure {
             subtype: subtype?,
             events: events?,
         })
+    }
+
+    pub fn crosslink(&self, _link: DocumentLink,
+                     _context: &mut CrosslinkContext) {
     }
 }
 

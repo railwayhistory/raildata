@@ -35,8 +35,16 @@ impl PrimaryIndex {
         self.documents.get(key).map(Clone::clone)
     }
 
+    pub fn len(&self) -> usize {
+        self.documents.len()
+    }
+
     pub fn values(&self) -> Values<Key, Permalink> {
         self.documents.values()
+    }
+
+    pub fn inner(&self) -> &HashMap<Key, Permalink> {
+        &self.documents
     }
 }
 

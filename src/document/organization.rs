@@ -1,7 +1,8 @@
 use std::ops;
 use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::crosslink::CrosslinkContext;
 use ::load::yaml::{MarkedMapping, Value};
-use ::links::{OrganizationLink, SourceLink};
+use ::links::{DocumentLink, OrganizationLink, SourceLink};
 use ::types::{EventDate, Key, List, LanguageText, LocalText, Marked};
 use super::common::{Basis, Common};
 
@@ -37,6 +38,10 @@ impl Organization {
             subtype: subtype?,
             events: events?,
         })
+    }
+
+    pub fn crosslink(&self, _link: DocumentLink,
+                     _context: &mut CrosslinkContext) {
     }
 }
 

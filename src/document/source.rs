@@ -2,6 +2,7 @@
 
 use std::ops;
 use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::crosslink::CrosslinkContext;
 use ::load::yaml::{Mapping, Value};
 use ::links::{DocumentLink, OrganizationLink, SourceLink};
 use ::types::{Date, LanguageText, Key, List, Marked, Url};
@@ -182,6 +183,10 @@ impl Source {
             note: note?,
             regards: regards?,
         })
+    }
+
+    pub fn crosslink(&self, _link: DocumentLink,
+                     _context: &mut CrosslinkContext) {
     }
 }
 

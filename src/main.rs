@@ -6,7 +6,7 @@ use raildata::load::load_tree;
 
 fn main() {
     match load_tree(Path::new("../data").into()) {
-        Ok(_) => println!("Ok."),
+        Ok(doc) => println!("Ok. {} documents.", doc.len()),
         Err(mut err) => {
             err.sort();
             println!("{} errors.", err.len());
