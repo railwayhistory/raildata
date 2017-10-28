@@ -1,12 +1,12 @@
+//! Types for holding localized data.
 
 use std::{fmt, ops, str};
 use std::str::FromStr;
 use std::collections::HashMap;
 use std::hash::Hash;
-use ::load::construct::{Context, Constructable, Failed};
+use ::load::construct::{Constructable, ConstructContext, Failed};
 use ::load::yaml::Value;
 use super::marked::Marked;
-use super::simple::Text;
 
 
 //------------ CountryCode ---------------------------------------------------
@@ -27,9 +27,9 @@ impl ops::Deref for CountryCode {
 }
 
 impl Constructable for Marked<CountryCode> {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
-        Text::construct(value, context)?
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
+        value.into_string(context)?
              .try_map(|text| CountryCode::from_str(&text))
              .map_err(|err| { context.push_error(err); Failed })
     }
@@ -64,9 +64,9 @@ impl ops::Deref for LanguageCode {
 }
 
 impl Constructable for Marked<LanguageCode> {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
-        Text::construct(value, context)?
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
+        value.into_string(context)?
              .try_map(|text| LanguageCode::from_str(&text))
              .map_err(|err| { context.push_error(err); Failed })
     }
@@ -123,9 +123,9 @@ impl From<LanguageCode> for LocalCode {
 }
 
 impl Constructable for Marked<LocalCode> {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
-        Text::construct(value, context)?
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
+        value.into_string(context)?
              .try_map(|text| LocalCode::from_str(&text))
              .map_err(|err| { context.push_error(err); Failed })
     }
@@ -159,12 +159,12 @@ pub struct CodedText<C: Hash + Eq>(CTInner<C>);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum CTInner<C: Hash + Eq> {
-    Plain(Text),
-    Map(HashMap<Marked<C>, Text>),
+    Plain(Marked<String>),
+    Map(HashMap<Marked<C>, Marked<String>>),
 }
 
 impl<C: Hash + Eq> CodedText<C> {
-    pub fn from_text(text: Text) -> Self {
+    pub fn from_text(text: Marked<String>) -> Self {
         CodedText(CTInner::Plain(text))
     }
 
@@ -172,7 +172,7 @@ impl<C: Hash + Eq> CodedText<C> {
         CodedText(CTInner::Map(HashMap::new()))
     }
 
-    pub fn insert(&mut self, key: Marked<C>, value: Text) {
+    pub fn insert(&mut self, key: Marked<C>, value: Marked<String>) {
         if let CTInner::Plain(_) = self.0 {
             self.0 = CTInner::Map(HashMap::new())
         }
@@ -189,8 +189,8 @@ impl<C: Hash + Eq> CodedText<C> {
 
 impl<C: Hash + Eq + FromStr> Constructable for CodedText<C>
      where <C as FromStr>::Err: fmt::Display + fmt::Debug + 'static + Send {
-    fn construct<Ctx: Context>(value: Value, context: &mut Ctx)
-                               -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         match value.try_into_mapping() {
             Ok(mut value) => {
                 let mut res = Self::new_map();
@@ -217,7 +217,7 @@ impl<C: Hash + Eq + FromStr> Constructable for CodedText<C>
                 }
             }
             Err(value) => {
-                Text::construct(value, context).map(Self::from_text)
+                value.into_string(context).map(Self::from_text)
             }
         }
     }

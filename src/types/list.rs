@@ -1,6 +1,8 @@
+//! A list with an optimization for holding a single item.
+
 use std::{fmt, mem, slice};
 use ::load::yaml::Value;
-use ::load::construct::{Constructable, Context, Failed};
+use ::load::construct::{Constructable, ConstructContext, Failed};
 use super::marked::Location;
 
 
@@ -82,8 +84,8 @@ impl<T> From<Option<List<T>>> for List<T> {
 }
 
 impl<T: Constructable> Constructable for List<T> {
-    fn construct<C>(value: Value, context: &mut C) -> Result<Self, Failed>
-                 where C: Context {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let location = value.location();
         let inner = match value.try_into_sequence() {
             Ok(mut seq) => {
@@ -116,7 +118,6 @@ impl<T: Constructable> Constructable for List<T> {
         Ok(List { inner, location })
     }
 }
-
 
 impl<'a, T> IntoIterator for &'a List<T> {
     type Item = &'a T;

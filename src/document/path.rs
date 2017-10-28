@@ -1,9 +1,9 @@
 use std::fmt;
-use ::load::construct::{Context, Failed};
-use ::load::yaml::{MarkedMapping};
-use super::common::Common;
-use super::links::{PointLink, SourceLink};
-use super::types::{Key};
+use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::path;
+use ::load::yaml::{Mapping, Value};
+use ::links::{PointLink, SourceLink};
+use ::types::{Key, Location, Marked};
 
 
 //------------ Path ----------------------------------------------------------
@@ -11,6 +11,9 @@ use super::types::{Key};
 #[derive(Clone, Debug)]
 pub struct Path {
     key: Key,
+    path: path::Path,
+    location: Location,
+
     name: Option<String>,
     nodes: Vec<Node>,
     source: Option<Vec<SourceLink>>,
@@ -18,6 +21,9 @@ pub struct Path {
 
 impl Path {
     pub fn key(&self) -> &Key { &self.key }
+    pub fn location(&self) -> (&path::Path, Location) {
+        (&self.path, self.location)
+    }
     pub fn name(&self) -> Option<&str> { self.name.as_ref().map(AsRef::as_ref) }
     pub fn nodes(&self) -> &[Node] { &self.nodes }
     pub fn source(&self) -> Option<&[SourceLink]> { 
@@ -27,28 +33,26 @@ impl Path {
 
 impl Path {
     pub fn new(key: Key, name: Option<String>, nodes: Vec<Node>,
-               source: Option<Vec<SourceLink>>) -> Self {
-        Path { key, name, nodes, source }
+               source: Option<Vec<SourceLink>>, path: path::Path,
+               location: Location) -> Self {
+        Path { key, path, location, name, nodes, source }
     }
 
-    pub fn construct<C: Context>(_common: Common, doc: MarkedMapping,
-                                 context: &mut C) -> Result<Self, Failed> {
-        context.push_error((PathFromYaml, doc.location()));
-        Err(Failed)
-        /*
+    pub fn construct(key: Marked<Key>, mut doc: Marked<Mapping>,
+                     context: &mut ConstructContext) -> Result<Self, Failed> {
         let name = doc.take_opt("name", context);
         let nodes = doc.take("nodes", context);
         let source = doc.take_default("source", context);
+        let location = doc.location();
         doc.exhausted(context)?;
-        Ok(Path { common,
+        Ok(Path {
+            key: key.into_value(),
+            path: context.path().clone(),
+            location,
             name: name?,
             nodes: nodes?,
             source: source?,
         })
-        */
-    }
-
-    pub fn crosslink<C: Context>(&mut self, _context: &mut C) {
     }
 }
 
@@ -90,6 +94,37 @@ impl Node {
     }
 }
 
+impl Constructable for Node {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
+        let mut value = value.into_mapping(context)?;
+        let lon = value.take("lon", context);
+        let lat = value.take("lat", context);
+        let pre = value.take("pre", context);
+        let post = value.take("post", context);
+        let name = value.take_opt("name", context);
+        let point = value.take_default("point", context);
+        let description = value.take_opt("description", context);
+        value.exhausted(context)?;
+        let name = name?;
+        let point: Vec<_> = point?;
+        let description = description?;
+        let extra = if name.is_some() || !point.is_empty()
+                        || description.is_some() {
+            Some(Box::new(NodeExtra { name, point, description }))
+        }
+        else {
+            None
+        };
+        Ok(Node {
+            lon: lon?,
+            lat: lat?,
+            pre: pre?,
+            post: post?,
+            extra
+        })
+    }
+}
 
 impl Node {
     pub fn lon(&self) -> f64 { self.lon }

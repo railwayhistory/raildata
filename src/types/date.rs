@@ -3,7 +3,7 @@
 use std::{cmp, fmt, str};
 use std::str::FromStr;
 use ::load::yaml::Value;
-use ::load::construct::{Constructable, Context, Failed};
+use ::load::construct::{Constructable, ConstructContext, Failed};
 use super::marked::Marked;
 
 
@@ -147,8 +147,8 @@ impl Date {
 }
 
 impl Constructable for Marked<Date> {
-    fn construct<C>(value: Value, context: &mut C) -> Result<Self, Failed>
-                 where C: Context {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let value = match value.try_into_integer() {
             Ok(year) => {
                 return year.try_map(|year| {
@@ -311,8 +311,8 @@ impl str::FromStr for Date {
 pub type EventDate = Marked<Option<Date>>;
 
 impl Constructable for EventDate {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         if value.is_null() {
             Ok(value.map(|_| None))
         }

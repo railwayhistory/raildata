@@ -3,6 +3,8 @@
 use std::{borrow, cmp, fmt, hash, ops};
 use std::cmp::min;
 use yaml_rust::scanner::Marker;
+use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::yaml::Value;
 
 
 //------------ Marked --------------------------------------------------------
@@ -58,8 +60,17 @@ impl<T> Marked<T> {
 }
 
 impl<T: Copy> Marked<T> {
-    pub fn to(&self) -> T {
+    pub fn to_value(&self) -> T {
         self.value
+    }
+}
+
+
+//--- From
+
+impl<T> From<T> for Marked<T> {
+    fn from(t: T) -> Marked<T> {
+        Marked::new(t, Location::NONE)
     }
 }
 
@@ -236,3 +247,112 @@ impl fmt::Display for Location {
         }
     }
 }
+
+
+//------------ Marked<bool> --------------------------------------------------
+
+impl Constructable for Marked<bool> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
+        value.into_boolean(context)
+    }
+}
+
+
+//------------ Marked<f64> ---------------------------------------------------
+
+impl Constructable for Marked<f64> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
+        value.into_float(context)
+    }
+}
+
+
+//------------ Marked<String> ------------------------------------------------
+
+impl AsRef<str> for Marked<String> {
+    fn as_ref(&self) -> &str {
+        self.value.as_ref()
+    }
+}
+
+impl borrow::Borrow<str> for Marked<String> {
+    fn borrow(&self) -> &str {
+        self.value.borrow()
+    }
+}
+
+impl Constructable for Marked<String> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
+        value.into_string(context)
+    }
+}
+
+impl Constructable for String {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
+        Marked::construct(value, context).map(Marked::into_value)
+    }
+}
+
+
+//------------ Marked<bool> --------------------------------------------------
+
+impl Constructable for Marked<u8> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
+        value.into_integer(context)?
+             .try_map(|int| {
+                if int < 0 || int > ::std::u8::MAX as i64 {
+                    Err(RangeError::new(0, ::std::u8::MAX as i64, int))
+                }
+                else {
+                    Ok(int as u8)
+                }
+             })
+            .map_err(|err| { context.push_error(err); Failed })
+    }
+}
+
+
+//------------ EnumError -----------------------------------------------------
+
+pub struct EnumError(String);
+
+impl EnumError {
+    pub fn new(variant: String) -> Self {
+        EnumError(variant)
+    }
+}
+
+impl fmt::Display for EnumError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "invalid enum value '{}'", self.0)
+    }
+}
+
+
+//------------ RangeError ----------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+pub struct RangeError {
+    low: i64,
+    hi: i64,
+    is: i64
+}
+
+impl RangeError {
+    pub fn new(low: i64, hi: i64, is: i64) -> Self {
+        RangeError { low, hi, is }
+    }
+}
+
+impl fmt::Display for RangeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "value {} is outside of range {} to {}",
+               self.is, self.low, self.hi)
+    }
+}
+

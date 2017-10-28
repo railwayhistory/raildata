@@ -1,11 +1,11 @@
 //! A source document.
 
 use std::ops;
-use ::load::construct::{Constructable, Context, Failed};
-use ::load::yaml::{MarkedMapping, Value};
+use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::yaml::{Mapping, Value};
+use ::links::{DocumentLink, OrganizationLink, SourceLink};
+use ::types::{Date, LanguageText, Key, List, Marked, Url};
 use super::common::Common;
-use super::links::{DocumentLink, OrganizationLink, SourceLink};
-use super::types::{Date, LanguageText, List, Marked, Text, Url};
 
 
 //------------ Source --------------------------------------------------------
@@ -18,23 +18,23 @@ pub struct Source {
     author: List<Marked<OrganizationLink>>,
     collection: Option<Marked<SourceLink>>,
     date: Option<Marked<Date>>,
-    designation: Option<Text>,
-    digital: List<Url>,
-    edition: Option<Text>,
+    designation: Option<Marked<String>>,
+    digital: List<Marked<Url>>,
+    edition: Option<Marked<String>>,
     editor: List<Marked<OrganizationLink>>,
     isbn: Option<Isbn>,
-    number: Option<Text>,
+    number: Option<Marked<String>>,
     organization: List<Marked<OrganizationLink>>,
     pages: Option<Pages>,
     publisher: List<Marked<OrganizationLink>>,
-    revision: Option<Text>,
-    short_title: Option<Text>,
-    title: Option<Text>,
-    url: Option<Url>,
-    volume: Option<Text>,
+    revision: Option<Marked<String>>,
+    short_title: Option<Marked<String>>,
+    title: Option<Marked<String>>,
+    url: Option<Marked<Url>>,
+    volume: Option<Marked<String>>,
 
     // Additional attributes
-    attribution: Option<Text>,
+    attribution: Option<Marked<String>>,
     crossref: List<Marked<SourceLink>>,
     note: Option<LanguageText>,
     regards: List<Marked<DocumentLink>>,
@@ -57,16 +57,16 @@ impl Source {
         self.date.as_ref()
     }
     
-    pub fn designation(&self) -> Option<&Text> {
-        self.designation.as_ref()
+    pub fn designation(&self) -> Option<&str> {
+        self.designation.as_ref().map(AsRef::as_ref)
     }
 
-    pub fn digital(&self) -> &List<Url> {
+    pub fn digital(&self) -> &List<Marked<Url>> {
         &self.digital
     }
 
-    pub fn edition(&self) -> Option<&Text> {
-        self.edition.as_ref()
+    pub fn edition(&self) -> Option<&str> {
+        self.edition.as_ref().map(AsRef::as_ref)
     }
 
     pub fn editor(&self) -> &List<Marked<OrganizationLink>> {
@@ -77,8 +77,8 @@ impl Source {
         self.isbn.as_ref()
     }
 
-    pub fn number(&self) -> Option<&Text> {
-        self.number.as_ref()
+    pub fn number(&self) -> Option<&str> {
+        self.number.as_ref().map(AsRef::as_ref)
     }
 
     pub fn organization(&self) -> &List<Marked<OrganizationLink>> {
@@ -93,28 +93,28 @@ impl Source {
         &self.publisher
     }
 
-    pub fn revision(&self) -> Option<&Text> {
-        self.revision.as_ref()
+    pub fn revision(&self) -> Option<&str> {
+        self.revision.as_ref().map(AsRef::as_ref)
     }
 
-    pub fn short_title(&self) -> Option<&Text> {
-        self.short_title.as_ref()
+    pub fn short_title(&self) -> Option<&str> {
+        self.short_title.as_ref().map(AsRef::as_ref)
     }
 
-    pub fn title(&self) -> Option<&Text> {
-        self.title.as_ref()
+    pub fn title(&self) -> Option<&str> {
+        self.title.as_ref().map(AsRef::as_ref)
     }
 
     pub fn url(&self) -> Option<&Url> {
-        self.url.as_ref()
+        self.url.as_ref().map(Marked::as_value)
     }
 
-    pub fn volume(&self) -> Option<&Text> {
-        self.volume.as_ref()
+    pub fn volume(&self) -> Option<&str> {
+        self.volume.as_ref().map(AsRef::as_ref)
     }
 
-    pub fn attribution(&self) -> Option<&Text> {
-        self.attribution.as_ref()
+    pub fn attribution(&self) -> Option<&str> {
+        self.attribution.as_ref().map(AsRef::as_ref)
     }
 
     pub fn crossref(&self) -> &List<Marked<SourceLink>> {
@@ -131,9 +131,9 @@ impl Source {
 }
 
 impl Source {
-    pub fn construct<C>(common: Common, mut doc: MarkedMapping,
-                        context: &mut C) -> Result<Self, Failed>
-                     where C: Context {
+    pub fn construct(key: Marked<Key>, mut doc: Marked<Mapping>,
+                     context: &mut ConstructContext) -> Result<Self, Failed> {
+        let common = Common::construct(key, &mut doc, context);
         let subtype = doc.take_default("subtype", context);
         let author = doc.take_opt("author", context);
         let collection = doc.take_opt("collection", context);
@@ -157,7 +157,8 @@ impl Source {
         let note = doc.take_opt("note", context);
         let regards = doc.take_default("regards", context);
         doc.exhausted(context)?;
-        Ok(Source { common,
+        Ok(Source {
+            common: common?,
             subtype: subtype?,
             author: author?.into(),
             collection: collection?,
@@ -181,9 +182,6 @@ impl Source {
             note: note?,
             regards: regards?,
         })
-    }
-
-    pub fn crosslink<C: Context>(&mut self, _context: &mut C) {
     }
 }
 
@@ -229,25 +227,25 @@ data_enum! {
 // XXX Temporary type. Replace with a type encoding the actual specification.
 
 #[derive(Clone, Debug)]
-pub struct Pages(Text);
+pub struct Pages(Marked<String>);
 
 impl Constructable for Pages {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         match value.try_into_integer() {
             Ok(int) => {
                 Ok(Pages(int.map(|int| format!("{}", int))))
             }
-            Err(value) => Text::construct(value, context).map(Pages)
+            Err(value) => Marked::construct(value, context).map(Pages)
         }
     }
 }
 
 impl ops::Deref for Pages {
-    type Target = Text;
+    type Target = str;
 
-    fn deref(&self) -> &Text {
-        &self.0
+    fn deref(&self) -> &str {
+        self.0.as_value().as_ref()
     }
 }
 
@@ -255,20 +253,20 @@ impl ops::Deref for Pages {
 //------------ Isbn ----------------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Isbn(Text);
+pub struct Isbn(Marked<String>);
 
 impl Constructable for Isbn {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
-        Text::construct(value, context).map(Isbn)
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
+        Marked::construct(value, context).map(Isbn)
     }
 }
 
 impl ops::Deref for Isbn {
-    type Target = Text;
+    type Target = str;
 
-    fn deref(&self) -> &Text {
-        &self.0
+    fn deref(&self) -> &str {
+        self.0.as_value().as_ref()
     }
 }
 

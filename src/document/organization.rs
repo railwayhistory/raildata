@@ -1,9 +1,9 @@
 use std::ops;
-use ::load::construct::{Constructable, Context, Failed};
+use ::load::construct::{Constructable, ConstructContext, Failed};
 use ::load::yaml::{MarkedMapping, Value};
+use ::links::{OrganizationLink, SourceLink};
+use ::types::{EventDate, Key, List, LanguageText, LocalText, Marked};
 use super::common::{Basis, Common};
-use super::links::{OrganizationLink, SourceLink};
-use super::types::{EventDate, List, LanguageText, LocalText, Marked};
 
 
 //------------ Organization --------------------------------------------------
@@ -11,13 +11,13 @@ use super::types::{EventDate, List, LanguageText, LocalText, Marked};
 #[derive(Clone, Debug)]
 pub struct Organization {
     common: Common,
-    subtype: Subtype,
+    subtype: Marked<Subtype>,
     events: List<Event>,
 }
 
 impl Organization {
     pub fn subtype(&self) -> Subtype {
-        self.subtype
+        self.subtype.to_value()
     }
 
     pub fn events(&self) -> &List<Event> {
@@ -26,19 +26,17 @@ impl Organization {
 }
 
 impl Organization {
-    pub fn construct<C>(common: Common, mut doc: MarkedMapping,
-                        context: &mut C) -> Result<Self, Failed>
-                     where C: Context {
+    pub fn construct(key: Marked<Key>, mut doc: MarkedMapping,
+                     context: &mut ConstructContext) -> Result<Self, Failed> {
+        let common = Common::construct(key, &mut doc, context);
         let subtype = doc.take("subtype", context);
         let events = doc.take("events", context);
         doc.exhausted(context)?;
-        Ok(Organization { common,
+        Ok(Organization {
+            common: common?,
             subtype: subtype?,
             events: events?,
         })
-    }
-
-    pub fn crosslink<C: Context>(&mut self, _context: &mut C) {
     }
 }
 
@@ -155,8 +153,8 @@ impl Event {
 
 
 impl Constructable for Event {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let mut value = value.into_mapping(context)?;
         let date = value.take("date", context);
         let document = value.take_default("document", context);
@@ -220,8 +218,8 @@ impl Property {
 }
 
 impl Constructable for Property {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let mut value = value.into_mapping(context)?;
         let role = value.take("role", context);
         let constructor = value.take_default("constructor", context);

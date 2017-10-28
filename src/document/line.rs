@@ -2,13 +2,12 @@
 
 use std::{fmt, ops};
 use std::str::FromStr;
-use ::load::construct::{Constructable, Context, Failed};
-use ::load::yaml::{MarkedMapping, Value};
+use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::yaml::{Mapping, Value};
+use ::links::{LineLink, OrganizationLink, PathLink, PointLink, SourceLink};
+use ::types::{Date, EventDate, Key, LanguageText, List, LocalText, Location,
+              Marked, Set};
 use super::common::{Alternative, Basis, Contract, Common};
-use super::links::{LineLink, OrganizationLink, PathLink, PointLink,
-                   SourceLink};
-use super::types::{Date, EventDate, LanguageText, List, LocalText,
-                   Location, Marked, Set, Text, Uint8};
 
 
 //------------ Line ----------------------------------------------------------
@@ -40,14 +39,16 @@ impl Line {
 }
 
 impl Line {
-    pub fn construct<C: Context>(common: Common, mut doc: MarkedMapping,
-                                 context: &mut C) -> Result<Self, Failed> {
+    pub fn construct(key: Marked<Key>, mut doc: Marked<Mapping>,
+                     context: &mut ConstructContext) -> Result<Self, Failed> {
+        let common = Common::construct(key, &mut doc, context);
         let label = doc.take_default("label", context);
         let note = doc.take_opt("note", context);
         let events = doc.take("events", context);
         let points = doc.take("points", context);
         doc.exhausted(context)?;
-        Ok(Line { common,
+        Ok(Line {
+            common: common?,
             label: label?,
             note: note?,
             events: events?,
@@ -55,16 +56,20 @@ impl Line {
         })
     }
 
+    /*
     pub fn crosslink<C: Context>(&mut self, context: &mut C) {
         self.events.crosslink(context);
-        /*
-        for (n, point) in self.points.iter_mut().enumerate() {
-            context.ok(point.with(|point| {
-                point.lines_mut().push((context.get_link(self.key()), n));
-            }))
+        for (n, point) in self.points.iter().enumerate() {
+            let link = match context.try_get_link(self.key()) {
+                Some(link) => link,
+                None => continue
+            };
+            context.ok(point.with_mut(|point| {
+                point.lines_mut().push((link, n));
+            }).map_err(|err| (err, point.location())));
         }
-        */
     }
+    */
 }
 
 
@@ -100,11 +105,13 @@ data_enum! {
 pub type EventList = List<Event>;
 
 impl EventList {
+    /*
     fn crosslink<C: Context>(&mut self, context: &mut C) {
         for event in self {
             event.crosslink(context)
         }
     }
+    */
 }
 
 //------------ Event ---------------------------------------------------------
@@ -129,15 +136,15 @@ pub struct Event {
     freight: Option<Freight>,
     gauge: Option<Set<Gauge>>,
     local_name: Option<LocalText>,
-    name: Option<Text>,
+    name: Option<Marked<String>>,
     operator: Option<List<Marked<OrganizationLink>>>,
     owner: Option<List<Marked<OrganizationLink>>>,
     passenger: Option<Passenger>,
-    rails: Option<Uint8>,
+    rails: Option<Marked<u8>>,
     region: Option<List<Marked<OrganizationLink>>>,
     reused: Option<List<Marked<LineLink>>>,
     status: Option<Status>,
-    tracks: Option<Uint8>,
+    tracks: Option<Marked<u8>>,
 
     de_vzg: Option<DeVzg>,
 }
@@ -167,7 +174,9 @@ impl Event {
     pub fn freight(&self) -> Option<Freight> { self.freight }
     pub fn gauge(&self) -> Option<&Set<Gauge>> { self.gauge.as_ref() }
     pub fn local_name(&self) -> Option<&LocalText> { self.local_name.as_ref() }
-    pub fn name(&self) -> Option<&Text> { self.name.as_ref() }
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_ref().map(|v| v.as_value().as_ref())
+    }
     pub fn operator(&self) -> Option<&List<Marked<OrganizationLink>>> {
         self.operator.as_ref()
     }
@@ -175,7 +184,9 @@ impl Event {
         self.owner.as_ref()
     }
     pub fn passenger(&self) -> Option<Passenger> { self.passenger }
-    pub fn rails(&self) -> Option<Uint8> { self.rails }
+    pub fn rails(&self) -> Option<u8> {
+        self.rails.as_ref().map(Marked::to_value)
+    }
     pub fn region(&self) -> Option<&List<Marked<OrganizationLink>>> {
         self.region.as_ref()
     }
@@ -183,14 +194,16 @@ impl Event {
         self.reused.as_ref()
     }
     pub fn status(&self) -> Option<Status> { self.status }
-    pub fn tracks(&self) -> Option<Uint8> { self.tracks }
+    pub fn tracks(&self) -> Option<u8> {
+        self.tracks.as_ref().map(Marked::to_value)
+    }
 
     pub fn de_vzg(&self) -> Option<&DeVzg> { self.de_vzg.as_ref() }
 }
 
 impl Constructable for Event {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let mut value = value.into_mapping(context)?;
         let date = value.take("date", context);
         let sections = value.take_default("sections", context);
@@ -283,8 +296,10 @@ impl Constructable for Event {
 }
 
 impl Event {
+    /*
     fn crosslink<C: Context>(&mut self, _context: &mut C) {
     }
+    */
 }
 
 
@@ -308,8 +323,8 @@ impl Section {
 
 
 impl Constructable for Section {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let mut value = value.into_mapping(context)?;
         let start = value.take_opt("start", context);
         let end = value.take_opt("end", context);
@@ -352,8 +367,8 @@ impl Concession {
 }
 
 impl Constructable for Concession {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let mut value = value.into_mapping(context)?;
         let by = value.take_default("by", context);
         let to = value.take_default("for", context);
@@ -369,19 +384,19 @@ impl Constructable for Concession {
 #[derive(Clone, Debug)]
 pub struct CourseSegment {
     path: Marked<PathLink>,
-    start: Text,
-    end: Text,
+    start: Marked<String>,
+    end: Marked<String>,
 }
 
 impl CourseSegment {
     pub fn path(&self) -> &Marked<PathLink> { &self.path }
-    pub fn start(&self) -> &Text { &self.start }
-    pub fn end(&self) -> &Text { &self.end }
+    pub fn start(&self) -> &str { self.start.as_value().as_ref() }
+    pub fn end(&self) -> &str { self.end.as_value().as_ref() }
 }
 
 impl Constructable for CourseSegment {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let (value, location) = value.into_string(context)?.unwrap();
         let mut value = value.split_whitespace();
         let path = match value.next() {
@@ -391,8 +406,10 @@ impl Constructable for CourseSegment {
                 return Err(Failed)
             }
         };
-        let path = Marked::new(String::from(path), location).into();
-        let path = Marked::new(context.get_link(&path), location);
+        let key = context.ok(Key::from_str(path)
+                                 .map_err(|err| (err, location)))?;
+        let path = Marked::new(PathLink::from_key(key, location, context)?,
+                               location);
         let start = match value.next() {
             Some(path) => path,
             None => {
@@ -420,7 +437,7 @@ impl Constructable for CourseSegment {
 
 //------------ Electrified ---------------------------------------------------
 
-pub type Electrified = Text;
+pub type Electrified = Marked<String>;
 
 
 //------------ Freight -------------------------------------------------------
@@ -441,7 +458,7 @@ pub struct Gauge(Marked<u16>);
 
 impl Gauge {
     pub fn gauge(&self) -> u16 {
-        self.0.to()
+        self.0.to_value()
     }
 
     pub fn location(&self) -> Location {
@@ -456,8 +473,8 @@ impl Default for Gauge {
 }
 
 impl Constructable for Gauge {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let (value, location) = value.into_string(context)?.unwrap();
         if !value.ends_with("mm") {
             context.push_error((InvalidGauge, location));
@@ -506,7 +523,7 @@ data_enum! {
 
 //------------ DeVzg ---------------------------------------------------------
 
-pub type DeVzg = Text;
+pub type DeVzg = Marked<String>;
 
 
 //============ Errors ========================================================

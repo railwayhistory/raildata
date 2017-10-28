@@ -1,9 +1,9 @@
 use std::ops;
-use ::load::construct::{Constructable, Context, Failed};
-use ::load::yaml::{MarkedMapping, Value};
+use ::links::SourceLink;
+use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::yaml::{Mapping, Value};
+use ::types::{EventDate, Key, LanguageText, List, LocalText, Marked};
 use super::common::Common;
-use super::links::SourceLink;
-use super::types::{EventDate, Float, LanguageText, List, LocalText, Marked};
 
 
 //------------ Structure -----------------------------------------------------
@@ -11,13 +11,13 @@ use super::types::{EventDate, Float, LanguageText, List, LocalText, Marked};
 #[derive(Clone, Debug)]
 pub struct Structure {
     common: Common,
-    subtype: Subtype,
+    subtype: Marked<Subtype>,
     events: List<Event>,
 }
 
 impl Structure {
     pub fn subtype(&self) -> Subtype {
-        self.subtype
+        self.subtype.to_value()
     }
 
     pub fn events(&self) -> &List<Event> {
@@ -26,19 +26,17 @@ impl Structure {
 }
 
 impl Structure {
-    pub fn construct<C>(common: Common, mut doc: MarkedMapping,
-                        context: &mut C) -> Result<Self, Failed>
-                     where C: Context {
+    pub fn construct(key: Marked<Key>, mut doc: Marked<Mapping>,
+                     context: &mut ConstructContext) -> Result<Self, Failed> {
+        let common = Common::construct(key, &mut doc, context);
         let subtype = doc.take("subtype", context);
         let events = doc.take("events", context);
         doc.exhausted(context)?;
-        Ok(Structure { common,
+        Ok(Structure {
+            common: common?,
             subtype: subtype?,
             events: events?,
         })
-    }
-
-    pub fn crosslink<C: Context>(&mut self, _context: &mut C) {
     }
 }
 
@@ -77,7 +75,7 @@ pub struct Event {
     source: List<Marked<SourceLink>>,
     note: Option<LanguageText>,
 
-    length: Option<Float>,
+    length: Option<Marked<f64>>,
     name: Option<LocalText>,
 }
 
@@ -87,13 +85,15 @@ impl Event {
     pub fn source(&self) -> &List<Marked<SourceLink>> { &self.source }
     pub fn note(&self) -> Option<&LanguageText> { self.note.as_ref() }
 
-    pub fn length(&self) -> Option<Float> { self.length }
+    pub fn length(&self) -> Option<f64> {
+        self.length.as_ref().map(Marked::to_value)
+    }
     pub fn name(&self) -> Option<&LocalText> { self.name.as_ref() }
 }
 
 impl Constructable for Event {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let mut value = value.into_mapping(context)?;
         let date = value.take("date", context);
         let document = value.take_default("document", context);
@@ -112,3 +112,4 @@ impl Constructable for Event {
         })
     }
 }
+

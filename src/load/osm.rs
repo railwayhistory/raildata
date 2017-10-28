@@ -3,17 +3,18 @@ use std::collections::HashSet;
 use std::f64::INFINITY;
 use osmxml::elements::{MemberType, Osm, Relation};
 use osmxml::read::read_xml;
-use ::documents::document::Document;
-use ::documents::links::{PointLink, SourceLink};
-use ::documents::path::{Path, Node};
-use ::documents::types::{Key, Location};
-use super::construct::Context;
-use super::tree::TreeContext;
+use ::document::{Document, DocumentType};
+use ::links::{PointLink, SourceLink};
+use ::document::path::{Path, Node};
+use ::types::{Key, Location};
+use ::types::key::InvalidKey;
+use super::construct::ConstructContext;
 
 
 //------------ load_osm_file -------------------------------------------------
 
-pub fn load_osm_file<R: io::Read>(read: &mut R, context: &mut TreeContext) {
+pub fn load_osm_file<R: io::Read>(read: &mut R,
+                                  context: &mut ConstructContext) {
     let mut osm = match read_xml(read) {
         Ok(osm) => osm,
         Err(err) => {
@@ -33,13 +34,22 @@ pub fn load_osm_file<R: io::Read>(read: &mut R, context: &mut TreeContext) {
 
 
 fn load_relation(mut relation: Relation, osm: &Osm,
-                 context: &mut TreeContext) {
+                 context: &mut ConstructContext) {
     if relation.tags().get("type") != Some("path") {
         push_error(context, OsmError::NonPathRelation(relation.id()));
         return
     }
-    let key: Key = match relation.tags_mut().remove("key") {
-        Some(key) => key.into(),
+    let key = match relation.tags_mut().remove("key") {
+        Some(key) => {
+            match Key::from_string(key) {
+                Ok(key) => key,
+                Err(err) => {
+                    push_error(context,
+                               OsmError::InvalidKey(relation.id(), err));
+                    return;
+                }
+            }
+        }
         None => {
             push_error(context, OsmError::MissingKey(relation.id()));
             return;
@@ -47,7 +57,9 @@ fn load_relation(mut relation: Relation, osm: &Osm,
     };
     let nodes = match load_nodes(&relation, osm, context) {
         None => {
-            context.insert_document(key.clone(), Document::broken(key));
+            context.insert_document(key.clone(),
+                                    Document::broken(key.into(),
+                                                     Some(DocumentType::Path)));
             return;
         }
         Some(nodes) => nodes
@@ -56,13 +68,15 @@ fn load_relation(mut relation: Relation, osm: &Osm,
     let source = load_source(relation.tags_mut().remove("source").as_ref()
                                      .map(AsRef::as_ref),
                              context);
+    let path = context.path().clone();
 
     context.insert_document(key.clone(),
                             Document::Path(Path::new(key, name, nodes,
-                                                     source)))
+                                                     source, path,
+                                                     Location::NONE)))
 }
 
-fn load_nodes(relation: &Relation, osm: &Osm, context: &mut TreeContext)
+fn load_nodes(relation: &Relation, osm: &Osm, context: &mut ConstructContext)
               -> Option<Vec<Node>> {
     let mut nodes = Vec::<Node>::new();
     let mut last_id = None;
@@ -136,7 +150,7 @@ fn load_nodes(relation: &Relation, osm: &Osm, context: &mut TreeContext)
 }
 
 
-fn load_node(id: i64, osm: &Osm, tension: f64, context: &mut TreeContext)
+fn load_node(id: i64, osm: &Osm, tension: f64, context: &mut ConstructContext)
              -> Option<Node> {
     let node = match osm.get_node(id) {
         Some(node) => node,
@@ -178,28 +192,40 @@ fn load_f64(value: &str) -> Option<f64> {
     f64::from_str(value).ok()
 }
 
-fn load_point(value: Option<&str>, context: &mut TreeContext)
+fn load_point(value: Option<&str>, context: &mut ConstructContext)
               -> Option<Vec<PointLink>> {
-    value.map(|value| {
-        value.split_whitespace().map(|key| {
-            context.get_link(&String::from(key).into())
-        }).collect()
-    })
+    let value = match value {
+        Some(value) => value,
+        None => return None
+    };
+    let mut res = Vec::new();
+    for item in value.split_whitespace() {
+        if let Ok(link) = PointLink::from_string(item.into(), context) {
+            res.push(link)
+        }
+    }
+    Some(res)
 }
 
-fn load_source(value: Option<&str>, context: &mut TreeContext)
+fn load_source(value: Option<&str>, context: &mut ConstructContext)
                -> Option<Vec<SourceLink>> {
-    value.map(|value| {
-        value.split_whitespace().map(|key| {
-            context.get_link(&String::from(key).into())
-        }).collect()
-    })
+    let value = match value {
+        Some(value) => value,
+        None => return None,
+    };
+    let mut res = Vec::new();
+    for item in value.split_whitespace() {
+        if let Ok(link) = SourceLink::from_string(item.into(), context) {
+            res.push(link)
+        }
+    }
+    Some(res)
 }
 
 
 //------------ Helpers -------------------------------------------------------
 
-fn push_error(context: &mut TreeContext, err: OsmError) {
+fn push_error(context: &mut ConstructContext, err: OsmError) {
     context.push_error((err, Location::NONE))
 }
 
@@ -210,6 +236,7 @@ fn push_error(context: &mut TreeContext, err: OsmError) {
 pub enum OsmError {
     NonPathRelation(i64),
     MissingKey(i64),
+    InvalidKey(i64, InvalidKey),
     NonWayMember { rel: i64, target: i64 },
     MissingWay { rel: i64, way: i64 },
     IllegalType { way: i64, value: String },
@@ -226,7 +253,8 @@ impl fmt::Display for OsmError {
 
         match *self {
             NonPathRelation(id) => write!(f, "relation {} in not a path", id),
-            MissingKey(id) => write!(f, "realtion {} is missing the key", id),
+            MissingKey(id) => write!(f, "relation {} is missing the key", id),
+            InvalidKey(id, err) => write!(f, "relation {}: {}", id, err),
             NonWayMember { rel, target } => {
                 write!(f, "relation {} has non-way member (ref: {})",
                        rel, target)

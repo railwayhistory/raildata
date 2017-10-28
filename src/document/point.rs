@@ -1,10 +1,9 @@
 use std::{fmt, ops};
-use ::load::construct::{Constructable, Context, Failed};
-use ::load::yaml::{MarkedMapping, Value};
+use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::yaml::{Mapping, Value};
+use ::links::{LineLink, PathLink, PointLink, SourceLink};
+use ::types::{EventDate, Key, LanguageText, List, LocalText, Marked, Set};
 use super::common::Common;
-use super::links::{LineLink, PathLink, PointLink, SourceLink};
-use super::types::{Boolean, EventDate, LanguageText, List, LocalText,
-                   Marked, Set, Text};
 
 
 //------------ Point ---------------------------------------------------------
@@ -14,7 +13,7 @@ pub struct Point {
     // Attributes
     common: Common,
     events: List<Event>,
-    junction: Option<Boolean>,
+    junction: Option<Marked<bool>>,
     subtype: Marked<Subtype>,
 
     // Cross-links
@@ -23,29 +22,30 @@ pub struct Point {
 
 impl Point {
     pub fn events(&self) -> &List<Event> { &self.events }
-    pub fn junction(&self) -> Option<Boolean> { self.junction }
+    pub fn junction(&self) -> Option<bool> {
+        self.junction.as_ref().map(Marked::to_value)
+    }
     pub fn subtype(&self) -> Marked<Subtype> { self.subtype }
 
     pub fn lines(&self) -> &List<(LineLink, usize)> { &self.lines }
 }
 
 impl Point {
-    pub fn construct<C: Context>(common: Common, mut doc: MarkedMapping,
-                                 context: &mut C) -> Result<Self, Failed> {
+    pub fn construct(key: Marked<Key>, mut doc: Marked<Mapping>,
+                     context: &mut ConstructContext) -> Result<Self, Failed> {
+        let common = Common::construct(key, &mut doc, context);
         let events = doc.take("events", context);
         let junction = doc.take_opt("junction", context);
         let subtype = doc.take_default("subtype", context);
         doc.exhausted(context)?;
-        Ok(Point { common,
+        Ok(Point {
+            common: common?,
             events: events?,
             junction: junction?,
             subtype: subtype?,
 
             lines: List::default(),
         })
-    }
-
-    pub fn crosslink<C: Context>(&mut self, _context: &mut C) {
     }
 }
 
@@ -96,7 +96,7 @@ pub struct Event {
 
     category: Option<Set<Category>>,
     connection: Option<List<Marked<PointLink>>>,
-    designation: Option<Text>,
+    designation: Option<Marked<String>>,
     location: Option<Location>,
     master: Option<Option<Marked<PointLink>>>,
     merged: Option<Marked<PointLink>>,
@@ -118,11 +118,11 @@ pub struct Event {
     de_rang: Option<DeRang>,
     de_vbl: Option<DeVbl>,
 
-    dk_ref: Option<Text>,
+    dk_ref: Option<Marked<String>>,
 
-    no_fs: Option<Text>,
-    no_njk: Option<Text>,
-    no_nsb: Option<Text>,
+    no_fs: Option<Marked<String>>,
+    no_njk: Option<Marked<String>>,
+    no_nsb: Option<Marked<String>>,
 }
 
 impl Event {
@@ -137,7 +137,9 @@ impl Event {
     pub fn connection(&self) -> Option<&List<Marked<PointLink>>> {
         self.connection.as_ref()
     }
-    pub fn designation(&self) -> Option<&Text> { self.designation.as_ref() }
+    pub fn designation(&self) -> Option<&str> {
+        self.designation.as_ref().map(AsRef::as_ref)
+    }
     pub fn location(&self) -> Option<&Location> { self.location.as_ref() }
     pub fn master(&self) -> Option<Option<&Marked<PointLink>>> {
         self.master.as_ref().map(Option::as_ref)
@@ -167,16 +169,24 @@ impl Event {
     pub fn de_rang(&self) -> Option<DeRang> { self.de_rang }
     pub fn de_vbl(&self) -> Option<&DeVbl> { self.de_vbl.as_ref() }
 
-    pub fn dk_ref(&self) -> Option<&Text> { self.dk_ref.as_ref() }
+    pub fn dk_ref(&self) -> Option<&str> {
+        self.dk_ref.as_ref().map(AsRef::as_ref)
+    }
 
-    pub fn no_fs(&self) -> Option<&Text> { self.no_fs.as_ref() }
-    pub fn no_njk(&self) -> Option<&Text> { self.no_njk.as_ref() }
-    pub fn no_nsb(&self) -> Option<&Text> { self.no_nsb.as_ref() }
+    pub fn no_fs(&self) -> Option<&str> {
+        self.no_fs.as_ref().map(AsRef::as_ref)
+    }
+    pub fn no_njk(&self) -> Option<&str> {
+        self.no_njk.as_ref().map(AsRef::as_ref)
+    }
+    pub fn no_nsb(&self) -> Option<&str> {
+        self.no_nsb.as_ref().map(AsRef::as_ref)
+    }
 }
 
 impl Constructable for Event {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let mut value = value.into_mapping(context)?;
 
         let date = value.take("date", context);
@@ -296,15 +306,21 @@ data_enum! {
 //------------ Location ------------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Location(List<(Marked<LineLink>, Option<Text>)>);
+pub struct Location(List<(Marked<LineLink>, Option<Marked<String>>)>);
 
 impl Constructable for Location {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let mut list = List::new();
         let mut err = false;
         for (key, value) in value.into_mapping(context)? {
-            let key = key.map(|key| context.get_link(&key.into()));
+            let key = match Marked::<LineLink>::from_string(key, context) {
+                Ok(key) => key,
+                Err(_) => {
+                    err = true;
+                    continue
+                }
+            };
             if value.is_null() {
                 list.push((key, None))
             }
@@ -327,7 +343,7 @@ impl Constructable for Location {
 
 //------------ Plc -----------------------------------------------------------
 
-pub type Plc = Text;
+pub type Plc = Marked<String>;
 
 
 //------------ Service -------------------------------------------------------
@@ -360,17 +376,17 @@ data_enum! {
 #[derive(Clone, Debug)]
 pub struct Site {
     path: Marked<PathLink>,
-    node: Text,
+    node: Marked<String>,
 }
 
 impl Site {
     pub fn path(&self) -> &Marked<PathLink> { &self.path }
-    pub fn node(&self) -> &Text { &self.node }
+    pub fn node(&self) -> &str { self.node.as_value().as_ref() }
 }
 
 impl Constructable for Site {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let (value, location) = value.into_string(context)?.unwrap();
         let mut value = value.split_whitespace();
         let path = match value.next() {
@@ -380,8 +396,8 @@ impl Constructable for Site {
                 return Err(Failed)
             }
         };
-        let path = Marked::new(String::from(path), location).into();
-        let path = Marked::new(context.get_link(&path), location);
+        let path = Marked::new(String::from(path), location);
+        let path = Marked::<PathLink>::from_string(path, context)?;
         let node = match value.next() {
             Some(path) => path,
             None => {
@@ -424,17 +440,17 @@ data_enum! {
 
 //------------ DeDs100 -------------------------------------------------------
 
-pub type DeDs100 = Text;
+pub type DeDs100 = Marked<String>;
 
 
 //------------ DeDstnr -------------------------------------------------------
 
-pub type DeDstnr = Text;
+pub type DeDstnr = Marked<String>;
 
 
 //------------ DeLknr --------------------------------------------------------
 
-pub type DeLknr = Text; 
+pub type DeLknr = Marked<String>; 
 
 
 //------------ DeRang --------------------------------------------------------
@@ -455,12 +471,12 @@ data_enum! {
 
 //------------ DeVbl ---------------------------------------------------------
 
-pub type DeVbl = Text;
+pub type DeVbl = Marked<String>;
 
 
 //------------ DeName16 ------------------------------------------------------
 
-pub type DeName16 = Text;
+pub type DeName16 = Marked<String>;
 
 
 //============ Errors ========================================================

@@ -1,19 +1,18 @@
 //! The attributes common to all documents.
 //! 
 
-use ::load::construct::{Constructable, Context, Failed};
-use ::load::yaml::Value;
+use ::links::{OrganizationLink, SourceLink};
+use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::yaml::{Mapping, Value};
 use ::load::path::Path;
-use ::load::yaml::Mapping;
-use super::links::{OrganizationLink, SourceLink};
-use super::types::{Date, EventDate, Key, LanguageText, List, Location, Marked};
+use ::types::{Date, EventDate, Key, LanguageText, List, Location, Marked};
 
 
 //------------ Common --------------------------------------------------------
 
 #[derive(Clone, Debug)]
 pub struct Common {
-    key: Key,
+    key: Marked<Key>,
     progress: Marked<Progress>,
     path: Path,
     location: Location,
@@ -21,26 +20,25 @@ pub struct Common {
 
 impl Common {
     pub fn key(&self) -> &Key {
-        &self.key
+        self.key.as_value()
     }
 
     pub fn progress(&self) -> Progress {
-        self.progress.to()
+        self.progress.to_value()
     }
 
-    pub fn location(&self) -> (Path, Location) {
-        (self.path.clone(), self.location)
+    pub fn location(&self) -> (&Path, Location) {
+        (&self.path, self.location)
     }
 }
 
 impl Common {
-    pub fn construct<C>(key: &Key, doc: &mut Marked<Mapping>, path: Path,
-                        context: &mut C) -> Result<Self, Failed>
-                     where C: Context {
+    pub fn construct(key: Marked<Key>, doc: &mut Marked<Mapping>,
+                     context: &mut ConstructContext) -> Result<Self, Failed> {
         Ok(Common {
-            key: key.clone(),
+            key: key,
             progress: doc.take_default("progress", context)?,
-            path,
+            path: context.path().clone(),
             location: doc.location()
         })
     }
@@ -76,8 +74,8 @@ impl Alternative {
 }
 
 impl Constructable for Alternative {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let mut value = value.into_mapping(context)?;
         let date = value.take("date", context);
         let document = value.take_default("document", context);
@@ -114,8 +112,8 @@ impl Basis {
 }
 
 impl Constructable for Basis {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let mut value = value.into_mapping(context)?;
         let date = value.take_opt("date", context);
         let document = value.take_default("document", context);
@@ -148,8 +146,8 @@ impl Contract {
 }
 
 impl Constructable for Contract {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let mut value = value.into_mapping(context)?;
         let parties = value.take("parties", context);
         value.exhausted(context)?;

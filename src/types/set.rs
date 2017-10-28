@@ -1,9 +1,11 @@
+//! A set with an optimazation for holding only a single element.
+
 use std::mem;
 use std::hash::Hash;
 use std::collections::hash_set;
 use std::collections::HashSet;
 use ::load::yaml::Value;
-use ::load::construct::{Constructable, Context, Failed};
+use ::load::construct::{Constructable, ConstructContext, Failed};
 use super::marked::Location;
 
 
@@ -98,8 +100,8 @@ impl<T: Hash + Eq> Default for Set<T> {
 }
 
 impl<T: Constructable + Hash + Eq> Constructable for Set<T> {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         if value.is_null() {
             return Ok(Set::empty(value.location()));
         }

@@ -3,8 +3,8 @@ use std::{f64, fmt, ops};
 use std::collections::HashMap;
 use yaml_rust::scanner::{Marker, ScanError, TokenType, TScalarStyle};
 use yaml_rust::parser::{Event, MarkedEventReceiver, Parser};
-use ::documents::types::Marked;
-use super::construct::{Constructable, Context, Failed};
+use ::types::Marked;
+use super::construct::{Constructable, ConstructContext, Failed};
 
 
 //------------ Constructor ---------------------------------------------------
@@ -155,8 +155,8 @@ impl Value {
 }
 
 impl Value {
-    pub fn into_mapping<C: Context>(self, context: &mut C)
-                                    -> Result<Marked<Mapping>, Failed> {
+    pub fn into_mapping(self, context: &mut ConstructContext)
+                        -> Result<Marked<Mapping>, Failed> {
         self.try_map(|plain| {
             if let PlainValue::Mapping(res) = plain { Ok(res) }
             else { Err(YamlError::type_mismatch(Type::Mapping, plain)) }
@@ -170,8 +170,8 @@ impl Value {
         })
     }
 
-    pub fn into_sequence<C: Context>(self, context: &mut C)
-                                     -> Result<Marked<Sequence>, Failed> {
+    pub fn into_sequence(self, context: &mut ConstructContext)
+                         -> Result<Marked<Sequence>, Failed> {
         self.try_map(|plain| {
             if let PlainValue::Sequence(res) = plain { Ok(res) }
             else { Err(YamlError::type_mismatch(Type::Sequence, plain)) }
@@ -185,7 +185,7 @@ impl Value {
         })
     }
 
-    fn into_scalar<C: Context>(self, further: Type, context: &mut C)
+    fn into_scalar(self, further: Type, context: &mut ConstructContext)
                    -> Result<Marked<Scalar>, Failed> {
         self.try_map(|plain| {
             if let PlainValue::Scalar(res) = plain { Ok(res) }
@@ -200,32 +200,32 @@ impl Value {
         })
     }
 
-    pub fn into_string<C: Context>(self, context: &mut C)
-                                   -> Result<Marked<String>, Failed> {
+    pub fn into_string(self, context: &mut ConstructContext)
+                       -> Result<Marked<String>, Failed> {
         self.into_scalar(Type::String, context)?.try_map(|scalar| {
             if let Scalar::String(res) = scalar { Ok(res) }
             else { Err(YamlError::type_mismatch(Type::String, scalar)) }
         }).map_err(|err| { context.push_error(err); Failed })
     }
 
-    pub fn into_boolean<C: Context>(self, context: &mut C)
-                                    -> Result<Marked<bool>, Failed> {
+    pub fn into_boolean(self, context: &mut ConstructContext)
+                        -> Result<Marked<bool>, Failed> {
         self.into_scalar(Type::Boolean, context)?.try_map(|scalar| {
             if let Scalar::Boolean(res) = scalar { Ok(res) }
             else { Err(YamlError::type_mismatch(Type::Boolean, scalar)) }
         }).map_err(|err| { context.push_error(err); Failed })
     }
 
-    pub fn into_float<C: Context>(self, context: &mut C)
-                                  -> Result<Marked<f64>, Failed> {
+    pub fn into_float(self, context: &mut ConstructContext)
+                      -> Result<Marked<f64>, Failed> {
         self.into_scalar(Type::Float, context)?.try_map(|scalar| {
             if let Scalar::Float(res) = scalar { Ok(res) }
             else { Err(YamlError::type_mismatch(Type::Float, scalar)) }
         }).map_err(|err| { context.push_error(err); Failed })
     }
 
-    pub fn into_integer<C: Context>(self, context: &mut C)
-                                    -> Result<Marked<i64>, Failed> {
+    pub fn into_integer(self, context: &mut ConstructContext)
+                        -> Result<Marked<i64>, Failed> {
         self.into_scalar(Type::Integer, context)?.try_map(|scalar| {
             if let Scalar::Integer(res) = scalar { Ok(res) }
             else { Err(YamlError::type_mismatch(Type::Integer, scalar)) }
@@ -266,8 +266,8 @@ impl Mapping {
         }
     }
 
-    pub fn check<C: Context>(&mut self, context: &mut C)
-                             -> Result<(), Failed> {
+    pub fn check(&mut self, context: &mut ConstructContext)
+                 -> Result<(), Failed> {
         if let Some(ref mut errors) = self.errors {
             if !errors.is_empty() {
                 for error in errors.drain(..) {
@@ -309,9 +309,9 @@ impl IntoIterator for Marked<Mapping> {
 pub type MarkedMapping = Marked<Mapping>;
 
 impl MarkedMapping {
-    pub fn take<C, Ctx>(&mut self, key: &str, context: &mut Ctx)
-                        -> Result<C, Failed>
-                where C: Constructable, Ctx: Context {
+    pub fn take<C>(&mut self, key: &str, context: &mut ConstructContext)
+                   -> Result<C, Failed>
+                where C: Constructable {
         if let Some(value) = self.as_value_mut().items.remove(key) {
             C::construct(value, context)
         }
@@ -324,10 +324,10 @@ impl MarkedMapping {
         }
     }
 
-    pub fn take_default<C, Ctx>(&mut self, key: &str, context: &mut Ctx)
-                                -> Result<C, Failed>
-                        where C: Constructable + Default,
-                              Ctx: Context {
+    pub fn take_default<C>(&mut self, key: &str,
+                           context: &mut ConstructContext)
+                           -> Result<C, Failed>
+                        where C: Constructable + Default {
         if let Some(value) = self.as_value_mut().items.remove(key) {
             C::construct(value, context)
         }
@@ -336,9 +336,9 @@ impl MarkedMapping {
         }
     }
 
-    pub fn take_opt<C, Ctx>(&mut self, key: &str, context: &mut Ctx)
-                            -> Result<Option<C>, Failed>
-                where C: Constructable, Ctx: Context {
+    pub fn take_opt<C>(&mut self, key: &str, context: &mut ConstructContext)
+                       -> Result<Option<C>, Failed>
+                where C: Constructable {
         if let Some(value) = self.as_value_mut().items.remove(key) {
             C::construct(value, context).map(Some)
         }
@@ -347,8 +347,8 @@ impl MarkedMapping {
         }
     }
 
-    pub fn exhausted<C: Context>(mut self, context: &mut C)
-                                 -> Result<(), Failed> {
+    pub fn exhausted(mut self, context: &mut ConstructContext)
+                     -> Result<(), Failed> {
         let mut failed = self.check(context).is_err();
         if !self.items.is_empty() {
             for (key, _) in self.into_value().items {

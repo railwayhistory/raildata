@@ -1,42 +1,123 @@
+//! Constructing data from its YAML represenation.
 
-use ::documents::document::Document;
-use ::documents::types::Key;
-use ::documents::types::list::ListError;
-use ::store::{Link, Variant};
-use super::error::Error;
-use super::yaml::Value;
+use std::sync::{Arc, RwLock};
+use ::document::Document;
+use ::index::{PrimaryIndex, DocumentExists};
+use ::links::{DocumentLink, Permalink};
+use ::types::Key;
+use ::types::list::ListError;
+use super::error::{Error, SharedErrorStore};
+use super::path::Path;
+use super::yaml::{Value, Constructor};
 
 
-pub trait Context {
-    fn get_link<T>(&mut self, key: &Key) -> Link<T>
-                where T: Variant<Item=Document>;
-    fn push_error<E: Into<Error>>(&mut self, error: E);
+//------------ ConstructContext ----------------------------------------------
 
-    fn ok<T, E: Into<Error>>(&mut self, result: Result<T, E>) -> Option<T> {
-        match result {
-            Ok(t) => Some(t),
+/// A type collecting everything needed during construction.
+pub struct ConstructContext {
+    path: Path,
+    docs: Arc<RwLock<PrimaryIndex>>,
+    errors: SharedErrorStore,
+}
+
+impl ConstructContext {
+    pub fn new(path: Path, docs: Arc<RwLock<PrimaryIndex>>,
+               errors: SharedErrorStore)
+               -> Self {
+        ConstructContext { path, docs, errors }
+    }
+}
+
+impl ConstructContext {
+    /// Appends an error to the context’s error store.
+    pub fn push_error<E: Into<Error>>(&mut self, error: E) {
+        self.errors.push(Some(&self.path), error)
+    }
+
+    pub fn insert_document(&mut self, key: Key, document: Document) {
+        let err = {
+            let mut docs = self.docs.write().unwrap();
+            if let Some(link) = docs.get(&key) {
+                {
+                    let mut doc = link.write().unwrap();
+                    if doc.is_nonexisting() {
+                        *doc = document;
+                        return;
+                    }
+                }
+                DocumentExists::from_link(&link)
+            }
+            else {
+                docs.insert(key, Permalink::from_document(document)).unwrap();
+                return;
+            }
+        };
+        self.push_error((err, document.location().unwrap().1));
+    }
+
+    /// Creates a link to a document identified by a key.
+    ///
+    /// If a document by this key doesn’t yet exist, creates a placeholder
+    /// document and returns a link to that.
+    pub fn forge_link(&mut self, key: Key) -> DocumentLink {
+        if let Some(link) = self.docs.read().unwrap().get(&key) {
+            return link.link()
+        }
+        let mut map = self.docs.write().unwrap();
+        // Someone may have added the document in between ...
+        if let Some(link) = map.get(&key) {
+            return link.link()
+        }
+        let link = Permalink::nonexisting(key.clone());
+        let res = link.link();
+        map.insert(key, link).unwrap();
+        res
+    }
+
+    /// Provides a reference to the path we are currently working on.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn ok<T, E: Into<Error>>(&mut self, res: Result<T, E>)
+                                 -> Result<T, Failed> {
+        match res {
+            Ok(some) => Ok(some),
             Err(err) => {
                 self.push_error(err);
-                None
+                Err(Failed)
             }
         }
     }
 }
 
-
-pub trait Constructable: Sized {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed>;
+impl<'a> Constructor for &'a mut ConstructContext {
+    fn construct(&mut self, doc: Value) {
+        let (doc, key) = match Document::construct(doc, self) {
+            Ok(doc) => doc,
+            Err(_) => return
+        };
+        self.insert_document(key, doc);
+    }
 }
 
 
-#[derive(Clone, Copy, Debug)]
-pub struct Failed;
+//------------ Constructable -------------------------------------------------
 
+/// A trait for types that can be constructed from a YAML value.
+pub trait Constructable: Sized {
+    /// Constructs a value of the type from a YAML value.
+    ///
+    /// Helpful methods for construction are available through `context`. If
+    /// construction fails, an error should be added via
+    /// `context.push_error()` and `Err(Failed)` returned.
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed>;
+}
 
 impl<T: Constructable> Constructable for Option<T> {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         if value.is_null() {
             Ok(None)
         }
@@ -47,8 +128,8 @@ impl<T: Constructable> Constructable for Option<T> {
 }
 
 impl<T: Constructable> Constructable for Vec<T> {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         let location = value.location();
         Ok(match value.try_into_sequence() {
             Ok(seq) => {
@@ -82,9 +163,19 @@ impl<T: Constructable> Constructable for Vec<T> {
 }
 
 impl Constructable for f64 {
-    fn construct<C: Context>(value: Value, context: &mut C)
-                             -> Result<Self, Failed> {
+    fn construct(value: Value, context: &mut ConstructContext)
+                 -> Result<Self, Failed> {
         value.into_float(context).map(|v| v.into_value())
     }
 }
+
+
+//------------ Failed --------------------------------------------------------
+
+/// Construction has failed.
+///
+/// This is only a marker type. Information about the failure has been added
+/// to the `ConstructContext`.
+#[derive(Clone, Copy, Debug)]
+pub struct Failed;
 
