@@ -35,6 +35,7 @@ pub struct Source {
     volume: Option<Marked<String>>,
 
     // Additional attributes
+    also: List<Marked<SourceLink>>,
     attribution: Option<Marked<String>>,
     crossref: List<Marked<SourceLink>>,
     note: Option<LanguageText>,
@@ -114,6 +115,10 @@ impl Source {
         self.volume.as_ref().map(AsRef::as_ref)
     }
 
+    pub fn also(&self) -> &List<Marked<SourceLink>> {
+        &self.also
+    }
+
     pub fn attribution(&self) -> Option<&str> {
         self.attribution.as_ref().map(AsRef::as_ref)
     }
@@ -153,6 +158,7 @@ impl Source {
         let title = doc.take_opt("title", context);
         let url = doc.take_opt("url", context);
         let volume = doc.take_opt("volume", context);
+        let also = doc.take_default("also", context);
         let attribution = doc.take_opt("attribution", context);
         let crossref = doc.take_default("crossref", context);
         let note = doc.take_opt("note", context);
@@ -178,6 +184,7 @@ impl Source {
             title: title?,
             url: url?,
             volume: volume?,
+            also: also?,
             attribution: attribution?,
             crossref: crossref?,
             note: note?,
