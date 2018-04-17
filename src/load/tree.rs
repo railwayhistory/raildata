@@ -30,25 +30,26 @@ pub fn load_tree(path: &path::Path) -> Result<PrimaryIndex, ErrorStore> {
             doc.complain(&errors)
         }
     }
-    if errors.is_empty() {
+    if !errors.is_empty() {
         return Err(errors.unwrap())
     }
 
     // Phase 2: Create crosslinks between documents.
     //
     // These need to be in place for verification.
-    let mut context = CrosslinkContext::new(docs.clone(), errors.clone());
-    for value in docs.read().unwrap().values() {
-        let link = value.link();
-        value.read().unwrap().crosslink(link, &mut context);
+    {
+        let mut context = CrosslinkContext::new(docs.clone(), errors.clone());
+        for value in docs.read().unwrap().values() {
+            let link = value.link();
+            value.read().unwrap().crosslink(link, &mut context);
+        }
     }
 
-    let errors = errors.unwrap();
     if errors.is_empty() {
         Ok(Arc::try_unwrap(docs).unwrap().into_inner().unwrap())
     }
     else {
-        Err(errors)
+        Err(errors.unwrap())
     }
 }
 
