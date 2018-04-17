@@ -101,7 +101,7 @@ pub struct Event {
 
     category: Option<Set<Category>>,
     connection: Option<List<Marked<PointLink>>>,
-    designation: Option<Marked<String>>,
+    designation: Option<LocalText>,
     location: Option<Location>,
     master: Option<Option<Marked<PointLink>>>,
     merged: Option<Marked<PointLink>>,
@@ -142,8 +142,8 @@ impl Event {
     pub fn connection(&self) -> Option<&List<Marked<PointLink>>> {
         self.connection.as_ref()
     }
-    pub fn designation(&self) -> Option<&str> {
-        self.designation.as_ref().map(AsRef::as_ref)
+    pub fn designation(&self) -> Option<&LocalText> {
+        self.designation.as_ref()
     }
     pub fn location(&self) -> Option<&Location> { self.location.as_ref() }
     pub fn master(&self) -> Option<Option<&Marked<PointLink>>> {
