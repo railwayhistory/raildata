@@ -108,7 +108,7 @@ pub struct Event {
     name: Option<LocalText>,
     plc: Option<Plc>,
     public_name: Option<List<LocalText>>,
-    site: Option<List<Site>>,
+    site: Option<Site>,
     short_name: Option<LocalText>,
     staff: Option<Staff>,
     status: Option<Status>,
@@ -155,7 +155,7 @@ impl Event {
     pub fn public_name(&self) -> Option<&List<LocalText>> {
         self.public_name.as_ref()
     }
-    pub fn site(&self) -> Option<&List<Site>> { self.site.as_ref() }
+    pub fn site(&self) -> Option<&Site> { self.site.as_ref() }
     pub fn short_name(&self) -> Option<&LocalText> {
         self.short_name.as_ref()
     }
@@ -379,43 +379,30 @@ data_enum! {
 //------------ Site ----------------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Site {
-    path: Marked<PathLink>,
-    node: Marked<String>,
-}
-
-impl Site {
-    pub fn path(&self) -> &Marked<PathLink> { &self.path }
-    pub fn node(&self) -> &str { self.node.as_value().as_ref() }
-}
+pub struct Site(List<(Marked<PathLink>, Marked<String>)>);
 
 impl Constructable for Site {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
-        let (value, location) = value.into_string(context)?.unwrap();
-        let mut value = value.split_whitespace();
-        let path = match value.next() {
-            Some(path) => path,
-            None => {
-                context.push_error((InvalidSite, location));
-                return Err(Failed)
+    fn construct(
+        value: Value,
+        context: &mut ConstructContext
+    ) -> Result<Self, Failed> {
+        let mut list = List::new();
+        let mut err = false;
+        for (key, value) in value.into_mapping(context)? {
+            let key = match Marked::<PathLink>::from_string(key, context) {
+                Ok(key) => key,
+                Err(_) => {
+                    err = true;
+                    continue
+                }
+            };
+            match value.into_string(context) {
+                Ok(value) => list.push((key, value)),
+                Err(_) => err = true,
             }
-        };
-        let path = Marked::new(String::from(path), location);
-        let path = Marked::<PathLink>::from_string(path, context)?;
-        let node = match value.next() {
-            Some(path) => path,
-            None => {
-                context.push_error((InvalidSite, location));
-                return Err(Failed)
-            }
-        };
-        let node = Marked::new(String::from(node), location);
-        if value.next().is_some() {
-            context.push_error((InvalidSite, location));
-            return Err(Failed)
         }
-        Ok(Site { path, node })
+        if err { Err(Failed) }
+        else { Ok(Site(list)) }
     }
 }
 
