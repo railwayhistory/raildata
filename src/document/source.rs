@@ -1,16 +1,17 @@
-//! A source document.
 
 use std::ops;
-use ::load::construct::{Constructable, ConstructContext, Failed};
-use ::load::crosslink::CrosslinkContext;
-use ::load::yaml::{Mapping, Value};
-use ::links::{DocumentLink, OrganizationLink, SourceLink};
-use ::types::{Date, LanguageText, Key, List, Marked, Url};
-use super::common::Common;
+use ::load::report::{Failed, Origin, PathReporter};
+use ::load::yaml::{FromYaml, Mapping, Value};
+use ::store::Link;
+use ::types::{Date, Key, LanguageText, List, Marked, Url};
+use super::{OrganizationLink};
+use super::common::{Common, Progress};
+use super::store::{DocumentLink, DocumentStoreBuilder, Stored};
 
 
 //------------ Source --------------------------------------------------------
 
+#[derive(Clone, Debug)]
 pub struct Source {
     common: Common,
     subtype: Subtype,
@@ -42,128 +43,128 @@ pub struct Source {
     regards: List<Marked<DocumentLink>>,
 }
 
-impl Source {
+impl<'a> Stored<'a, Source> {
+    pub fn common(&self) -> &Common {
+        &self.access().common
+    }
+
+    pub fn key(&self) -> &Key {
+        self.common().key()
+    }
+
+    pub fn progress(&self) -> Progress {
+        self.common().progress()
+    }
+
+    pub fn origin(&self) -> &Origin {
+        &self.common().origin()
+    }
+
     pub fn subtype(&self) -> Subtype {
-        self.subtype
-    }
-    
-    pub fn author(&self) -> &List<Marked<OrganizationLink>> {
-        &self.author
+        self.access().subtype
     }
 
-    pub fn collection(&self) -> Option<&Marked<SourceLink>> {
-        self.collection.as_ref()
+    pub fn author(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
+        self.map(|item| &item.author)
     }
 
-    pub fn date(&self) -> Option<&Marked<Date>> {
-        self.date.as_ref()
+    pub fn collection(&self) -> Option<&Source> {
+        self.map_opt(|item| item.collection.as_ref()).map(|x| x.follow())
     }
-    
+
+    pub fn date(&self) -> Option<&Date> {
+        self.access().date.as_ref().map(Marked::as_value)
+    }
+
     pub fn designation(&self) -> Option<&str> {
-        self.designation.as_ref().map(AsRef::as_ref)
+        self.access().designation.as_ref().map(|x| x.as_value().as_ref())
     }
 
     pub fn digital(&self) -> &List<Marked<Url>> {
-        &self.digital
+        &self.access().digital
     }
 
     pub fn edition(&self) -> Option<&str> {
-        self.edition.as_ref().map(AsRef::as_ref)
+        self.access().edition.as_ref().map(|x| x.as_value().as_ref())
     }
 
-    pub fn editor(&self) -> &List<Marked<OrganizationLink>> {
-        &self.editor
+    pub fn editor(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
+        self.map(|item| &item.editor)
     }
 
     pub fn isbn(&self) -> Option<&Isbn> {
-        self.isbn.as_ref()
+        self.access().isbn.as_ref()
     }
 
     pub fn number(&self) -> Option<&str> {
-        self.number.as_ref().map(AsRef::as_ref)
+        self.access().number.as_ref().map(|x| x.as_value().as_ref())
     }
 
-    pub fn organization(&self) -> &List<Marked<OrganizationLink>> {
-        &self.organization
+    pub fn organization(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
+        self.map(|item| &item.organization)
     }
 
     pub fn pages(&self) -> Option<&Pages> {
-        self.pages.as_ref()
+        self.access().pages.as_ref()
     }
 
-    pub fn publisher(&self) -> &List<Marked<OrganizationLink>> {
-        &self.publisher
+    pub fn publisher(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
+        self.map(|item| &item.publisher)
     }
 
     pub fn revision(&self) -> Option<&str> {
-        self.revision.as_ref().map(AsRef::as_ref)
+        self.access().revision.as_ref().map(|x| x.as_value().as_ref())
     }
 
     pub fn short_title(&self) -> Option<&str> {
-        self.short_title.as_ref().map(AsRef::as_ref)
+        self.access().short_title.as_ref().map(|x| x.as_value().as_ref())
     }
 
     pub fn title(&self) -> Option<&str> {
-        self.title.as_ref().map(AsRef::as_ref)
+        self.access().title.as_ref().map(|x| x.as_value().as_ref())
     }
 
     pub fn url(&self) -> Option<&Url> {
-        self.url.as_ref().map(Marked::as_value)
+        self.access().url.as_ref().map(Marked::as_value)
     }
 
     pub fn volume(&self) -> Option<&str> {
-        self.volume.as_ref().map(AsRef::as_ref)
-    }
-
-    pub fn also(&self) -> &List<Marked<SourceLink>> {
-        &self.also
-    }
-
-    pub fn attribution(&self) -> Option<&str> {
-        self.attribution.as_ref().map(AsRef::as_ref)
-    }
-
-    pub fn crossref(&self) -> &List<Marked<SourceLink>> {
-        &self.crossref
-    }
-
-    pub fn note(&self) -> Option<&LanguageText> {
-        self.note.as_ref()
-    }
-
-    pub fn regards(&self) -> &List<Marked<DocumentLink>> {
-        &self.regards
+        self.access().volume.as_ref().map(|x| x.as_value().as_ref())
     }
 }
 
 impl Source {
-    pub fn construct(key: Marked<Key>, mut doc: Marked<Mapping>,
-                     context: &mut ConstructContext) -> Result<Self, Failed> {
-        let common = Common::construct(key, &mut doc, context);
-        let subtype = doc.take_default("subtype", context);
-        let author = doc.take_opt("author", context);
-        let collection = doc.take_opt("collection", context);
-        let date = doc.take_opt("date", context);
-        let designation = doc.take_opt("designation", context);
-        let digital = doc.take_default("digital", context);
-        let edition = doc.take_opt("edition", context);
-        let editor = doc.take_default("editor", context);
-        let isbn = doc.take_opt("isbn", context);
-        let number = doc.take_opt("number", context);
-        let organization = doc.take_default("organization", context);
-        let pages = doc.take_opt("pages", context);
-        let publisher = doc.take_default("publisher", context);
-        let revision = doc.take_opt("revision", context);
-        let short_title = doc.take_opt("short_title", context);
-        let title = doc.take_opt("title", context);
-        let url = doc.take_opt("url", context);
-        let volume = doc.take_opt("volume", context);
-        let also = doc.take_default("also", context);
-        let attribution = doc.take_opt("attribution", context);
-        let crossref = doc.take_default("crossref", context);
-        let note = doc.take_opt("note", context);
-        let regards = doc.take_default("regards", context);
-        doc.exhausted(context)?;
+    pub fn from_yaml(
+        key: Marked<Key>,
+        mut doc: Mapping,
+        context: &mut DocumentStoreBuilder,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let common = Common::from_yaml(key, &mut doc, context, report);
+        let subtype = doc.take_default("subtype", context, report);
+        let author = doc.take_opt("author", context, report);
+        let collection = doc.take_opt("collection", context, report);
+        let date = doc.take_opt("date", context, report);
+        let designation = doc.take_opt("designation", context, report);
+        let digital = doc.take_default("digital", context, report);
+        let edition = doc.take_opt("edition", context, report);
+        let editor = doc.take_default("editor", context, report);
+        let isbn = doc.take_opt("isbn", context, report);
+        let number = doc.take_opt("number", context, report);
+        let organization = doc.take_default("organization", context, report);
+        let pages = doc.take_opt("pages", context, report);
+        let publisher = doc.take_default("publisher", context, report);
+        let revision = doc.take_opt("revision", context, report);
+        let short_title = doc.take_opt("short_title", context, report);
+        let title = doc.take_opt("title", context, report);
+        let url = doc.take_opt("url", context, report);
+        let volume = doc.take_opt("volume", context, report);
+        let also = doc.take_default("also", context, report);
+        let attribution = doc.take_opt("attribution", context, report);
+        let crossref = doc.take_default("crossref", context, report);
+        let note = doc.take_opt("note", context, report);
+        let regards = doc.take_default("regards", context, report);
+        doc.exhausted(report)?;
         Ok(Source {
             common: common?,
             subtype: subtype?,
@@ -191,26 +192,12 @@ impl Source {
             regards: regards?,
         })
     }
-
-    pub fn crosslink(&self, _link: DocumentLink,
-                     _context: &mut CrosslinkContext) {
-    }
 }
 
 
-impl ops::Deref for Source {
-    type Target = Common;
+//------------ LineLink ------------------------------------------------------
 
-    fn deref(&self) -> &Common {
-        &self.common
-    }
-}
-
-impl ops::DerefMut for Source {
-    fn deref_mut(&mut self) -> &mut Common {
-        &mut self.common
-    }
-}
+pub type SourceLink = Link<Source>;
 
 
 //------------ Subtype -------------------------------------------------------
@@ -241,14 +228,17 @@ data_enum! {
 #[derive(Clone, Debug)]
 pub struct Pages(Marked<String>);
 
-impl Constructable for Pages {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
+impl<C> FromYaml<C> for Pages {
+    fn from_yaml(
+        value: Value,
+        context: &mut C,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
         match value.try_into_integer() {
             Ok(int) => {
                 Ok(Pages(int.map(|int| format!("{}", int))))
             }
-            Err(value) => Marked::construct(value, context).map(Pages)
+            Err(value) => Marked::from_yaml(value, context, report).map(Pages)
         }
     }
 }
@@ -267,10 +257,13 @@ impl ops::Deref for Pages {
 #[derive(Clone, Debug)]
 pub struct Isbn(Marked<String>);
 
-impl Constructable for Isbn {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
-        Marked::construct(value, context).map(Isbn)
+impl<C> FromYaml<C> for Isbn {
+    fn from_yaml(
+        value: Value,
+        context: &mut C,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        Marked::from_yaml(value, context, report).map(Isbn)
     }
 }
 

@@ -1,10 +1,11 @@
-use std::ops;
-use ::load::construct::{Constructable, ConstructContext, Failed};
-use ::load::crosslink::CrosslinkContext;
-use ::load::yaml::{MarkedMapping, Value};
-use ::links::{DocumentLink, OrganizationLink, SourceLink};
-use ::types::{EventDate, Key, List, LanguageText, LocalText, Marked};
-use super::common::{Basis, Common};
+
+use ::load::yaml::{FromYaml, Mapping, Value};
+use ::load::report::{Failed, Origin, PathReporter};
+use ::store::Link;
+use ::types::{EventDate, Key, LanguageText, LocalText, List, Marked};
+use super::{SourceLink};
+use super::common::{Basis, Common, Progress};
+use super::store::{DocumentStoreBuilder, Stored};
 
 
 //------------ Organization --------------------------------------------------
@@ -13,52 +14,58 @@ use super::common::{Basis, Common};
 pub struct Organization {
     common: Common,
     subtype: Marked<Subtype>,
-    events: List<Event>,
+    events: EventList,
 }
 
-impl Organization {
+impl<'a> Stored<'a, Organization> {
+    pub fn common(&self) -> &Common {
+        &self.access().common
+    }
+
+    pub fn key(&self) -> &Key {
+        self.common().key()
+    }
+
+    pub fn progress(&self) -> Progress {
+        self.common().progress()
+    }
+
+    pub fn origin(&self) -> &Origin {
+        &self.common().origin()
+    }
+
     pub fn subtype(&self) -> Subtype {
-        self.subtype.to_value()
+        self.access().subtype.into_value()
     }
 
-    pub fn events(&self) -> &List<Event> {
-        &self.events
+    pub fn events(&self) -> Stored<'a, EventList> {
+        self.map(|item| &item.events)
     }
 }
 
 impl Organization {
-    pub fn construct(key: Marked<Key>, mut doc: MarkedMapping,
-                     context: &mut ConstructContext) -> Result<Self, Failed> {
-        let common = Common::construct(key, &mut doc, context);
-        let subtype = doc.take("subtype", context);
-        let events = doc.take("events", context);
-        doc.exhausted(context)?;
+    pub fn from_yaml(
+        key: Marked<Key>,
+        mut doc: Mapping,
+        context: &mut DocumentStoreBuilder,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let common = Common::from_yaml(key, &mut doc, context, report);
+        let subtype = doc.take("subtype", context, report);
+        let events = doc.take("events", context, report);
+        doc.exhausted(report)?;
         Ok(Organization {
             common: common?,
             subtype: subtype?,
             events: events?,
         })
     }
-
-    pub fn crosslink(&self, _link: DocumentLink,
-                     _context: &mut CrosslinkContext) {
-    }
 }
 
 
-impl ops::Deref for Organization {
-    type Target = Common;
+//------------ OrganizationLink ----------------------------------------------
 
-    fn deref(&self) -> &Common {
-        &self.common
-    }
-}
-
-impl ops::DerefMut for Organization {
-    fn deref_mut(&mut self) -> &mut Common {
-        &mut self.common
-    }
-}
+pub type OrganizationLink = Link<Organization>;
 
 
 //------------ Subtype -------------------------------------------------------
@@ -72,6 +79,11 @@ data_enum! {
         { Region: "region" }
     }
 }
+
+
+//------------ EventList -----------------------------------------------------
+
+pub type EventList = List<Event>;
 
 
 //------------ Event ---------------------------------------------------------
@@ -89,92 +101,90 @@ pub struct Event {
     domicile: List<Marked<OrganizationLink>>,
     master: Option<Marked<OrganizationLink>>,
     name: Option<LocalText>,
-    owner: List<Marked<OrganizationLink>>,
+    owner: Option<List<Marked<OrganizationLink>>>,
     property: Option<Property>,
     short_name: Option<LocalText>,
     status: Option<Status>,
     successor: Option<Marked<OrganizationLink>>,
 }
 
-/// # Event Metadata Attributes
-///
-impl Event {
+impl<'a> Stored<'a, Event> {
     pub fn date(&self) -> &EventDate {
-        &self.date
+        &self.access().date
     }
 
-    pub fn document(&self) -> &List<Marked<SourceLink>> {
-        &self.document
+    pub fn document(&self) -> Stored<'a, List<Marked<SourceLink>>> {
+        self.map(|item| &item.document)
     }
 
-    pub fn source(&self) -> &List<Marked<SourceLink>> {
-        &self.source
+    pub fn source(&self) -> Stored<'a, List<Marked<SourceLink>>> {
+        self.map(|item| &item.source)
     }
 
-    pub fn basis(&self) -> &List<Basis> {
-        &self.basis
+    pub fn basis(&self) -> Stored<'a, List<Basis>> {
+        self.map(|item| &item.basis)
     }
 
     pub fn note(&self) -> Option<&LanguageText> {
-        self.note.as_ref()
-    }
-}
-
-/// # Organization Property Attributes
-///
-impl Event {
-    pub fn domicile(&self) -> &List<Marked<OrganizationLink>> {
-        &self.domicile
+        self.access().note.as_ref()
     }
 
-    pub fn master(&self) -> Option<&Marked<OrganizationLink>> {
-        self.master.as_ref()
+    pub fn domicile(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
+        self.map(|item| &item.domicile)
+    }
+
+    pub fn master(&self) -> Option<&Organization> {
+        self.map_opt(|item| item.master.as_ref()).map(|x| x.follow())
     }
 
     pub fn name(&self) -> Option<&LocalText> {
-        self.name.as_ref()
+        self.access().name.as_ref()
     }
 
-    pub fn owner(&self) -> &List<Marked<OrganizationLink>> {
-        &self.owner
+    pub fn owner(
+        &self
+    ) -> Option<Stored<'a, List<Marked<OrganizationLink>>>> {
+        self.map_opt(|item| item.owner.as_ref())
     }
 
-    pub fn property(&self) -> Option<&Property> {
-        self.property.as_ref()
+    pub fn property(&self) -> Option<Stored<'a, Property>> {
+        self.map_opt(|item| item.property.as_ref())
     }
 
     pub fn short_name(&self) -> Option<&LocalText> {
-        self.short_name.as_ref()
+        self.access().short_name.as_ref()
     }
 
     pub fn status(&self) -> Option<Status> {
-        self.status
+        self.access().status
     }
 
-    pub fn successor(&self) -> Option<&Marked<OrganizationLink>> {
-        self.successor.as_ref()
+    pub fn successor(&self) -> Option<&Organization> {
+        self.map_opt(|item| item.successor.as_ref()).map(|x| x.follow())
     }
 }
 
-
-impl Constructable for Event {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
-        let mut value = value.into_mapping(context)?;
-        let date = value.take("date", context);
-        let document = value.take_default("document", context);
-        let source = value.take_default("source", context);
-        let basis = value.take_default("basis", context);
-        let note = value.take_opt("note", context);
-        let domicile = value.take_default("domicile", context);
-        let master = value.take_opt("master", context);
-        let name = value.take_opt("name", context);
-        let owner = value.take_default("owner", context);
-        let property = value.take_opt("property", context);
-        let short_name = value.take_opt("short_name", context);
-        let status = value.take_opt("status", context);
-        let successor = value.take_opt("successor", context);
-        value.exhausted(context)?;
+impl FromYaml<DocumentStoreBuilder> for Event {
+    fn from_yaml(
+        value: Value,
+        context: &mut DocumentStoreBuilder,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let mut value = value.into_mapping(report)?;
+        let date = value.take("date", context, report);
+        let document = value.take_default("document", context, report);
+        let source = value.take_default("source", context, report);
+        let basis = value.take_default("basis", context, report);
+        let note = value.take_opt("note", context, report);
+        let domicile = value.take_default("domicile", context, report);
+        let master = value.take_opt("master", context, report);
+        let name = value.take_opt("name", context, report);
+        let owner = value.take_default("owner", context, report);
+        let property = value.take_opt("property", context, report);
+        let short_name = value.take_opt("short_name", context, report);
+        let status = value.take_opt("status", context, report);
+        let successor = value.take_opt("successor", context, report);
+        value.exhausted(report)?;
         Ok(Event {
             date: date?,
             document: document?,
@@ -198,39 +208,48 @@ impl Constructable for Event {
 
 #[derive(Clone, Debug)]
 pub struct Property {
-    role: PropertyRole,
+    role: Marked<PropertyRole>,
     constructor: List<Marked<OrganizationLink>>,
+    operator: List<Marked<OrganizationLink>>,
     owner: List<Marked<OrganizationLink>>,
-    operator: List<Marked<OrganizationLink>>
 }
 
-impl Property {
+impl<'a> Stored<'a, Property> {
     pub fn role(&self) -> PropertyRole {
-        self.role
+        self.access().role.into_value()
     }
 
-    pub fn constructor(&self) -> &List<Marked<OrganizationLink>> {
-        &self.constructor
+    pub fn constructor(
+        &self
+    ) -> Stored<'a, List<Marked<OrganizationLink>>> {
+        self.map(|item| &item.constructor)
     }
 
-    pub fn owner(&self) -> &List<Marked<OrganizationLink>> {
-        &self.owner
+    pub fn operator(
+        &self
+    ) -> Stored<'a, List<Marked<OrganizationLink>>> {
+        self.map(|item| &item.operator)
     }
 
-    pub fn operator(&self) -> &List<Marked<OrganizationLink>> {
-        &self.operator
+    pub fn owner(
+        &self
+    ) -> Stored<'a, List<Marked<OrganizationLink>>> {
+        self.map(|item| &item.owner)
     }
 }
 
-impl Constructable for Property {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
-        let mut value = value.into_mapping(context)?;
-        let role = value.take("role", context);
-        let constructor = value.take_default("constructor", context);
-        let owner = value.take_default("owner", context);
-        let operator = value.take_default("operator", context);
-        value.exhausted(context)?;
+impl FromYaml<DocumentStoreBuilder> for Property {
+    fn from_yaml(
+        value: Value,
+        context: &mut DocumentStoreBuilder,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let mut value = value.into_mapping(report)?;
+        let role = value.take("role", context, report);
+        let constructor = value.take_default("constructor", context, report);
+        let owner = value.take_default("owner", context, report);
+        let operator = value.take_default("operator", context, report);
+        value.exhausted(report)?;
         Ok(Property {
             role: role?,
             constructor: constructor?,
@@ -261,3 +280,4 @@ data_enum! {
         { Closed: "closed" }
     }
 }
+

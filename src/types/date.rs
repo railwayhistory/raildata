@@ -2,8 +2,8 @@
 
 use std::{cmp, fmt, str};
 use std::str::FromStr;
-use ::load::yaml::Value;
-use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::yaml::{FromYaml, Value};
+use ::load::report::{Failed, PathReporter};
 use super::marked::Marked;
 
 
@@ -146,9 +146,12 @@ impl Date {
     }
 }
 
-impl Constructable for Marked<Date> {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
+impl<C> FromYaml<C> for Marked<Date> {
+    fn from_yaml(
+        value: Value,
+        _: &mut C,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
         let value = match value.try_into_integer() {
             Ok(year) => {
                 return year.try_map(|year| {
@@ -157,11 +160,12 @@ impl Constructable for Marked<Date> {
                         Ok(Date::from_year(year as i16))
                     }
                     else { Err(FromStrError) }
-                }).map_err(|err| { context.push_error(err); Failed });
+                }).map_err(|err| { report.error(err); Failed });
             }
             Err(value) => value
         };
-        let value = value.into_string(context)?;
+
+        let value = value.into_string(report)?;
         value.try_map(|plain| {
             if let Some(date) = stand_in_dates(&plain) {
                 Ok(date)
@@ -169,7 +173,7 @@ impl Constructable for Marked<Date> {
             else {
                 Date::from_str(&plain)
             }
-        }).map_err(|err| { context.push_error(err); Failed })
+        }).map_err(|err| { report.error(err); Failed })
     }
 }
 
@@ -310,18 +314,25 @@ impl str::FromStr for Date {
 
 pub type EventDate = Marked<Option<Date>>;
 
-impl Constructable for EventDate {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
-        if value.is_null() {
-            Ok(value.map(|_| None))
-        }
-        else {
-            Ok(<Marked<Date>>::construct(value, context)?
-                              .map(Some))
+impl<C> FromYaml<C> for EventDate {
+    fn from_yaml(
+        value: Value,
+        context: &mut C,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        match value.try_into_null() {
+            Ok(value) => Ok(value.map(|_| None)),
+            Err(value) => {
+                Ok(
+                    <Marked<Date>>::from_yaml(
+                        value, context, report
+                    )?.map(Some)
+                )
+            }
         }
     }
 }
+
 
 //------------ DateError -----------------------------------------------------
 

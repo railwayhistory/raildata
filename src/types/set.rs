@@ -4,8 +4,8 @@ use std::mem;
 use std::hash::Hash;
 use std::collections::hash_set;
 use std::collections::HashSet;
-use ::load::yaml::Value;
-use ::load::construct::{Constructable, ConstructContext, Failed};
+use ::load::yaml::{FromYaml, Value};
+use ::load::report::{Failed, PathReporter};
 use super::marked::Location;
 
 
@@ -99,27 +99,27 @@ impl<T: Hash + Eq> Default for Set<T> {
     }
 }
 
-impl<T: Constructable + Hash + Eq> Constructable for Set<T> {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
-        if value.is_null() {
-            return Ok(Set::empty(value.location()));
-        }
+impl<C, T: FromYaml<C> + Hash + Eq> FromYaml<C> for Set<T> {
+    fn from_yaml(
+        value: Value,
+        context: &mut C,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
         match value.try_into_sequence() {
             Ok(mut seq) => {
                 if seq.is_empty() {
                     Ok(Set::empty(seq.location()))
                 }
                 else if seq.len() == 1 {
-                    T::construct(seq.pop().unwrap(), context)
+                    T::from_yaml(seq.pop().unwrap(), context, report)
                              .map(|value| Set::one(value, seq.location()))
                 }
                 else {
                     let mut res = HashSet::with_capacity(seq.len());
                     let mut err = false;
                     let location = seq.location();
-                    for item in seq.into_value() {
-                        if let Ok(item ) = T::construct(item, context) {
+                    for item in seq {
+                        if let Ok(item ) = T::from_yaml(item, context, report) {
                             res.insert(item);
                         }
                         else {
@@ -134,7 +134,7 @@ impl<T: Constructable + Hash + Eq> Constructable for Set<T> {
             }
             Err(value) => {
                 let location = value.location();
-                T::construct(value, context).map(|value| {
+                T::from_yaml(value, context, report).map(|value| {
                     Set::one(value, location)
                 })
             }

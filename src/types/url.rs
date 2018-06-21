@@ -1,19 +1,21 @@
-use std::fmt;
 use url;
-use ::load::construct::{Constructable, ConstructContext, Failed};
-use ::load::yaml::Value;
-use super::Marked;
+use ::load::yaml::{FromYaml, Value};
+use ::load::report::{Failed, PathReporter};
+use super::{IntoMarked, Marked};
 
 pub use url::Url;
 
-impl Constructable for Marked<Url> {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
-        let value = value.into_string(context)?;
+impl<C> FromYaml<C> for Marked<Url> {
+    fn from_yaml(
+        value: Value,
+        _: &mut C,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let value = value.into_string(report)?;
         match url::Url::parse(value.as_ref()) {
-            Ok(url) => Ok(Marked::new(url, value.location())),
+            Ok(url) => Ok(url.marked(value.location())),
             Err(err) => {
-                context.push_error((UrlError(err), value.location()));
+                report.error(UrlError(err).marked(value.location()));
                 Err(Failed)
             }
         }
@@ -21,12 +23,7 @@ impl Constructable for Marked<Url> {
 }
 
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Fail)]
+#[fail(display="invalid URL, {}", _0)]
 struct UrlError(url::ParseError);
-
-impl fmt::Display for UrlError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "invaldid URL, {}", self.0)
-    }
-}
 

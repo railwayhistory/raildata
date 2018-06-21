@@ -10,7 +10,9 @@ fn main() {
         Err(mut err) => {
             err.sort();
             println!("{} errors.", err.len());
-            println!("{}", err)
+            for item in err.iter() {
+                println!("{}", item)
+            }
         }
     }
 }

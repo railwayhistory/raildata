@@ -43,35 +43,35 @@ macro_rules! data_enum {
             $( $(#[$variant_attr])* $variant ),*,
         }
 
-        impl $crate::load::construct::Constructable for $name {
-            fn construct(value: $crate::load::yaml::Value,
-                         context: &mut $crate::load::construct
-                                             ::ConstructContext)
-                            -> Result<Self,
-                                      $crate::load::construct::Failed> {
-                $crate::types::Marked::construct(value, context)
+        impl<C> $crate::load::yaml::FromYaml<C> for $name {
+            fn from_yaml(
+                value: $crate::load::yaml::Value,
+                context: &mut C,
+                report: &mut $crate::load::report::PathReporter
+            ) -> Result<Self, $crate::load::report::Failed> {
+                $crate::types::Marked::from_yaml(value, context, report)
                        .map(|res: $crate::types::Marked<$name>|
                                     res.into_value())
             }
         }
 
-        impl $crate::load::construct::Constructable
-                         for $crate::types::Marked<$name> {
-            fn construct(value: $crate::load::yaml::Value,
-                         context: &mut $crate::load::construct
-                                             ::ConstructContext)
-                            -> Result<Self,
-                                      $crate::load::construct::Failed> {
-                let text = value.into_string(context)?;
+        impl<C> $crate::load::yaml::FromYaml<C>
+        for $crate::types::Marked<$name> {
+            fn from_yaml(
+                value: $crate::load::yaml::Value,
+                _: &mut C,
+                report: &mut $crate::load::report::PathReporter
+            ) -> Result<Self, $crate::load::report::Failed> {
+                let text = value.into_string(report)?;
                 let res = text.try_map(|plain| match plain.as_ref() {
                     $(
                         $yaml => Ok($name::$variant),
                     )*
-                    _ => Err($crate::types::marked::EnumError::new(plain))
+                    _ => Err($crate::types::enums::EnumError::new(plain))
                 });
                 res.map_err(|err| {
-                    context.push_error(err);
-                    $crate::load::construct::Failed
+                    report.error(err);
+                    $crate::load::report::Failed
                 })
             }
         }
@@ -87,5 +87,18 @@ macro_rules! data_enum {
             }
         }
     };
+}
+
+
+//------------ EnumError -----------------------------------------------------
+
+#[derive(Clone, Debug, Fail)]
+#[fail(display="invalid enum value '{}'", _0)]
+pub struct EnumError(String);
+
+impl EnumError {
+    pub fn new(variant: String) -> Self {
+        EnumError(variant)
+    }
 }
 

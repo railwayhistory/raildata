@@ -1,11 +1,9 @@
 //! Types for holding localized data.
 
-use std::{fmt, ops, str};
+use std::{ops, str};
 use std::str::FromStr;
-use std::collections::HashMap;
-use std::hash::Hash;
-use ::load::construct::{Constructable, ConstructContext, Failed};
-use ::load::yaml::Value;
+use ::load::yaml::{FromYaml, Value};
+use ::load::report::{Failed, Message, PathReporter};
 use super::marked::Marked;
 
 
@@ -26,12 +24,15 @@ impl ops::Deref for CountryCode {
     }
 }
 
-impl Constructable for Marked<CountryCode> {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
-        value.into_string(context)?
+impl<C> FromYaml<C> for Marked<CountryCode> {
+    fn from_yaml(
+        value: Value,
+        _: &mut C,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        value.into_string(report)?
              .try_map(|text| CountryCode::from_str(&text))
-             .map_err(|err| { context.push_error(err); Failed })
+             .map_err(|err| { report.error(err); Failed })
     }
 }
 
@@ -63,12 +64,15 @@ impl ops::Deref for LanguageCode {
     }
 }
 
-impl Constructable for Marked<LanguageCode> {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
-        value.into_string(context)?
+impl<C> FromYaml<C> for Marked<LanguageCode> {
+    fn from_yaml(
+        value: Value,
+        _: &mut C,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        value.into_string(report)?
              .try_map(|text| LanguageCode::from_str(&text))
-             .map_err(|err| { context.push_error(err); Failed })
+             .map_err(|err| { report.error(err); Failed })
     }
 }
 
@@ -122,12 +126,15 @@ impl From<LanguageCode> for LocalCode {
     }
 }
 
-impl Constructable for Marked<LocalCode> {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
-        value.into_string(context)?
+impl<C> FromYaml<C> for Marked<LocalCode> {
+    fn from_yaml(
+        value: Value,
+        _: &mut C,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        value.into_string(report)?
              .try_map(|text| LocalCode::from_str(&text))
-             .map_err(|err| { context.push_error(err); Failed })
+             .map_err(|err| { report.error(err); Failed })
     }
 }
 
@@ -155,74 +162,58 @@ impl FromStr for LocalCode {
 //------------ CodedText and friends -----------------------------------------
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CodedText<C: Hash + Eq>(CTInner<C>);
+pub struct CodedText<C: Ord>(CTInner<C>);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-enum CTInner<C: Hash + Eq> {
+enum CTInner<C: Ord> {
     Plain(Marked<String>),
-    Map(HashMap<Marked<C>, Marked<String>>),
+    Map(Vec<(Marked<C>, Marked<String>)>),
 }
 
-impl<C: Hash + Eq> CodedText<C> {
-    pub fn from_text(text: Marked<String>) -> Self {
-        CodedText(CTInner::Plain(text))
-    }
-
-    pub fn new_map() -> Self {
-        CodedText(CTInner::Map(HashMap::new()))
-    }
-
-    pub fn insert(&mut self, key: Marked<C>, value: Marked<String>) {
-        if let CTInner::Plain(_) = self.0 {
-            self.0 = CTInner::Map(HashMap::new())
-        }
-        if let CTInner::Map(ref mut map) = self.0 {
-            map.insert(key, value);
-        }
-        else {
-            unreachable!()
-        }
-    }
-
+impl<C: Ord> CodedText<C> {
     // XXX TODO Read access ...
 }
 
-impl<C: Hash + Eq + FromStr> Constructable for CodedText<C>
-     where <C as FromStr>::Err: fmt::Display + fmt::Debug + 'static + Send {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
+impl<Ctx, C: Ord + FromStr> FromYaml<Ctx> for CodedText<C>
+where <C as FromStr>::Err: Message {
+    fn from_yaml(
+        value: Value,
+        _: &mut Ctx,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
         match value.try_into_mapping() {
             Ok(mut value) => {
-                let mut res = Self::new_map();
-                let mut failed = value.check(context).is_err();
+                let mut res = Vec::new();
+                let mut failed = value.check(report).is_err();
                 for (key, value) in value {
-                    let key = key.try_map(|s| C::from_str(&s));
-                    let value = value.into_string(context);
-                    if let Err(err) = key {
-                        context.push_error(err);
-                        failed = true;
-                    }
-                    else if value.is_err() {
-                        failed = true;
-                    }
-                    else if !failed {
-                        res.insert(key.unwrap(), value.unwrap());
+                    let key = key.try_map(|s| C::from_str(&s))
+                                 .map_err(|err| { report.error(err); Failed });
+                    let value = value.into_string(report);
+                    match (key, value, failed) {
+                        (Ok(key), Ok(value), false) => {
+                            res.push((key, value));
+                        }
+                        _ => failed = true
                     }
                 }
                 if failed {
                     Err(Failed)
                 }
                 else {
-                    Ok(res)
+                    use ::std::cmp::Ord;
+
+                    res.sort_by(|left, right| left.0.cmp(&right.0));
+                    Ok(CodedText(CTInner::Map(res)))
                 }
             }
             Err(value) => {
-                value.into_string(context).map(Self::from_text)
+                value.into_string(report).map(|res| {
+                    CodedText(CTInner::Plain(res))
+                })
             }
         }
     }
 }
-
 
 
 pub type LocalText = CodedText<LocalCode>;
@@ -231,7 +222,8 @@ pub type LanguageText = CodedText<LanguageCode>;
 
 //------------ CountryCodeError ----------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Fail)]
+#[fail(display="invalid country code '{}'", _0)]
 pub struct CountryCodeError(String);
 
 impl From<String> for CountryCodeError {
@@ -240,16 +232,11 @@ impl From<String> for CountryCodeError {
     }
 }
 
-impl fmt::Display for CountryCodeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "invalid country code '{}'", self.0)
-    }
-}
-
 
 //------------ LanguageCodeError ---------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Fail)]
+#[fail(display="invalid language code '{}'", _0)]
 pub struct LanguageCodeError(String);
 
 impl From<String> for LanguageCodeError {
@@ -258,27 +245,16 @@ impl From<String> for LanguageCodeError {
     }
 }
 
-impl fmt::Display for LanguageCodeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "invalid language code '{}'", self.0)
-    }
-}
-
 
 //------------ LocalCodeError ------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Fail)]
+#[fail(display="invalid country or language code '{}'", _0)]
 pub struct LocalCodeError(String);
 
 impl From<String> for LocalCodeError {
     fn from(s: String) -> Self {
         LocalCodeError(s)
-    }
-}
-
-impl fmt::Display for LocalCodeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "invalid country or language code '{}'", self.0)
     }
 }
 

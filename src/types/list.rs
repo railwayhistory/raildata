@@ -1,9 +1,10 @@
 //! A list with an optimization for holding a single item.
 
 use std::{fmt, mem, slice};
-use ::load::yaml::Value;
-use ::load::construct::{Constructable, ConstructContext, Failed};
-use super::marked::Location;
+use ::load::report::{Failed, PathReporter};
+use ::load::yaml::{FromYaml, Value};
+use super::marked::{IntoMarked, Location};
+use ::document::store::{ForStored, Stored};
 
 
 //------------ List ----------------------------------------------------------
@@ -68,6 +69,12 @@ impl<T> List<T> {
     }
 }
 
+impl<'a, T> Stored<'a, List<T>> {
+    pub fn iter(self) -> ForStored<'a, Iter<'a, T>> {
+        self.wrap(|list| list.iter())
+    }
+}
+
 impl<T> Default for List<T> {
     fn default() -> Self {
         List { inner: Inner::Empty, location: Location::default() }
@@ -83,24 +90,28 @@ impl<T> From<Option<List<T>>> for List<T> {
     }
 }
 
-impl<T: Constructable> Constructable for List<T> {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
+impl<C, T: FromYaml<C>> FromYaml<C> for List<T> {
+    fn from_yaml(
+        value: Value,
+        context: &mut C,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
         let location = value.location();
         let inner = match value.try_into_sequence() {
             Ok(mut seq) => {
                 if seq.is_empty() {
-                    context.push_error((ListError::Empty, location));
+                    report.error(ListError::Empty.marked(location));
                     return Err(Failed)
                 }
                 else if seq.len() == 1 {
-                    T::construct(seq.pop().unwrap(), context).map(Inner::One)?
+                    T::from_yaml(seq.pop().unwrap(), context, report)
+                        .map(Inner::One)?
                 }
                 else {
                     let mut res = Vec::with_capacity(seq.len());
                     let mut err = false;
-                    for item in seq.into_value() {
-                        if let Ok(item) = T::construct(item, context) {
+                    for item in seq {
+                        if let Ok(item) = T::from_yaml(item, context, report) {
                             res.push(item)
                         }
                         else {
@@ -113,7 +124,7 @@ impl<T: Constructable> Constructable for List<T> {
                     Inner::Many(res)
                 }
             }
-            Err(value) => T::construct(value, context).map(Inner::One)?
+            Err(value) => T::from_yaml(value, context, report).map(Inner::One)?
         };
         Ok(List { inner, location })
     }
@@ -125,6 +136,15 @@ impl<'a, T> IntoIterator for &'a List<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         Iter::new(self)
+    }
+}
+
+impl<'a, T> IntoIterator for Stored<'a, List<T>> {
+    type Item = Stored<'a, T>;
+    type IntoIter = ForStored<'a, Iter<'a, T>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 
@@ -161,6 +181,17 @@ impl<'a, T: 'a> Iterator for Iter<'a, T> {
             Inner::Empty => None,
             Inner::One(ref mut item) => item.take(),
             Inner::Many(ref mut iter) => iter.next(),
+        }
+    }
+}
+
+impl<'a, T: 'a> Iterator for ForStored<'a, Iter<'a, T>> {
+    type Item = Stored<'a, T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.as_mut().next() {
+            Some(res) => Some(self.as_stored(res)),
+            None => None
         }
     }
 }

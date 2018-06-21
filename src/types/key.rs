@@ -1,7 +1,7 @@
 
 use std::{fmt, str};
-use ::load::construct::{Constructable, ConstructContext, Failed};
-use ::load::yaml::Value;
+use ::load::report::{Failed, PathReporter};
+use ::load::yaml::{FromYaml, Value};
 use super::marked::Marked;
 
 
@@ -17,7 +17,7 @@ impl Key {
 }
 
 impl Marked<Key> {
-    pub fn from_string(s: Marked<String>, _context: &mut ConstructContext)
+    pub fn from_string(s: Marked<String>, _report: &mut PathReporter)
                        -> Result<Self, Failed> {
         Ok(s.map(Key))
     }
@@ -31,19 +31,16 @@ impl str::FromStr for Key {
     }
 }
 
-impl Constructable for Marked<Key> {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
-        Ok(value.into_string(context)?.map(Key))
+impl<C> FromYaml<C> for Marked<Key> {
+    fn from_yaml(
+        value: Value,
+        _: &mut C,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        Ok(value.into_string(report)?.map(Key))
     }
 }
 
-impl Constructable for Key {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
-        Marked::construct(value, context).map(Marked::into_value)
-    }
-}
 
 impl fmt::Display for Key {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -54,12 +51,7 @@ impl fmt::Display for Key {
 
 //------------ InvalidKey ----------------------------------------------------
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Fail)]
+#[fail(display="invalid key")]
 pub struct InvalidKey;
-
-impl fmt::Display for InvalidKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("invalid key")
-    }
-}
 

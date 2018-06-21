@@ -1,10 +1,11 @@
-use std::{fmt, ops};
-use ::load::construct::{Constructable, ConstructContext, Failed};
-use ::load::crosslink::CrosslinkContext;
-use ::load::yaml::{Mapping, Value};
-use ::links::{DocumentLink, LineLink, PathLink, PointLink, SourceLink};
+
+use ::load::report::{Failed, Origin, PathReporter};
+use ::load::yaml::{FromYaml, Mapping, Value};
+use ::store::Link;
 use ::types::{EventDate, Key, LanguageText, List, LocalText, Marked, Set};
-use super::common::Common;
+use super::{LineLink, PathLink, SourceLink};
+use super::common::{Common, Progress};
+use super::store::{DocumentStoreBuilder, Stored};
 
 
 //------------ Point ---------------------------------------------------------
@@ -16,64 +17,62 @@ pub struct Point {
     events: List<Event>,
     junction: Option<Marked<bool>>,
     subtype: Marked<Subtype>,
-
-    // Cross-links
-    lines: List<(LineLink, usize)>,
 }
 
-impl Point {
-    pub fn events(&self) -> &List<Event> { &self.events }
-    pub fn junction(&self) -> Option<bool> {
-        self.junction.as_ref().map(Marked::to_value)
+impl<'a> Stored<'a, Point> {
+    pub fn common(&self) -> &Common {
+        &self.access().common
     }
-    pub fn subtype(&self) -> Marked<Subtype> { self.subtype }
 
-    pub fn lines(&self) -> &List<(LineLink, usize)> { &self.lines }
+    pub fn key(&self) -> &Key {
+        self.common().key()
+    }
+
+    pub fn progress(&self) -> Progress {
+        self.common().progress()
+    }
+
+    pub fn origin(&self) -> &Origin {
+        &self.common().origin()
+    }
+
+    pub fn events(&self) -> Stored<'a, EventList> {
+        self.map(|item| &item.events)
+    }
+
+    pub fn junction(&self) -> Option<bool> {
+        self.access().junction.map(Marked::into_value)
+    }
+
+    pub fn subtype(&self) -> Subtype {
+        self.access().subtype.into_value()
+    }
 }
 
 impl Point {
-    pub fn construct(key: Marked<Key>, mut doc: Marked<Mapping>,
-                     context: &mut ConstructContext) -> Result<Self, Failed> {
-        let common = Common::construct(key, &mut doc, context);
-        let events = doc.take("events", context);
-        let junction = doc.take_opt("junction", context);
-        let subtype = doc.take_default("subtype", context);
-        doc.exhausted(context)?;
+    pub fn from_yaml(
+        key: Marked<Key>,
+        mut doc: Mapping,
+        context: &mut DocumentStoreBuilder,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let common = Common::from_yaml(key, &mut doc, context, report);
+        let events = doc.take("events", context, report);
+        let junction = doc.take_opt("junction", context, report);
+        let subtype = doc.take_default("subtype", context, report);
+        doc.exhausted(report)?;
         Ok(Point {
             common: common?,
             events: events?,
             junction: junction?,
             subtype: subtype?,
-
-            lines: List::default(),
         })
     }
-
-    pub fn crosslink(&self, _link: DocumentLink,
-                     _context: &mut CrosslinkContext) {
-    }
 }
 
-impl Point {
-    pub fn push_line(&mut self, link: LineLink, n: usize) {
-        self.lines.push((link, n))
-    }
-}
+//------------ PointLink -----------------------------------------------------
 
-
-impl ops::Deref for Point {
-    type Target = Common;
-
-    fn deref(&self) -> &Common {
-        &self.common
-    }
-}
-
-impl ops::DerefMut for Point {
-    fn deref_mut(&mut self) -> &mut Common {
-        &mut self.common
-    }
-}
+pub type PointLink = Link<Point>;
 
 
 //------------ Subtype -------------------------------------------------------
@@ -90,6 +89,11 @@ data_enum! {
 }
 
 
+//------------ EventList -----------------------------------------------------
+
+pub type EventList = List<Event>;
+
+
 //------------ Event ---------------------------------------------------------
 
 #[derive(Clone, Debug)]
@@ -103,7 +107,7 @@ pub struct Event {
     connection: Option<List<Marked<PointLink>>>,
     designation: Option<LocalText>,
     location: Option<Location>,
-    master: Option<Option<Marked<PointLink>>>,
+    master: Option<Option<List<Marked<PointLink>>>>,
     merged: Option<Marked<PointLink>>,
     name: Option<LocalText>,
     plc: Option<Plc>,
@@ -130,106 +134,170 @@ pub struct Event {
     no_nsb: Option<Marked<String>>,
 }
 
-impl Event {
-    pub fn date(&self) -> &EventDate { &self.date }
-    pub fn document(&self) -> &List<Marked<SourceLink>> { &self.document }
-    pub fn source(&self) -> &List<Marked<SourceLink>> { &self.source }
-    pub fn note(&self) -> Option<&LanguageText> { self.note.as_ref() }
+impl<'a> Stored<'a, Event> {
+    pub fn date(&self) -> &EventDate {
+        &self.access().date
+    }
+
+    pub fn document(&self) -> Stored<'a, List<Marked<SourceLink>>> {
+        self.map(|item| &item.document)
+    }
+
+    pub fn source(&self) -> Stored<'a, List<Marked<SourceLink>>> {
+        self.map(|item| &item.source)
+    }
+
+    pub fn note(&self) -> Option<&LanguageText> {
+        self.access().note.as_ref()
+    }
 
     pub fn category(&self) -> Option<&Set<Category>> {
-        self.category.as_ref()
+        self.access().category.as_ref()
     }
-    pub fn connection(&self) -> Option<&List<Marked<PointLink>>> {
-        self.connection.as_ref()
+
+    pub fn connection(&self) -> Option<Stored<'a, List<Marked<PointLink>>>> {
+        self.map_opt(|item| item.connection.as_ref())
     }
+
     pub fn designation(&self) -> Option<&LocalText> {
-        self.designation.as_ref()
+        self.access().designation.as_ref()
     }
-    pub fn location(&self) -> Option<&Location> { self.location.as_ref() }
-    pub fn master(&self) -> Option<Option<&Marked<PointLink>>> {
-        self.master.as_ref().map(Option::as_ref)
+
+    pub fn location(&self) -> Option<Stored<'a, Location>> {
+        self.map_opt(|item| item.location.as_ref())
     }
-    pub fn merged(&self) -> Option<&Marked<PointLink>> { self.merged.as_ref() }
-    pub fn name(&self) -> Option<&LocalText> { self.name.as_ref() }
-    pub fn plc(&self) -> Option<&Plc> { self.plc.as_ref() }
+
+    pub fn master(
+        &self
+    ) -> Stored<'a, Option<Option<List<Marked<PointLink>>>>> {
+        self.map(|item| &item.master)
+    }
+
+    pub fn merged(&self) -> Option<&Point> {
+        self.map_opt(|item| item.merged.as_ref()).map(|x| x.follow())
+    }
+
+    pub fn name(&self) -> Option<&LocalText> {
+        self.access().name.as_ref()
+    }
+
+    pub fn plc(&self) -> Option<&Plc> {
+        self.access().plc.as_ref()
+    }
+
     pub fn public_name(&self) -> Option<&List<LocalText>> {
-        self.public_name.as_ref()
+        self.access().public_name.as_ref()
     }
-    pub fn site(&self) -> Option<&Site> { self.site.as_ref() }
+
+    pub fn site(&self) -> Option<Stored<'a, Site>> {
+        self.map_opt(|item| item.site.as_ref())
+    }
+
     pub fn short_name(&self) -> Option<&LocalText> {
-        self.short_name.as_ref()
-    }
-    pub fn staff(&self) -> Option<Staff> { self.staff }
-    pub fn status(&self) -> Option<Status> { self.status }
-
-    pub fn service(&self) -> Option<Service> { self.service }
-    pub fn split_from(&self) -> Option<&Marked<PointLink>> {
-        self.split_from.as_ref()
+        self.access().short_name.as_ref()
     }
 
-    pub fn de_ds100(&self) -> Option<&DeDs100> { self.de_ds100.as_ref() }
-    pub fn de_dstnr(&self) -> Option<&DeDstnr> { self.de_dstnr.as_ref() }
-    pub fn de_lknr(&self) -> Option<&List<DeLknr>> { self.de_lknr.as_ref() }
-    pub fn de_name16(&self) -> Option<&DeName16> { self.de_name16.as_ref() }
-    pub fn de_rang(&self) -> Option<DeRang> { self.de_rang }
-    pub fn de_vbl(&self) -> Option<&DeVbl> { self.de_vbl.as_ref() }
+    pub fn staff(&self) -> Option<Staff> {
+        self.access().staff
+    }
+
+    pub fn status(&self) -> Option<Status> {
+        self.access().status
+    }
+
+    pub fn service(&self) -> Option<Service> {
+        self.access().service
+    }
+
+    pub fn split_from(&self) -> Option<&Point> {
+        self.map_opt(|item| item.split_from.as_ref()).map(|x| x.follow())
+    }
+
+    pub fn de_ds100(&self) -> Option<&DeDs100> {
+        self.access().de_ds100.as_ref()
+    }
+
+    pub fn de_dstnr(&self) -> Option<&DeDstnr> {
+        self.access().de_dstnr.as_ref()
+    }
+
+    pub fn de_lknr(&self) -> Option<&List<DeLknr>> {
+        self.access().de_lknr.as_ref()
+    }
+
+    pub fn de_name16(&self) -> Option<&DeName16> {
+        self.access().de_name16.as_ref()
+    }
+
+    pub fn de_rang(&self) -> Option<&DeRang> {
+        self.access().de_rang.as_ref()
+    }
+
+    pub fn de_vbl(&self) -> Option<&DeVbl> {
+        self.access().de_vbl.as_ref()
+    }
 
     pub fn dk_ref(&self) -> Option<&str> {
-        self.dk_ref.as_ref().map(AsRef::as_ref)
+        self.access().dk_ref.as_ref().map(|x| x.as_value().as_ref())
     }
 
     pub fn no_fs(&self) -> Option<&str> {
-        self.no_fs.as_ref().map(AsRef::as_ref)
+        self.access().no_fs.as_ref().map(|x| x.as_value().as_ref())
     }
+
     pub fn no_njk(&self) -> Option<&str> {
-        self.no_njk.as_ref().map(AsRef::as_ref)
+        self.access().no_njk.as_ref().map(|x| x.as_value().as_ref())
     }
+
     pub fn no_nsb(&self) -> Option<&str> {
-        self.no_nsb.as_ref().map(AsRef::as_ref)
+        self.access().no_nsb.as_ref().map(|x| x.as_value().as_ref())
     }
 }
 
-impl Constructable for Event {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
-        let mut value = value.into_mapping(context)?;
+impl FromYaml<DocumentStoreBuilder> for Event {
+    fn from_yaml(
+        value: Value,
+        context: &mut DocumentStoreBuilder,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let mut value = value.into_mapping(report)?;
 
-        let date = value.take("date", context);
-        let document = value.take_default("document", context);
-        let source = value.take_default("source", context);
-        let note = value.take_opt("note", context);
+        let date = value.take("date", context, report);
+        let document = value.take_default("document", context, report);
+        let source = value.take_default("source", context, report);
+        let note = value.take_opt("note", context, report);
 
-        let category = value.take_opt("category", context);
-        let connection = value.take_opt("connection", context);
-        let designation = value.take_opt("designation", context);
-        let location = value.take_opt("location", context);
-        let master = value.take_opt("master", context);
-        let merged = value.take_opt("merged", context);
-        let name = value.take_opt("name", context);
-        let plc = value.take_opt("PLC", context);
-        let public_name = value.take_opt("public_name", context);
-        let site = value.take_opt("site", context);
-        let short_name = value.take_opt("short_name", context);
-        let staff = value.take_opt("staff", context);
-        let status = value.take_opt("status", context);
+        let category = value.take_opt("category", context, report);
+        let connection = value.take_opt("connection", context, report);
+        let designation = value.take_opt("designation", context, report);
+        let location = value.take_opt("location", context, report);
+        let master = value.take_opt("master", context, report);
+        let merged = value.take_opt("merged", context, report);
+        let name = value.take_opt("name", context, report);
+        let plc = value.take_opt("PLC", context, report);
+        let public_name = value.take_opt("public_name", context, report);
+        let site = value.take_opt("site", context, report);
+        let short_name = value.take_opt("short_name", context, report);
+        let staff = value.take_opt("staff", context, report);
+        let status = value.take_opt("status", context, report);
 
-        let service = value.take_opt("service", context);
-        let split_from = value.take_opt("split_from", context);
+        let service = value.take_opt("service", context, report);
+        let split_from = value.take_opt("split_from", context, report);
 
-        let de_ds100 = value.take_opt("de.DS100", context);
-        let de_dstnr = value.take_opt("de.dstnr", context);
-        let de_lknr = value.take_opt("de.lknr", context);
-        let de_name16 = value.take_opt("de.name16", context);
-        let de_rang = value.take_opt("de.rang", context);
-        let de_vbl = value.take_opt("de.VBL", context);
+        let de_ds100 = value.take_opt("de.DS100", context, report);
+        let de_dstnr = value.take_opt("de.dstnr", context, report);
+        let de_lknr = value.take_opt("de.lknr", context, report);
+        let de_name16 = value.take_opt("de.name16", context, report);
+        let de_rang = value.take_opt("de.rang", context, report);
+        let de_vbl = value.take_opt("de.VBL", context, report);
 
-        let dk_ref = value.take_opt("dk.ref", context);
+        let dk_ref = value.take_opt("dk.ref", context, report);
         
-        let no_fs = value.take_opt("no.fs", context);
-        let no_njk = value.take_opt("no.NJK", context);
-        let no_nsb = value.take_opt("no.NSB", context);
+        let no_fs = value.take_opt("no.fs", context, report);
+        let no_njk = value.take_opt("no.NJK", context, report);
+        let no_nsb = value.take_opt("no.NSB", context, report);
 
-        value.exhausted(context)?;
+        value.exhausted(report)?;
         Ok(Event {
             date: date?,
             document: document?,
@@ -263,6 +331,7 @@ impl Constructable for Event {
         })
     }
 }
+
 
 
 //------------ Category ------------------------------------------------------
@@ -313,13 +382,23 @@ data_enum! {
 #[derive(Clone, Debug)]
 pub struct Location(List<(Marked<LineLink>, Option<Marked<String>>)>);
 
-impl Constructable for Location {
-    fn construct(value: Value, context: &mut ConstructContext)
-                 -> Result<Self, Failed> {
-        let mut list = List::new();
+impl FromYaml<DocumentStoreBuilder> for Location {
+    fn from_yaml(
+        value: Value,
+        context: &mut DocumentStoreBuilder,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let mut res = List::new();
         let mut err = false;
-        for (key, value) in value.into_mapping(context)? {
-            let key = match Marked::<LineLink>::from_string(key, context) {
+        for (key, value) in value.into_mapping(report)? {
+            let key = match Marked::from_string(key, report) {
+                Ok(key) => key,
+                Err(_) => {
+                    err = true;
+                    continue;
+                }
+            };
+            let key = match context.forge_link(key, report) {
                 Ok(key) => key,
                 Err(_) => {
                     err = true;
@@ -327,20 +406,20 @@ impl Constructable for Location {
                 }
             };
             if value.is_null() {
-                list.push((key, None))
+                res.push((key, None))
             }
-            else if let Ok(value) = value.into_string(context) {
-                list.push((key, Some(value)));
+            else if let Ok(value) = value.into_string(report) {
+                res.push((key, Some(value)))
             }
             else {
-                err = true;
+                err = true
             }
         }
         if err {
             Err(Failed)
         }
         else {
-            Ok(Location(list))
+            Ok(Location(res))
         }
     }
 }
@@ -381,28 +460,40 @@ data_enum! {
 #[derive(Clone, Debug)]
 pub struct Site(List<(Marked<PathLink>, Marked<String>)>);
 
-impl Constructable for Site {
-    fn construct(
+impl FromYaml<DocumentStoreBuilder> for Site {
+    fn from_yaml(
         value: Value,
-        context: &mut ConstructContext
+        context: &mut DocumentStoreBuilder,
+        report: &mut PathReporter
     ) -> Result<Self, Failed> {
-        let mut list = List::new();
+        let mut res = List::new();
         let mut err = false;
-        for (key, value) in value.into_mapping(context)? {
-            let key = match Marked::<PathLink>::from_string(key, context) {
+        for (key, value) in value.into_mapping(report)? {
+            let key = match Marked::from_string(key, report) {
+                Ok(key) => key,
+                Err(_) => {
+                    err = true;
+                    continue;
+                }
+            };
+            let key = match context.forge_link(key, report) {
                 Ok(key) => key,
                 Err(_) => {
                     err = true;
                     continue
                 }
             };
-            match value.into_string(context) {
-                Ok(value) => list.push((key, value)),
-                Err(_) => err = true,
+            match value.into_string(report) {
+                Ok(value) => res.push((key, value)),
+                Err(_) => { err = true }
             }
         }
-        if err { Err(Failed) }
-        else { Ok(Site(list)) }
+        if err {
+            Err(Failed)
+        }
+        else {
+            Ok(Site(res))
+        }
     }
 }
 
@@ -469,16 +560,4 @@ pub type DeVbl = Marked<String>;
 //------------ DeName16 ------------------------------------------------------
 
 pub type DeName16 = Marked<String>;
-
-
-//============ Errors ========================================================
-
-#[derive(Clone, Copy, Debug)]
-pub struct InvalidSite;
-
-impl fmt::Display for InvalidSite {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("invalid site value")
-    }
-}
 

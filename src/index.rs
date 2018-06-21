@@ -1,7 +1,9 @@
 
 use std::fmt;
 use std::collections::hash_map::{HashMap, Entry, Values};
-use ::links::Permalink;
+use std::sync::{Arc, RwLock};
+use ::document::Document;
+use ::links::{DocumentLink, Permalink};
 use ::load::path::Path;
 use ::types::{Key, Location};
 
@@ -45,6 +47,61 @@ impl PrimaryIndex {
 
     pub fn inner(&self) -> &HashMap<Key, Permalink> {
         &self.documents
+    }
+}
+
+
+//------------ PrimaryBuilder ------------------------------------------------
+
+#[derive(Debug, Default)]
+pub struct PrimaryBuilder {
+    docs: Arc<RwLock<PrimaryIndex>>,
+}
+
+impl PrimaryBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn insert_document(
+        &mut self,
+        key: Key,
+        document: Document
+    ) -> Result<(), DocumentExists> {
+        let mut docs = self.docs.write().unwrap();
+        if let Some(link) = docs.get(&key) {
+            {
+                let mut doc = link.write().unwrap();
+                if doc.is_nonexisting() {
+                    *doc = document;
+                    return Ok(())
+                }
+            }
+            Err(DocumentExists::from_link(&link))
+        }
+        else {
+            docs.insert(key, Permalink::from_document(document)).unwrap();
+            Ok(())
+        }
+    }
+
+    /// Creates a link to a document identified by a key.
+    ///
+    /// If a document by this key doesn’t yet exist, creates a placeholder
+    /// document and returns a link to that.
+    pub fn forge_link(&mut self, key: Key) -> DocumentLink {
+        if let Some(link) = self.docs.read().unwrap().get(&key) {
+            return link.link()
+        }
+        let mut map = self.docs.write().unwrap();
+        // Someone may have added the document in between ...
+        if let Some(link) = map.get(&key) {
+            return link.link()
+        }
+        let link = Permalink::nonexisting(key.clone());
+        let res = link.link();
+        map.insert(key, link).unwrap();
+        res
     }
 }
 

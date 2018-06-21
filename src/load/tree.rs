@@ -1,72 +1,60 @@
-use std::path;
-use std::sync::{Arc, RwLock};
+
+use std::{io, mem, path};
+use std::collections::HashSet;
 use std::fs::File;
 use ignore::{WalkBuilder, WalkState};
 use ignore::types::TypesBuilder;
-use ::index::PrimaryIndex;
-use ::types::Location;
-use super::construct::ConstructContext;
-use super::crosslink::CrosslinkContext;
-use super::error::{ErrorStore, SharedErrorStore};
-use super::path::Path;
+use osmxml::read::read_xml;
+use ::document::path::Path;
+use ::document::store::{DocumentStore, DocumentStoreBuilder};
+use ::types::{IntoMarked, Location};
 use super::read::Utf8Chars;
-use super::osm::load_osm_file;
+use super::report::{self, PathReporter, Report, Reporter, Stage};
 use super::yaml::Loader;
 
 
 //------------ load_tree -----------------------------------------------------
 
-pub fn load_tree(path: &path::Path) -> Result<PrimaryIndex, ErrorStore> {
-    let docs = Arc::new(RwLock::new(PrimaryIndex::new()));
-    let errors = SharedErrorStore::new();
+pub fn load_tree(path: &path::Path) -> Result<DocumentStore, Report> {
+    let builder = DocumentStoreBuilder::new();
+    let report = Reporter::new();
 
     // Phase 1: Construct all documents and check that they are all present
     //          and accounted for.
-    load_facts(path, docs.clone(), errors.clone());
-    load_paths(path, docs.clone(), errors.clone());
- 
-    for value in docs.read().unwrap().values() {
-        if let Some(doc) = value.read().unwrap().as_nonexisting() {
-            doc.complain(&errors)
-        }
-    }
-    if !errors.is_empty() {
-        return Err(errors.unwrap())
-    }
+    load_facts(path, builder.clone(), report.clone());
+    load_paths(path, builder.clone(), report.clone());
 
-    // Phase 2: Create crosslinks between documents.
-    //
-    // These need to be in place for verification.
-    {
-        let mut context = CrosslinkContext::new(docs.clone(), errors.clone());
-        for value in docs.read().unwrap().values() {
-            let link = value.link();
-            value.read().unwrap().crosslink(link, &mut context);
+    let res = {
+        // Separate block so the report clone is dropped before we unwrap it
+        // later.
+        builder.into_store(&mut report.clone().stage(Stage::Translate))
+    };
+    match res {
+        Ok(some) => Ok(some),
+        Err(_) => {
+            Err(report.unwrap())
         }
-    }
-
-    if errors.is_empty() {
-        Ok(Arc::try_unwrap(docs).unwrap().into_inner().unwrap())
-    }
-    else {
-        Err(errors.unwrap())
     }
 }
 
 
 //------------ load_facts ----------------------------------------------------
 
-fn load_facts(base: &path::Path, docs: Arc<RwLock<PrimaryIndex>>,
-              errors: SharedErrorStore) {
+fn load_facts(
+    base: &path::Path,
+    docs: DocumentStoreBuilder,
+    report: Reporter
+) {
     let walk = WalkBuilder::new(base.join("facts"))
-                           .types(TypesBuilder::new()
-                                               .add_defaults()
-                                               .select("yaml")
-                                               .build().unwrap())
-                           .build_parallel();
+        .types(TypesBuilder::new()
+            .add_defaults()
+            .select("yaml")
+            .build().unwrap()
+        )
+        .build_parallel();
     walk.run(|| {
-        let docs = docs.clone();
-        let errors = errors.clone();
+        let mut docs = docs.clone();
+        let report = report.clone();
         Box::new(move |path| {
             if let Ok(path) = path {
                 if let Some(file_type) = path.file_type() {
@@ -74,19 +62,26 @@ fn load_facts(base: &path::Path, docs: Arc<RwLock<PrimaryIndex>>,
                         return WalkState::Continue
                     }
                 }
-                let path = Path::new(path.path());
-                let mut context = ConstructContext::new(path.clone(),
-                                                        docs.clone(),
-                                                        errors.clone());
+                let path = report::Path::new(path.path());
                 match File::open(&path) {
                     Ok(file) => {
-                        if let Err(err) = Loader::new(&mut context)
-                                                 .load(Utf8Chars::new(file)) {
-                            context.push_error((err, Location::NONE))
+                        let mut report = report.clone()
+                            .stage(Stage::Translate)
+                            .with_path(path);
+                        let res = {
+                            let mut loader = Loader::new(|v| {
+                                let _ = docs.from_yaml(v, &mut report);
+                            });
+                            loader.load(Utf8Chars::new(file))
+                        };
+                        if let Err(err) = res {
+                            let mut report = report.restage(Stage::Parse);
+                            report.error(err.marked(Location::NONE));
                         }
                     }
                     Err(err) => {
-                        context.push_error((err, Location::NONE));
+                        report.clone().stage(Stage::Parse)
+                            .with_path(path).error(err.marked(Location::NONE))
                     }
                 }
             }
@@ -98,16 +93,19 @@ fn load_facts(base: &path::Path, docs: Arc<RwLock<PrimaryIndex>>,
 
 //------------ load_paths ----------------------------------------------------
 
-fn load_paths(base: &path::Path, docs: Arc<RwLock<PrimaryIndex>>,
-              errors: SharedErrorStore) {
+fn load_paths(
+    base: &path::Path,
+    docs: DocumentStoreBuilder,
+    report: Reporter
+) {
     let mut types = TypesBuilder::new();
     types.add("osm", "*.osm").unwrap();
     let walk = WalkBuilder::new(base.join("paths"))
                            .types(types.select("osm").build().unwrap())
                            .build_parallel();
     walk.run(|| {
-        let docs = docs.clone();
-        let errors = errors.clone();
+        let mut docs = docs.clone();
+        let report = report.clone();
         Box::new(move |path| {
             if let Ok(path) = path {
                 if let Some(file_type) = path.file_type() {
@@ -115,14 +113,17 @@ fn load_paths(base: &path::Path, docs: Arc<RwLock<PrimaryIndex>>,
                         return WalkState::Continue
                     }
                 }
-                let path = Path::new(path.path());
-                let mut context = ConstructContext::new(path.clone(),
-                                                        docs.clone(),
-                                                        errors.clone());
+                let path = report::Path::new(path.path());
                 match File::open(&path) {
-                    Ok(mut file) => load_osm_file(&mut file, &mut context),
+                    Ok(mut file) => {
+                        let mut report = report.clone()
+                            .stage(Stage::Translate)
+                            .with_path(path);
+                        load_osm_file(&mut file, &mut docs, &mut report);
+                    }
                     Err(err) => {
-                        context.push_error((err, Location::NONE))
+                        report.clone().stage(Stage::Parse)
+                            .with_path(path).error(err.marked(Location::NONE))
                     }
                 }
             }
@@ -130,3 +131,43 @@ fn load_paths(base: &path::Path, docs: Arc<RwLock<PrimaryIndex>>,
         })
     })
 }
+
+
+//------------ load_osm_file -------------------------------------------------
+
+pub fn load_osm_file<R: io::Read>(
+    read: &mut R,
+    docs: &mut DocumentStoreBuilder,
+    report: &mut PathReporter
+) {
+    let mut osm = match read_xml(read) {
+        Ok(osm) => osm,
+        Err(err) => {
+            report.error(err.unmarked());
+            return;
+        }
+    };
+    
+    // Swap out the relations so we don’t hold a mutable reference to
+    // `osm` while draining the relations.
+    let mut relations = HashSet::new();
+    mem::swap(osm.relations_mut(), &mut relations);
+    for relation in relations.drain() {
+        match Path::from_osm(relation, &osm, docs, report) {
+            Ok(path) => {
+                if let Err(err) = docs.insert(path.key().clone(), path,
+                                                    Location::NONE, report) {
+                    report.error(err.marked(Location::NONE))
+                }
+            }
+            Err(Some(key)) => {
+                if let Err(err) = docs.insert_broken::<Path>(key,
+                                                    Location::NONE, report) {
+                    report.error(err.marked(Location::NONE))
+                }
+            }
+            Err(None) => { }
+        }
+    }
+}
+
