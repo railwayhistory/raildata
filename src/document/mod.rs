@@ -1,10 +1,11 @@
 
-pub use self::line::{Line, LineLink};
-pub use self::organization::{Organization, OrganizationLink};
-pub use self::path::{Path, PathLink};
-pub use self::point::{Point, PointLink};
+pub use self::line::Line;
+pub use self::organization::Organization;
+pub use self::path::Path;
+pub use self::point::Point;
 pub use self::structure::Structure;
-pub use self::source::{Source, SourceLink};
+pub use self::store::document::*;
+pub use self::source::Source;
 
 pub mod line;
 pub mod organization;

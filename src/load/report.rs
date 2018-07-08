@@ -38,6 +38,9 @@ pub enum Stage {
 
     /// Cross-linking between documents.
     Crosslink = 2,
+
+    /// Verify document sanity.
+    Verify = 3,
 }
 
 
@@ -273,10 +276,12 @@ impl Reporter {
         StageReporter::new(self, stage)
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.report.lock().unwrap().is_empty()
+    }
+
     fn notice(&mut self, notice: Notice) {
-        if let Ok(mut report) = self.report.try_lock() {
-            report.notice(notice)
-        }
+        self.report.lock().unwrap().notice(notice)
     }
 }
 
@@ -363,6 +368,10 @@ impl PathReporter {
 
     pub fn path(&self) -> Path {
         self.path.clone()
+    }
+
+    pub fn origin(&self, location: Location) -> Origin {
+        Origin::new(self.path.clone(), location)
     }
 
     pub fn unwrap(self) -> StageReporter {

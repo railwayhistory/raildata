@@ -5,8 +5,9 @@ use std::fs::File;
 use ignore::{WalkBuilder, WalkState};
 use ignore::types::TypesBuilder;
 use osmxml::read::read_xml;
-use ::document::path::Path;
-use ::document::store::{DocumentStore, DocumentStoreBuilder};
+use ::document::{Document, Path};
+use ::document::common::DocumentType;
+use ::document::store::{Store, LoadStore};
 use ::types::{IntoMarked, Location};
 use super::read::Utf8Chars;
 use super::report::{self, PathReporter, Report, Reporter, Stage};
@@ -15,26 +16,31 @@ use super::yaml::Loader;
 
 //------------ load_tree -----------------------------------------------------
 
-pub fn load_tree(path: &path::Path) -> Result<DocumentStore, Report> {
-    let builder = DocumentStoreBuilder::new();
+pub fn load_tree(path: &path::Path) -> Result<Store, Report> {
     let report = Reporter::new();
 
     // Phase 1: Construct all documents and check that they are all present
     //          and accounted for.
-    load_facts(path, builder.clone(), report.clone());
-    load_paths(path, builder.clone(), report.clone());
-
-    let res = {
-        // Separate block so the report clone is dropped before we unwrap it
-        // later.
-        builder.into_store(&mut report.clone().stage(Stage::Translate))
+    let store = {
+        let builder = LoadStore::new();
+        load_facts(path, builder.clone(), report.clone());
+        load_paths(path, builder.clone(), report.clone());
+        builder.into_update_store(&mut report.clone().stage(Stage::Translate))
     };
-    match res {
-        Ok(some) => Ok(some),
-        Err(_) => {
-            Err(report.unwrap())
-        }
+    let store = match store {
+        Ok(store) => store,
+        Err(_) => return Err(report.unwrap())
+    };
+
+    /*
+    // Phase 2: Cross-link.
+    crosslink(builder.clone(), report.clone());
+    if !report.is_empty() {
+        return Err(report.unwrap())
     }
+    */
+
+    Ok(store.into_store())
 }
 
 
@@ -42,7 +48,7 @@ pub fn load_tree(path: &path::Path) -> Result<DocumentStore, Report> {
 
 fn load_facts(
     base: &path::Path,
-    docs: DocumentStoreBuilder,
+    docs: LoadStore,
     report: Reporter
 ) {
     let walk = WalkBuilder::new(base.join("facts"))
@@ -95,7 +101,7 @@ fn load_facts(
 
 fn load_paths(
     base: &path::Path,
-    docs: DocumentStoreBuilder,
+    docs: LoadStore,
     report: Reporter
 ) {
     let mut types = TypesBuilder::new();
@@ -137,7 +143,7 @@ fn load_paths(
 
 pub fn load_osm_file<R: io::Read>(
     read: &mut R,
-    docs: &mut DocumentStoreBuilder,
+    docs: &mut LoadStore,
     report: &mut PathReporter
 ) {
     let mut osm = match read_xml(read) {
@@ -155,19 +161,31 @@ pub fn load_osm_file<R: io::Read>(
     for relation in relations.drain() {
         match Path::from_osm(relation, &osm, docs, report) {
             Ok(path) => {
-                if let Err(err) = docs.insert(path.key().clone(), path,
-                                                    Location::NONE, report) {
-                    report.error(err.marked(Location::NONE))
-                }
+                let _ = docs.insert(
+                    path.key().clone(), Document::Path(path), report
+                );
             }
             Err(Some(key)) => {
-                if let Err(err) = docs.insert_broken::<Path>(key,
-                                                    Location::NONE, report) {
-                    report.error(err.marked(Location::NONE))
-                }
+                let _ = docs.insert_broken(
+                    key, Location::NONE, Some(DocumentType::Path), report
+                );
             }
             Err(None) => { }
         }
     }
 }
+
+
+/*
+//------------ crosslink -----------------------------------------------------
+
+fn crosslink(
+    docs: LoadStore,
+    report: Reporter
+) {
+    let report = report.stage(Stage::Crosslink);
+
+    // go over all documents.
+}
+*/
 

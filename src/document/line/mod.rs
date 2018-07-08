@@ -1,15 +1,16 @@
 
 use std::str::FromStr;
-use ::load::report::{Failed, Origin, PathReporter};
+use ::load::report::{Failed, Origin, PathReporter, StageReporter};
 use ::load::yaml::{FromYaml, Mapping, Value};
 use ::types::{
     Date, EventDate, IntoMarked, Key, LanguageText, List, LocalText, Location,
     Marked, Set
 };
-use ::store::Link;
-use super::{OrganizationLink, PathLink, Point, PointLink, SourceLink};
+use super::{LineLink, OrganizationLink, PathLink, Point, PointLink, SourceLink};
 use super::common::{Alternative, Basis, Common, Contract, Progress};
-use super::store::{DocumentStoreBuilder, Stored};
+use super::store::{LoadStore, Stored};
+
+mod verify;
 
 
 //------------ Line ----------------------------------------------------------
@@ -20,7 +21,21 @@ pub struct Line {
     label: Set<Label>,
     note: Option<LanguageText>,
     events: EventList,
-    points: List<Marked<PointLink>>,
+    points: Points,
+}
+
+impl Line {
+    pub fn common(&self) -> &Common {
+        &self.common
+    }
+
+    pub fn key(&self) -> &Key {
+        self.common().key()
+    }
+
+    pub fn origin(&self) -> &Origin {
+        &self.common().origin()
+    }
 }
 
 impl<'a> Stored<'a, Line> {
@@ -52,7 +67,7 @@ impl<'a> Stored<'a, Line> {
         self.map(|item| &item.events)
     }
 
-    pub fn points(&self) -> Stored<'a, List<Marked<PointLink>>> {
+    pub fn points(&self) -> Stored<'a, Points> {
         self.map(|item| &item.points)
     }
 }
@@ -61,7 +76,7 @@ impl Line {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -78,12 +93,11 @@ impl Line {
             points: points?,
         })
     }
+
+    pub fn verify(&self, report: &mut StageReporter) {
+        verify::verify(self, report)
+    }
 }
-
-
-//------------ LineLink ------------------------------------------------------
-
-pub type LineLink = Link<Line>;
 
 
 //------------ Label ---------------------------------------------------------
@@ -94,6 +108,38 @@ data_enum! {
         { Freight: "freight" }
         { Port: "port" }
         { DeSBahn: "de.S-Bahn" }
+    }
+}
+
+
+//------------ Points --------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct Points {
+    points: Vec<Marked<PointLink>>,
+    indexes: Vec<(PointLink, usize)>,
+}
+
+impl Points {
+    pub fn get_index(&self, link: &PointLink) -> Option<usize> {
+        self.indexes.binary_search_by(|x| link.cmp(&x.0)).ok()
+    }
+}
+
+impl FromYaml<LoadStore> for Points {
+    fn from_yaml(
+        value: Value,
+        context: &mut LoadStore,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let points: Vec<Marked<PointLink>> = Vec::from_yaml(
+            value, context, report
+        )?;
+        let mut indexes: Vec<_> = points.iter().enumerate()
+            .map(|(index, point)| (point.as_value().clone(), index))
+            .collect();
+        indexes.sort_unstable_by(|x, y| x.0.cmp(&y.0));
+        Ok(Points { points, indexes })
     }
 }
 
@@ -261,10 +307,10 @@ impl<'a> Stored<'a, Event> {
     }
 }
 
-impl FromYaml<DocumentStoreBuilder> for Event {
+impl FromYaml<LoadStore> for Event {
     fn from_yaml(
         value: Value,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -379,10 +425,10 @@ impl<'a> Stored<'a, Section> {
 }
 
 
-impl FromYaml<DocumentStoreBuilder> for Section {
+impl FromYaml<LoadStore> for Section {
     fn from_yaml(
         value: Value,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -434,10 +480,10 @@ impl<'a> Stored<'a, Concession> {
     }
 }
 
-impl FromYaml<DocumentStoreBuilder> for Concession {
+impl FromYaml<LoadStore> for Concession {
     fn from_yaml(
         value: Value,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -473,10 +519,10 @@ impl<'a> Stored<'a, CourseSegment> {
     }
 }
 
-impl FromYaml<DocumentStoreBuilder> for CourseSegment {
+impl FromYaml<LoadStore> for CourseSegment {
     fn from_yaml(
         value: Value,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let (value, location) = value.into_string(report)?.unwrap();
@@ -495,7 +541,7 @@ impl FromYaml<DocumentStoreBuilder> for CourseSegment {
                 return Err(Failed)
             }
         };
-        let path = context.forge_link(key, report)?;
+        let path = PathLink::forge(key, context, report)?;
         let start = match value.next() {
             Some(path) => path,
             None => {

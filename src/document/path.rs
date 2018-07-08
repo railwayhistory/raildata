@@ -2,14 +2,13 @@
 use std::f64::INFINITY;
 use std::str::FromStr;
 use osmxml::elements::{MemberType, Osm, Relation};
-use ::load::report::{self, Failed, Origin, PathReporter};
+use ::load::report::{self, Failed, Origin, PathReporter, StageReporter};
 use ::load::yaml::Mapping;
-use ::store::Link;
 use ::types::{IntoMarked, Location, Key, Marked};
 use ::types::key::InvalidKey;
 use super::SourceLink;
 use super::common::{Common, Progress};
-use super::store::{DocumentStoreBuilder, Stored};
+use super::store::{LoadStore, Stored};
 
 
 //------------ Path ----------------------------------------------------------
@@ -26,9 +25,9 @@ pub struct Path {
     node_descr: Vec<(usize, String)>,
 }
 
-impl<'a> Stored<'a, Path> {
+impl Path {
     pub fn common(&self) -> &Common {
-        &self.access().common
+        &self.common
     }
 
     pub fn key(&self) -> &Key {
@@ -44,13 +43,15 @@ impl<'a> Stored<'a, Path> {
     }
 
     pub fn name(&self) -> Option<&str> {
-        self.access().name.as_ref().map(AsRef::as_ref)
+        self.name.as_ref().map(AsRef::as_ref)
     }
 
     pub fn nodes(&self) -> &[Node] {
-        self.access().nodes.as_ref()
+        self.nodes.as_ref()
     }
+}
 
+impl<'a> Stored<'a, Path> {
     pub fn source(&self) -> Stored<'a, Vec<SourceLink>> {
         self.map(|item| &item.source)
     }
@@ -72,14 +73,10 @@ impl Path {
         }
     }
 
-    pub fn key(&self) -> &Key {
-        self.common.key()
-    }
-
     pub fn from_yaml(
         _key: Marked<Key>,
         doc: Mapping,
-        _context: &mut DocumentStoreBuilder,
+        _context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         report.error(PathInYaml.marked(doc.location()));
@@ -89,7 +86,7 @@ impl Path {
     pub fn from_osm(
         mut relation: Relation,
         osm: &Osm,
-        documents: &mut DocumentStoreBuilder,
+        documents: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Option<Key>> {
         if relation.tags().get("type") != Some("path") {
@@ -196,6 +193,17 @@ impl Path {
             }
         }
         self.node_names.sort_by(|x, y| x.0.cmp(&y.0));
+
+        let mut remaining: &[_] = self.node_names.as_ref();
+        while remaining.len() > 1 {
+            if remaining[0].0 == remaining[1].0 {
+                report.unmarked_error(
+                    DuplicateName(remaining[0].0.clone())
+                );
+            }
+            remaining = &remaining[1..]
+        }
+
         Ok(())
     }
 
@@ -249,7 +257,7 @@ impl Path {
     fn load_source(
         &mut self,
         relation: &mut Relation,
-        documents: &mut DocumentStoreBuilder,
+        documents: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<(), Failed> {
         let source = match relation.tags_mut().remove("source") {
@@ -265,7 +273,7 @@ impl Path {
                 }
             };
             let key = key.marked(Location::NONE);
-            if let Ok(link) = documents.forge_link(key, report) {
+            if let Ok(link) = SourceLink::forge(key, documents, report) {
                 self.source.push(link.into_value())
             }
             else {
@@ -274,12 +282,10 @@ impl Path {
         }
         Ok(())
     }
+
+    pub fn verify(&self, _report: &mut StageReporter) {
+    }
 }
-
-
-//------------ LineLink ------------------------------------------------------
-
-pub type PathLink = Link<Path>;
 
 
 //------------ Node ----------------------------------------------------------
@@ -360,5 +366,9 @@ pub struct InvalidPre(i64);
 #[derive(Clone, Copy, Debug, Fail)]
 #[fail(display="invalid post tag in node {}", _0)]
 pub struct InvalidPost(i64);
+
+#[derive(Clone, Debug, Fail)]
+#[fail(display="duplicate node name '{}'", _0)]
+pub struct DuplicateName(String);
 
 

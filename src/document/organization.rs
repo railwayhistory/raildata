@@ -1,11 +1,10 @@
 
 use ::load::yaml::{FromYaml, Mapping, Value};
-use ::load::report::{Failed, Origin, PathReporter};
-use ::store::Link;
+use ::load::report::{Failed, Origin, PathReporter, StageReporter};
 use ::types::{EventDate, Key, LanguageText, LocalText, List, Marked};
-use super::{SourceLink};
+use super::{OrganizationLink, SourceLink};
 use super::common::{Basis, Common, Progress};
-use super::store::{DocumentStoreBuilder, Stored};
+use super::store::{LoadStore, Stored};
 
 
 //------------ Organization --------------------------------------------------
@@ -17,9 +16,9 @@ pub struct Organization {
     events: EventList,
 }
 
-impl<'a> Stored<'a, Organization> {
+impl Organization {
     pub fn common(&self) -> &Common {
-        &self.access().common
+        &self.common
     }
 
     pub fn key(&self) -> &Key {
@@ -35,9 +34,11 @@ impl<'a> Stored<'a, Organization> {
     }
 
     pub fn subtype(&self) -> Subtype {
-        self.access().subtype.into_value()
+        self.subtype.into_value()
     }
+}
 
+impl<'a> Stored<'a, Organization> {
     pub fn events(&self) -> Stored<'a, EventList> {
         self.map(|item| &item.events)
     }
@@ -47,7 +48,7 @@ impl Organization {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -60,12 +61,10 @@ impl Organization {
             events: events?,
         })
     }
+
+    pub fn verify(&self, _report: &mut StageReporter) {
+    }
 }
-
-
-//------------ OrganizationLink ----------------------------------------------
-
-pub type OrganizationLink = Link<Organization>;
 
 
 //------------ Subtype -------------------------------------------------------
@@ -164,10 +163,10 @@ impl<'a> Stored<'a, Event> {
     }
 }
 
-impl FromYaml<DocumentStoreBuilder> for Event {
+impl FromYaml<LoadStore> for Event {
     fn from_yaml(
         value: Value,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -238,10 +237,10 @@ impl<'a> Stored<'a, Property> {
     }
 }
 
-impl FromYaml<DocumentStoreBuilder> for Property {
+impl FromYaml<LoadStore> for Property {
     fn from_yaml(
         value: Value,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;

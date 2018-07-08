@@ -1,11 +1,10 @@
 
-use ::load::report::{Failed, Origin, PathReporter};
+use ::load::report::{Failed, Origin, PathReporter, StageReporter};
 use ::load::yaml::{FromYaml, Mapping, Value};
-use ::store::Link;
 use ::types::{EventDate, Key, LanguageText, List, LocalText, Marked};
 use super::SourceLink;
 use super::common::{Common, Progress};
-use super::store::{DocumentStoreBuilder, Stored};
+use super::store::{LoadStore, Stored};
 
 
 //------------ Structure -----------------------------------------------------
@@ -17,9 +16,9 @@ pub struct Structure {
     events: EventList,
 }
 
-impl<'a> Stored<'a, Structure> {
+impl Structure {
     pub fn common(&self) -> &Common {
-        &self.access().common
+        &self.common
     }
 
     pub fn key(&self) -> &Key {
@@ -35,9 +34,11 @@ impl<'a> Stored<'a, Structure> {
     }
 
     pub fn subtype(&self) -> Subtype {
-        self.access().subtype.into_value()
+        self.subtype.into_value()
     }
+}
 
+impl<'a> Stored<'a, Structure> {
     pub fn events(&self) -> Stored<'a, EventList> {
         self.map(|item| &item.events)
     }
@@ -47,7 +48,7 @@ impl Structure {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -60,12 +61,10 @@ impl Structure {
             events: events?,
         })
     }
+
+    pub fn verify(&self, _report: &mut StageReporter) {
+    }
 }
-
-
-//------------ StructureLink -------------------------------------------------
-
-pub type StructureLink = Link<Structure>;
 
 
 //------------ Subtype -------------------------------------------------------
@@ -123,10 +122,10 @@ impl<'a> Stored<'a, Event> {
     }
 }
 
-impl FromYaml<DocumentStoreBuilder> for Event {
+impl FromYaml<LoadStore> for Event {
     fn from_yaml(
         value: Value,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;

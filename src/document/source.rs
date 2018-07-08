@@ -1,12 +1,11 @@
 
 use std::ops;
-use ::load::report::{Failed, Origin, PathReporter};
+use ::load::report::{Failed, Origin, PathReporter, StageReporter};
 use ::load::yaml::{FromYaml, Mapping, Value};
-use ::store::Link;
 use ::types::{Date, Key, LanguageText, List, Marked, Url};
-use super::{OrganizationLink};
+use super::{DocumentLink, OrganizationLink, SourceLink};
 use super::common::{Common, Progress};
-use super::store::{DocumentLink, DocumentStoreBuilder, Stored};
+use super::store::{LoadStore, Stored};
 
 
 //------------ Source --------------------------------------------------------
@@ -43,9 +42,9 @@ pub struct Source {
     regards: List<Marked<DocumentLink>>,
 }
 
-impl<'a> Stored<'a, Source> {
+impl Source {
     pub fn common(&self) -> &Common {
-        &self.access().common
+        &self.common
     }
 
     pub fn key(&self) -> &Key {
@@ -61,9 +60,11 @@ impl<'a> Stored<'a, Source> {
     }
 
     pub fn subtype(&self) -> Subtype {
-        self.access().subtype
+        self.subtype
     }
+}
 
+impl<'a> Stored<'a, Source> {
     pub fn author(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
         self.map(|item| &item.author)
     }
@@ -137,7 +138,7 @@ impl Source {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -192,12 +193,10 @@ impl Source {
             regards: regards?,
         })
     }
+
+    pub fn verify(&self, _report: &mut StageReporter) {
+    }
 }
-
-
-//------------ LineLink ------------------------------------------------------
-
-pub type SourceLink = Link<Source>;
 
 
 //------------ Subtype -------------------------------------------------------

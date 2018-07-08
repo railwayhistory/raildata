@@ -1,11 +1,10 @@
 
-use ::load::report::{Failed, Origin, PathReporter};
+use ::load::report::{Failed, Origin, PathReporter, StageReporter};
 use ::load::yaml::{FromYaml, Mapping, Value};
-use ::store::Link;
 use ::types::{EventDate, Key, LanguageText, List, LocalText, Marked, Set};
-use super::{LineLink, PathLink, SourceLink};
+use super::{LineLink, PathLink, PointLink, SourceLink};
 use super::common::{Common, Progress};
-use super::store::{DocumentStoreBuilder, Stored};
+use super::store::{LoadStore, Stored};
 
 
 //------------ Point ---------------------------------------------------------
@@ -19,9 +18,9 @@ pub struct Point {
     subtype: Marked<Subtype>,
 }
 
-impl<'a> Stored<'a, Point> {
+impl Point {
     pub fn common(&self) -> &Common {
-        &self.access().common
+        &self.common
     }
 
     pub fn key(&self) -> &Key {
@@ -35,7 +34,9 @@ impl<'a> Stored<'a, Point> {
     pub fn origin(&self) -> &Origin {
         &self.common().origin()
     }
+}
 
+impl<'a> Stored<'a, Point> {
     pub fn events(&self) -> Stored<'a, EventList> {
         self.map(|item| &item.events)
     }
@@ -53,7 +54,7 @@ impl Point {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -68,11 +69,10 @@ impl Point {
             subtype: subtype?,
         })
     }
+
+    pub fn verify(&self, _report: &mut StageReporter) {
+    }
 }
-
-//------------ PointLink -----------------------------------------------------
-
-pub type PointLink = Link<Point>;
 
 
 //------------ Subtype -------------------------------------------------------
@@ -254,10 +254,10 @@ impl<'a> Stored<'a, Event> {
     }
 }
 
-impl FromYaml<DocumentStoreBuilder> for Event {
+impl FromYaml<LoadStore> for Event {
     fn from_yaml(
         value: Value,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -382,10 +382,10 @@ data_enum! {
 #[derive(Clone, Debug)]
 pub struct Location(List<(Marked<LineLink>, Option<Marked<String>>)>);
 
-impl FromYaml<DocumentStoreBuilder> for Location {
+impl FromYaml<LoadStore> for Location {
     fn from_yaml(
         value: Value,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut res = List::new();
@@ -398,7 +398,7 @@ impl FromYaml<DocumentStoreBuilder> for Location {
                     continue;
                 }
             };
-            let key = match context.forge_link(key, report) {
+            let key = match LineLink::forge(key, context, report) {
                 Ok(key) => key,
                 Err(_) => {
                     err = true;
@@ -460,10 +460,10 @@ data_enum! {
 #[derive(Clone, Debug)]
 pub struct Site(List<(Marked<PathLink>, Marked<String>)>);
 
-impl FromYaml<DocumentStoreBuilder> for Site {
+impl FromYaml<LoadStore> for Site {
     fn from_yaml(
         value: Value,
-        context: &mut DocumentStoreBuilder,
+        context: &mut LoadStore,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut res = List::new();
@@ -476,7 +476,7 @@ impl FromYaml<DocumentStoreBuilder> for Site {
                     continue;
                 }
             };
-            let key = match context.forge_link(key, report) {
+            let key = match PathLink::forge(key, context, report) {
                 Ok(key) => key,
                 Err(_) => {
                     err = true;
