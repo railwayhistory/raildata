@@ -2,13 +2,16 @@
 use std::str::FromStr;
 use ::load::report::{Failed, Origin, PathReporter, StageReporter};
 use ::load::yaml::{FromYaml, Mapping, Value};
+use ::store::{
+    LoadStore, Stored, UpdateStore,
+    LineLink, OrganizationLink, PathLink, PointLink, SourceLink
+};
 use ::types::{
     Date, EventDate, IntoMarked, Key, LanguageText, List, LocalText, Location,
     Marked, Set
 };
-use super::{LineLink, OrganizationLink, PathLink, Point, PointLink, SourceLink};
+use super::Point;
 use super::common::{Alternative, Basis, Common, Contract, Progress};
-use super::store::{LoadStore, Stored, UpdateStore};
 
 mod verify;
 

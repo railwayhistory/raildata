@@ -4,12 +4,10 @@ use std::str::FromStr;
 use osmxml::elements::{MemberType, Osm, Relation};
 use ::load::report::{self, Failed, Origin, PathReporter, StageReporter};
 use ::load::yaml::Mapping;
+use ::store::{LoadStore, Stored, UpdateStore, PathLink, SourceLink};
 use ::types::{IntoMarked, Location, Key, Marked};
 use ::types::key::InvalidKey;
-use super::SourceLink;
 use super::common::{Common, Progress};
-use super::store::{LoadStore, Stored, UpdateStore};
-use super::store::document::PathLink;
 
 
 //------------ Path ----------------------------------------------------------

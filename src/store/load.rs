@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use ::document::common::DocumentType;
 use ::load::report::{Failed, Origin, PathReporter, StageReporter};
 use ::load::yaml::Value;
 use ::types::{Key, Location, Marked};
 use ::types::marked::IntoMarked;
 use super::document::{Document, DocumentLink};
 use super::update::UpdateStore;
-use super::super::common::DocumentType;
 
 
 //------------ LoadStore -----------------------------------------------------

@@ -2,9 +2,8 @@
 
 use ::load::report::{Failed, Origin, PathReporter};
 use ::load::yaml::{FromYaml, Mapping, Value};
+use ::store::{LoadStore, Stored, OrganizationLink, SourceLink};
 use ::types::{Date, EventDate, Key, LanguageText, List, Marked};
-use super::{OrganizationLink, SourceLink};
-use super::store::{LoadStore, Stored};
 
 
 //------------ Common --------------------------------------------------------

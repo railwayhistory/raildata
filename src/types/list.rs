@@ -3,8 +3,8 @@
 use std::{fmt, mem, slice};
 use ::load::report::{Failed, PathReporter};
 use ::load::yaml::{FromYaml, Value};
+use ::store::{ForStored, Stored};
 use super::marked::{IntoMarked, Location};
-use ::document::store::{ForStored, Stored};
 
 
 //------------ List ----------------------------------------------------------

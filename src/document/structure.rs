@@ -1,10 +1,9 @@
 
 use ::load::report::{Failed, Origin, PathReporter, StageReporter};
 use ::load::yaml::{FromYaml, Mapping, Value};
+use ::store::{LoadStore, Stored, UpdateStore, SourceLink, StructureLink};
 use ::types::{EventDate, Key, LanguageText, List, LocalText, Marked};
-use super::{SourceLink, StructureLink};
 use super::common::{Common, Progress};
-use super::store::{LoadStore, Stored, UpdateStore};
 
 
 //------------ Structure -----------------------------------------------------

@@ -2,10 +2,12 @@
 use std::ops;
 use ::load::report::{Failed, Origin, PathReporter, StageReporter};
 use ::load::yaml::{FromYaml, Mapping, Value};
+use ::store::{
+    LoadStore, Stored, UpdateStore,
+    DocumentLink, OrganizationLink, SourceLink,
+};
 use ::types::{Date, Key, LanguageText, List, Marked, Url};
-use super::{DocumentLink, OrganizationLink, SourceLink};
 use super::common::{Common, Progress};
-use super::store::{LoadStore, Stored, UpdateStore};
 
 
 //------------ Source --------------------------------------------------------
