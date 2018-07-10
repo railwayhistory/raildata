@@ -2,9 +2,9 @@
 use ::load::report::{Failed, Origin, PathReporter, StageReporter};
 use ::load::yaml::{FromYaml, Mapping, Value};
 use ::types::{EventDate, Key, LanguageText, List, LocalText, Marked};
-use super::SourceLink;
+use super::{SourceLink, StructureLink};
 use super::common::{Common, Progress};
-use super::store::{LoadStore, Stored};
+use super::store::{LoadStore, Stored, UpdateStore};
 
 
 //------------ Structure -----------------------------------------------------
@@ -60,6 +60,15 @@ impl Structure {
             subtype: subtype?,
             events: events?,
         })
+    }
+
+    pub fn crosslink(
+        &self,
+        _link: StructureLink,
+        _store: &mut UpdateStore,
+        _report: &mut StageReporter
+    ) {
+        unimplemented!()
     }
 
     pub fn verify(&self, _report: &mut StageReporter) {

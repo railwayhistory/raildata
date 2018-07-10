@@ -5,9 +5,9 @@ use std::fs::File;
 use ignore::{WalkBuilder, WalkState};
 use ignore::types::TypesBuilder;
 use osmxml::read::read_xml;
-use ::document::{Document, Path};
+use ::document::{Document, DocumentLink, Path};
 use ::document::common::DocumentType;
-use ::document::store::{Store, LoadStore};
+use ::document::store::{Store, LoadStore, UpdateStore};
 use ::types::{IntoMarked, Location};
 use super::read::Utf8Chars;
 use super::report::{self, PathReporter, Report, Reporter, Stage};
@@ -27,18 +27,16 @@ pub fn load_tree(path: &path::Path) -> Result<Store, Report> {
         load_paths(path, builder.clone(), report.clone());
         builder.into_update_store(&mut report.clone().stage(Stage::Translate))
     };
-    let store = match store {
+    let mut store = match store {
         Ok(store) => store,
         Err(_) => return Err(report.unwrap())
     };
 
-    /*
     // Phase 2: Cross-link.
-    crosslink(builder.clone(), report.clone());
+    crosslink(&mut store, report.clone());
     if !report.is_empty() {
         return Err(report.unwrap())
     }
-    */
 
     Ok(store.into_store())
 }
@@ -176,16 +174,17 @@ pub fn load_osm_file<R: io::Read>(
 }
 
 
-/*
 //------------ crosslink -----------------------------------------------------
 
 fn crosslink(
-    docs: LoadStore,
+    docs: &mut UpdateStore,
     report: Reporter
 ) {
-    let report = report.stage(Stage::Crosslink);
-
-    // go over all documents.
+    let mut report = report.stage(Stage::Crosslink);
+    for pos in 0..docs.len() {
+        let mut doc = docs.take_document(pos);
+        doc.crosslink(DocumentLink::new(pos), docs, &mut report);
+        docs.return_document(pos, doc);
+    }
 }
-*/
 

@@ -8,7 +8,8 @@ use ::types::{IntoMarked, Location, Key, Marked};
 use ::types::key::InvalidKey;
 use super::SourceLink;
 use super::common::{Common, Progress};
-use super::store::{LoadStore, Stored};
+use super::store::{LoadStore, Stored, UpdateStore};
+use super::store::document::PathLink;
 
 
 //------------ Path ----------------------------------------------------------
@@ -281,6 +282,15 @@ impl Path {
             }
         }
         Ok(())
+    }
+
+    pub fn crosslink(
+        &self,
+        _link: PathLink,
+        _store: &mut UpdateStore,
+        _report: &mut StageReporter
+    ) {
+        unimplemented!()
     }
 
     pub fn verify(&self, _report: &mut StageReporter) {

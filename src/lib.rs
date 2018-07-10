@@ -4,6 +4,7 @@
 extern crate failure;
 extern crate osmxml;
 extern crate ignore;
+extern crate rayon;
 extern crate url;
 extern crate yaml_rust;
 

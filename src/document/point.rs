@@ -4,7 +4,7 @@ use ::load::yaml::{FromYaml, Mapping, Value};
 use ::types::{EventDate, Key, LanguageText, List, LocalText, Marked, Set};
 use super::{LineLink, PathLink, PointLink, SourceLink};
 use super::common::{Common, Progress};
-use super::store::{LoadStore, Stored};
+use super::store::{LoadStore, Stored, UpdateStore};
 
 
 //------------ Point ---------------------------------------------------------
@@ -16,8 +16,15 @@ pub struct Point {
     events: List<Event>,
     junction: Option<Marked<bool>>,
     subtype: Marked<Subtype>,
+
+    // Crosslinked data.
+    lines: List<LineLink>,
+    connections: Set<PointLink>,
 }
 
+
+/// # Data Access
+///
 impl Point {
     pub fn common(&self) -> &Common {
         &self.common
@@ -34,22 +41,37 @@ impl Point {
     pub fn origin(&self) -> &Origin {
         &self.common().origin()
     }
+
+    /// Returns whether the point is a junction.
+    ///
+    /// A junction is a point that connects lines. Any point can be declared
+    /// a junction or not a junction via the `junction` point attribute. If
+    /// this attribute is missing, it becomes a junction if it is listed in
+    /// the `points` attribute of more than one line or if it is connected to
+    /// some other point via its or the other point’s `connection` attribute.
+    pub fn junction(&self) -> bool {
+        match self.junction {
+            Some(value) => value.into_value(),
+            None => {
+                !self.connections.is_empty() || self.lines.len() > 1
+            }
+        } 
+    }
+
+    pub fn subtype(&self) -> Subtype {
+        self.subtype.into_value()
+    }
 }
 
 impl<'a> Stored<'a, Point> {
     pub fn events(&self) -> Stored<'a, EventList> {
         self.map(|item| &item.events)
     }
-
-    pub fn junction(&self) -> Option<bool> {
-        self.access().junction.map(Marked::into_value)
-    }
-
-    pub fn subtype(&self) -> Subtype {
-        self.access().subtype.into_value()
-    }
 }
 
+
+/// # Loading
+///
 impl Point {
     pub fn from_yaml(
         key: Marked<Key>,
@@ -67,7 +89,33 @@ impl Point {
             events: events?,
             junction: junction?,
             subtype: subtype?,
+            lines: List::new(),
+            connections: Set::new(),
         })
+    }
+
+    //--- Crosslinking
+
+    pub fn crosslink(
+        &mut self,
+        link: PointLink,
+        store: &mut UpdateStore,
+        _report: &mut StageReporter
+    ) {
+        for event in &self.events {
+            if let Some(ref conns) = event.connection {
+                for conn in conns {
+                    self.connections.insert(conn.as_value().clone());
+                    conn.update(store, |point| {
+                        point.connections.insert(link.clone());
+                    })
+                }
+            }
+        }
+    }
+
+    pub fn add_line(&mut self, line: LineLink) {
+        self.lines.push(line);
     }
 
     pub fn verify(&self, _report: &mut StageReporter) {

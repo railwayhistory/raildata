@@ -4,7 +4,7 @@ use ::load::report::{Failed, Origin, PathReporter, StageReporter};
 use ::types::{EventDate, Key, LanguageText, LocalText, List, Marked};
 use super::{OrganizationLink, SourceLink};
 use super::common::{Basis, Common, Progress};
-use super::store::{LoadStore, Stored};
+use super::store::{LoadStore, Stored, UpdateStore};
 
 
 //------------ Organization --------------------------------------------------
@@ -60,6 +60,15 @@ impl Organization {
             subtype: subtype?,
             events: events?,
         })
+    }
+
+    pub fn crosslink(
+        &mut self,
+        _link: OrganizationLink,
+        _store: &mut UpdateStore,
+        _report: &mut StageReporter
+    ) {
+        unimplemented!()
     }
 
     pub fn verify(&self, _report: &mut StageReporter) {

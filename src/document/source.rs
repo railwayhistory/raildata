@@ -5,7 +5,7 @@ use ::load::yaml::{FromYaml, Mapping, Value};
 use ::types::{Date, Key, LanguageText, List, Marked, Url};
 use super::{DocumentLink, OrganizationLink, SourceLink};
 use super::common::{Common, Progress};
-use super::store::{LoadStore, Stored};
+use super::store::{LoadStore, Stored, UpdateStore};
 
 
 //------------ Source --------------------------------------------------------
@@ -192,6 +192,15 @@ impl Source {
             note: note?,
             regards: regards?,
         })
+    }
+
+    pub fn crosslink(
+        &self,
+        _link: SourceLink,
+        _store: &mut UpdateStore,
+        _report: &mut StageReporter
+    ) {
+        unimplemented!()
     }
 
     pub fn verify(&self, _report: &mut StageReporter) {

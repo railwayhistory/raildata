@@ -8,7 +8,7 @@ use ::types::{
 };
 use super::{LineLink, OrganizationLink, PathLink, Point, PointLink, SourceLink};
 use super::common::{Alternative, Basis, Common, Contract, Progress};
-use super::store::{LoadStore, Stored};
+use super::store::{LoadStore, Stored, UpdateStore};
 
 mod verify;
 
@@ -94,6 +94,17 @@ impl Line {
         })
     }
 
+    pub fn crosslink(
+        &mut self,
+        link: LineLink,
+        store: &mut UpdateStore,
+        _report: &mut StageReporter
+    ) {
+        for point in self.points.iter() {
+            point.update(store, |point| point.add_line(link.clone()))
+        }
+    }
+
     pub fn verify(&self, report: &mut StageReporter) {
         verify::verify(self, report)
     }
@@ -123,6 +134,10 @@ pub struct Points {
 impl Points {
     pub fn get_index(&self, link: &PointLink) -> Option<usize> {
         self.indexes.binary_search_by(|x| link.cmp(&x.0)).ok()
+    }
+
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item=PointLink> + 'a {
+        self.points.iter().map(|link| link.as_value().clone())
     }
 }
 

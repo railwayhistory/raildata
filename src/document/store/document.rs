@@ -1,4 +1,4 @@
-use ::load::report::{Failed, Origin, PathReporter};
+use ::load::report::{Failed, Origin, PathReporter, StageReporter};
 use ::load::yaml::{FromYaml, Mapping, Value};
 use ::types::{Key, Location, Marked};
 use ::types::marked::IntoMarked;
@@ -6,6 +6,7 @@ use super::super::{Line, Organization, Path, Point, Source, Structure};
 use super::super::common::DocumentType;
 use super::load::LoadStore;
 use super::store::Stored;
+use super::update::UpdateStore;
 
 
 macro_rules! document_enum {  ( $( ($vattr:ident, $vtype:ident,
@@ -65,12 +66,28 @@ macro_rules! document_enum {  ( $( ($vattr:ident, $vtype:ident,
                 )*
             }
         }
+
+        pub fn crosslink(
+            &mut self,
+            link: DocumentLink,
+            store: &mut UpdateStore,
+            report: &mut StageReporter
+        ) {
+            match *self {
+                $(
+                    Document::$vtype(ref mut inner) => {
+                        inner.crosslink($vlink::from(link), store, report)
+                    }
+                )*
+            }
+        }
     }
+
 
     //------------ Links -----------------------------------------------------
 
     $(
-        #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+        #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         pub struct $vlink {
             pos: usize
         }
@@ -85,6 +102,26 @@ macro_rules! document_enum {  ( $( ($vattr:ident, $vtype:ident,
                 store.forge_link(
                     key, Some(DocumentType::$vtype), report
                 ).map(|link| $vlink { pos: link.pos }.marked(location))
+            }
+
+            pub fn update<F>(&self, store: &mut UpdateStore, op: F)
+            where F: FnOnce(&mut $vtype) {
+                store.update(self.pos, |doc| {
+                    match doc {
+                        Document::$vtype(ref mut inner) => op(inner),
+                        _ => panic!("wrong document type"),
+                    }
+                })
+            }
+
+            pub fn from_pos(pos: usize) -> Self {
+                $vlink { pos }
+            }
+        }
+
+        impl From<DocumentLink> for $vlink {
+            fn from(link: DocumentLink) -> Self {
+                $vlink { pos: link.pos }
             }
         }
 

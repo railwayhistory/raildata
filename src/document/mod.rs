@@ -3,9 +3,9 @@ pub use self::line::Line;
 pub use self::organization::Organization;
 pub use self::path::Path;
 pub use self::point::Point;
+pub use self::source::Source;
 pub use self::structure::Structure;
 pub use self::store::document::*;
-pub use self::source::Source;
 
 pub mod line;
 pub mod organization;
