@@ -1,9 +1,10 @@
 //! The date type.
 
-use std::{cmp, fmt, str};
+use std::{cmp, fmt, ops, str};
 use std::str::FromStr;
 use ::load::yaml::{FromYaml, Value};
 use ::load::report::{Failed, PathReporter};
+use super::list::List;
 use super::marked::Marked;
 
 
@@ -312,7 +313,16 @@ impl str::FromStr for Date {
 
 //------------ EventDate -----------------------------------------------------
 
-pub type EventDate = Marked<Option<Date>>;
+#[derive(Clone, Debug)]
+pub struct EventDate(List<Marked<Date>>);
+
+impl ops::Deref for EventDate {
+    type Target = List<Marked<Date>>;
+
+    fn deref(&self) -> &List<Marked<Date>> {
+        &self.0
+    }
+}
 
 impl<C> FromYaml<C> for EventDate {
     fn from_yaml(
@@ -321,13 +331,13 @@ impl<C> FromYaml<C> for EventDate {
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         match value.try_into_null() {
-            Ok(value) => Ok(value.map(|_| None)),
+            Ok(_value) => Ok(EventDate(List::new())),
             Err(value) => {
-                Ok(
-                    <Marked<Date>>::from_yaml(
+                Ok(EventDate(
+                    List::from_yaml(
                         value, context, report
-                    )?.map(Some)
-                )
+                    )?
+                ))
             }
         }
     }

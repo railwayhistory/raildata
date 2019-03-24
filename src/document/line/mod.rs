@@ -180,6 +180,7 @@ pub struct Event {
     note: Option<LanguageText>,
 
     concession: Option<Concession>,
+    expropriation: Option<Concession>,
     contract: Option<Contract>,
     treaty: Option<Contract>,
 
@@ -234,6 +235,10 @@ impl<'a> Stored<'a, Event> {
 
     pub fn concession(&self) -> Option<Stored<'a, Concession>> {
         self.map_opt(|item| item.concession.as_ref())
+    }
+
+    pub fn expropriation(&self) -> Option<Stored<'a, Concession>> {
+        self.map_opt(|item| item.expropriation.as_ref())
     }
 
     pub fn contract(&self) -> Option<Stored<'a, Contract>> {
@@ -343,6 +348,7 @@ impl FromYaml<LoadStore> for Event {
         let note = value.take_opt("note", context, report);
 
         let concession = value.take_opt("concession", context, report);
+        let expropriation = value.take_opt("expropriation", context, report);
         let contract = value.take_opt("contract", context, report);
         let treaty = value.take_opt("treaty", context, report);
         
@@ -398,6 +404,7 @@ impl FromYaml<LoadStore> for Event {
             note: note?,
 
             concession: concession?,
+            expropriation: expropriation?,
             contract: contract?,
             treaty: treaty?,
 

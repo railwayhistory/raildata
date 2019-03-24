@@ -100,10 +100,11 @@ impl Point {
 
     pub fn crosslink(
         &mut self,
-        link: PointLink,
-        store: &mut UpdateStore,
+        _link: PointLink,
+        _store: &mut UpdateStore,
         _report: &mut StageReporter
     ) {
+        /*
         for event in &self.events {
             if let Some(ref conns) = event.connection {
                 for conn in conns {
@@ -114,6 +115,7 @@ impl Point {
                 }
             }
         }
+        */
     }
 
     pub fn add_line(&mut self, line: LineLink) {
@@ -414,6 +416,7 @@ data_enum! {
         { DeEGr: "de.EGr" }
         { DeGp: "de.Gp" }
         { DeLGr: "de.LGr" }
+        { DeRBGr: "de.RBGr" }
 
         { DkSt: "dk.St" }
         { DkT: "dk.T" }

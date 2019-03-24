@@ -202,7 +202,6 @@ impl Source {
         _store: &mut UpdateStore,
         _report: &mut StageReporter
     ) {
-        unimplemented!()
     }
 
     pub fn verify(&self, _report: &mut StageReporter) {
