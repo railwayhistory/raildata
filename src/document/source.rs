@@ -71,7 +71,7 @@ impl<'a> Stored<'a, Source> {
         self.map(|item| &item.author)
     }
 
-    pub fn collection(&self) -> Option<&Source> {
+    pub fn collection(&self) -> Option<Stored<Source>> {
         self.map_opt(|item| item.collection.as_ref()).map(|x| x.follow())
     }
 

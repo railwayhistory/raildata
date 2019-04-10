@@ -42,12 +42,21 @@ impl Line {
 }
 
 impl<'a> Stored<'a, Line> {
-    pub fn common(&self) -> &Common {
+    pub fn common(&self) -> &'a Common {
         &self.access().common
     }
 
-    pub fn key(&self) -> &Key {
+    pub fn key(&self) -> &'a Key {
         self.common().key()
+    }
+
+    pub fn code(&self) -> &'a str {
+        if self.key().as_str().starts_with("line.") {
+            &self.key().as_str()[5..]
+        }
+        else {
+            self.key().as_str()
+        }
     }
 
     pub fn progress(&self) -> Progress {
@@ -440,11 +449,11 @@ pub struct Section {
 }
 
 impl<'a> Stored<'a, Section> {
-    pub fn start(&self) -> Option<&Point> {
+    pub fn start(&self) -> Option<Stored<Point>> {
         self.map_opt(|item| item.start.as_ref()).map(|x| x.follow())
     }
 
-    pub fn end(&self) -> Option<&Point> {
+    pub fn end(&self) -> Option<Stored<Point>> {
         self.map_opt(|item| item.end.as_ref()).map(|x| x.follow())
     }
 }

@@ -1,5 +1,9 @@
-use std::ops;
-use super::document::Document;
+use std::{borrow, ops};
+use std::collections::BTreeMap;
+use std::ops::Bound;
+use ::document::common::DocumentType;
+use ::types::key::Key;
+use super::document::{Document, DocumentLink, StoredDocument};
 
 
 //------------ Store ---------------------------------------------------------
@@ -7,15 +11,50 @@ use super::document::Document;
 #[derive(Clone, Debug)]
 pub struct Store {
     documents: Vec<Document>,
+    index: BTreeMap<Key, (DocumentLink, DocumentType)>,
 }
 
 impl Store {
     pub fn from_documents<I: Iterator<Item=Document>>(iter: I) -> Self {
-        Store { documents: iter.collect() }
+        let mut documents = Vec::new();
+        let mut index = BTreeMap::new();
+
+        for (pos, document) in iter.enumerate() {
+            index.insert(
+                document.key().clone(),
+                (DocumentLink::new(pos), document.doctype())
+            );
+            documents.push(document)
+        }
+
+        Store { documents, index }
     }
 
     pub fn len(&self) -> usize {
         self.documents.len()
+    }
+
+    pub fn resolve(&self, link: DocumentLink) -> StoredDocument {
+        StoredDocument::new(self.documents.get(link.pos()).unwrap(), self)
+    }
+
+    pub fn iter<'a>(
+        &'a self
+    ) -> impl Iterator<Item=StoredDocument<'a>> + 'a {
+        self.index.values().map(move |item| self.resolve(item.0.clone()))
+    }
+
+    pub fn iter_from<'a, T>(
+        &'a self,
+        start: &T
+    ) -> impl Iterator<Item=StoredDocument<'a>> + 'a
+    where T: Ord + ?Sized, Key: borrow::Borrow<T> {
+        self.index.range((Bound::Included(start), Bound::Unbounded))
+            .map(move |item| self.resolve((item.1).0.clone()))
+    }
+
+    pub fn get<K: AsRef<Key>>(&self, key: K) -> Option<DocumentLink> {
+        self.index.get(key.as_ref()).map(|item| item.0.clone())
     }
 }
 
@@ -29,8 +68,12 @@ pub struct Stored<'a, T: 'a> {
 }
 
 impl<'a, T: 'a> Stored<'a, T> {
-    pub fn stored_document(&self, pos: usize) -> &'a Document {
-        self.store.documents.get(pos).unwrap()
+    pub(crate) fn new(item: &'a T, store: &'a Store) -> Self {
+        Stored { item, store }
+    }
+
+    pub fn store(&self) -> &'a Store {
+        self.store
     }
 
     pub fn access(&self) -> &'a T {

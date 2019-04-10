@@ -5,7 +5,7 @@ use ::types::marked::IntoMarked;
 use ::document::{Line, Organization, Path, Point, Source, Structure};
 use ::document::common::DocumentType;
 use super::load::LoadStore;
-use super::store::Stored;
+use super::store::{Store, Stored};
 use super::update::UpdateStore;
 
 
@@ -83,6 +83,80 @@ macro_rules! document_enum {  ( $( ($vattr:ident, $vtype:ident,
         }
     }
 
+    $(
+        impl AsRef<$vtype> for Document {
+            fn as_ref(&self) -> &$vtype {
+                match *self {
+                    Document::$vtype(ref inner) => inner,
+                    _ => panic!("wrong document type"),
+                }
+            }
+        }
+
+        impl<'a> Stored<'a, $vtype> {
+            pub fn from_document(doc: Stored<'a, Document>) -> Option<Self> {
+                doc.map_opt(|item| {
+                    match item {
+                        Document::$vtype(ref inner) => Some(inner),
+                        _ => None
+                    }
+                })
+            }
+        }
+    )*
+
+
+    //------------ StoredDocument --------------------------------------------
+
+    #[derive(Clone, Debug)]
+    pub enum StoredDocument<'a> {
+        $(
+            $vtype(Stored<'a, $vtype>),
+        )*
+    }
+
+    impl<'a> StoredDocument<'a> {
+        pub(crate) fn new(document: &'a Document, store: &'a Store) -> Self {
+            match *document {
+                $(
+                    Document::$vtype(ref inner) => {
+                        StoredDocument::$vtype(
+                            Stored::new(inner, store)
+                        )
+                    }
+                )*
+            }
+        }
+
+        pub fn doctype(&self) -> DocumentType {
+            match *self {
+                $(
+                    StoredDocument::$vtype(_) => DocumentType::$vtype,
+                )*
+            }
+        }
+
+        pub fn key(&self) -> &Key {
+            match *self {
+                $(
+                    StoredDocument::$vtype(ref doc) => doc.key(),
+                )*
+            }
+        }
+
+        pub fn origin(&self) -> &Origin {
+            match *self {
+                $(
+                    StoredDocument::$vtype(ref doc) => doc.origin(),
+                )*
+            }
+        }
+
+        pub fn location(&self) -> Location {
+            self.origin().location()
+        }
+    }
+
 
     //------------ Links -----------------------------------------------------
 
@@ -117,6 +191,13 @@ macro_rules! document_enum {  ( $( ($vattr:ident, $vtype:ident,
             pub fn from_pos(pos: usize) -> Self {
                 $vlink { pos }
             }
+
+            pub fn resolve<'a>(&self, store: &'a Store) -> Stored<'a, $vtype> {
+                match store.resolve(self.clone().into()) {
+                    StoredDocument::$vtype(inner) => inner,
+                    _ => unreachable!()
+                }
+            }
         }
 
         impl From<DocumentLink> for $vlink {
@@ -125,21 +206,24 @@ macro_rules! document_enum {  ( $( ($vattr:ident, $vtype:ident,
             }
         }
 
+        impl From<$vlink> for DocumentLink {
+            fn from(link: $vlink) -> Self {
+                DocumentLink { pos: link.pos }
+            }
+        }
+
         impl<'a> Stored<'a, $vlink> {
-            pub fn follow(&self) -> &'a $vtype {
-                match self.stored_document(self.access().pos) {
-                    Document::$vtype(ref inner) => inner,
+            pub fn follow(&self) -> Stored<'a, $vtype> {
+                match self.store().resolve(DocumentLink::new(self.pos)) {
+                    StoredDocument::$vtype(inner) => inner,
                     _ => unreachable!()
                 }
             }
         }
 
         impl<'a> Stored<'a, Marked<$vlink>> {
-            pub fn follow(&self) -> &'a $vtype {
-                match self.stored_document(self.access().pos) {
-                    Document::$vtype(ref inner) => inner,
-                    _ => unreachable!()
-                }
+            pub fn follow(&self) -> Stored<'a, $vtype> {
+                self.map(Marked::as_value).follow()
             }
         }
 
@@ -162,7 +246,7 @@ macro_rules! document_enum {  ( $( ($vattr:ident, $vtype:ident,
 
     //------------ DocumentLink ----------------------------------------------
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Copy, Debug)]
     pub struct DocumentLink {
         pos: usize
     }
@@ -171,11 +255,15 @@ macro_rules! document_enum {  ( $( ($vattr:ident, $vtype:ident,
         pub fn new(pos: usize) -> Self {
             DocumentLink { pos }
         }
+
+        pub fn pos(&self) -> usize {
+            self.pos
+        }
     }
 
     impl<'a> Stored<'a, DocumentLink> {
-        pub fn follow(&self) -> &'a Document {
-            self.stored_document(self.access().pos)
+        pub fn follow(&self) -> StoredDocument<'a> {
+            self.store().resolve(self.access().clone())
         }
     }
 

@@ -139,7 +139,7 @@ impl<'a> Stored<'a, Event> {
         self.map(|item| &item.domicile)
     }
 
-    pub fn master(&self) -> Option<&Organization> {
+    pub fn master(&self) -> Option<Stored<Organization>> {
         self.map_opt(|item| item.master.as_ref()).map(|x| x.follow())
     }
 
@@ -165,7 +165,7 @@ impl<'a> Stored<'a, Event> {
         self.access().status
     }
 
-    pub fn successor(&self) -> Option<&Organization> {
+    pub fn successor(&self) -> Option<Stored<Organization>> {
         self.map_opt(|item| item.successor.as_ref()).map(|x| x.follow())
     }
 }

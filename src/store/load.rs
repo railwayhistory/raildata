@@ -6,6 +6,7 @@ use ::load::yaml::Value;
 use ::types::{Key, Location, Marked};
 use ::types::marked::IntoMarked;
 use super::document::{Document, DocumentLink};
+use super::store::Store;
 use super::update::UpdateStore;
 
 
@@ -101,6 +102,13 @@ impl LoadStore {
                 )
             )
         }
+    }
+
+    pub fn into_store(
+        self,
+        report: &mut StageReporter
+    ) -> Result<Store, Failed> {
+        self.into_update_store(report).map(UpdateStore::into_store)
     }
 }
 

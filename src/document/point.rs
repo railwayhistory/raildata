@@ -108,6 +108,10 @@ impl Point {
         for event in &self.events {
             if let Some(ref conns) = event.connection {
                 for conn in conns {
+                    if conn.as_value().clone() == link {
+                        // XXX Produce an error here!
+                        continue
+                    }
                     self.connections.insert(conn.as_value().clone());
                     conn.update(store, |point| {
                         point.connections.insert(link.clone());
@@ -225,7 +229,7 @@ impl<'a> Stored<'a, Event> {
         self.map(|item| &item.master)
     }
 
-    pub fn merged(&self) -> Option<&Point> {
+    pub fn merged(&self) -> Option<Stored<Point>> {
         self.map_opt(|item| item.merged.as_ref()).map(|x| x.follow())
     }
 
@@ -261,7 +265,7 @@ impl<'a> Stored<'a, Event> {
         self.access().service
     }
 
-    pub fn split_from(&self) -> Option<&Point> {
+    pub fn split_from(&self) -> Option<Stored<Point>> {
         self.map_opt(|item| item.split_from.as_ref()).map(|x| x.follow())
     }
 

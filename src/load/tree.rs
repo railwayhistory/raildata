@@ -97,7 +97,7 @@ fn load_facts(
 
 //------------ load_paths ----------------------------------------------------
 
-fn load_paths(
+pub fn load_paths(
     base: &path::Path,
     docs: LoadStore,
     report: Reporter
@@ -139,7 +139,7 @@ fn load_paths(
 
 //------------ load_osm_file -------------------------------------------------
 
-pub fn load_osm_file<R: io::Read>(
+fn load_osm_file<R: io::Read>(
     read: &mut R,
     docs: &mut LoadStore,
     report: &mut PathReporter

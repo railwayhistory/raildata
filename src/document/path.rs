@@ -48,6 +48,16 @@ impl Path {
     pub fn nodes(&self) -> &[Node] {
         self.nodes.as_ref()
     }
+
+    pub fn node(&self, pos: usize) -> Option<&Node> {
+        self.nodes.get(pos)
+    }
+
+    pub fn get_pos(&self, name: &str) -> Option<usize> {
+        self.node_names.binary_search_by(|item|
+            AsRef::<str>::as_ref(&item.0).cmp(name)
+        ).ok()
+    }
 }
 
 impl<'a> Stored<'a, Path> {
@@ -308,6 +318,14 @@ pub struct Node {
 impl Node {
     pub fn new(lon: f64, lat: f64, pre: f64, post: f64) -> Self {
         Node { lon, lat, pre, post }
+    }
+
+    pub fn lon(&self) -> f64 { 
+        self.lon
+    }
+
+    pub fn lat(&self) -> f64 { 
+        self.lat
     }
 }
 
