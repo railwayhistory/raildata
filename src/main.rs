@@ -24,7 +24,7 @@ fn main() {
                 }
             }
             else {
-                println!("{} errors.", err.stage_count(Stage::Translate));
+                println!("{} errors.", err.len());
                 for item in err.iter() {
                     println!("{}", item)
                 }

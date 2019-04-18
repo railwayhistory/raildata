@@ -10,34 +10,22 @@ use super::common::{Common, Progress};
 
 #[derive(Clone, Debug)]
 pub struct Structure {
-    common: Common,
-    subtype: Marked<Subtype>,
-    events: EventList,
+    pub common: Common,
+    pub subtype: Marked<Subtype>,
+    pub events: EventList,
 }
 
 impl Structure {
-    pub fn common(&self) -> &Common {
-        &self.common
-    }
-
     pub fn key(&self) -> &Key {
-        self.common().key()
+        &self.common.key
     }
 
     pub fn progress(&self) -> Progress {
-        self.common().progress()
+        self.common.progress.into_value()
     }
 
     pub fn origin(&self) -> &Origin {
-        &self.common().origin()
-    }
-
-    pub fn subtype(&self) -> Subtype {
-        self.subtype.into_value()
-    }
-
-    pub fn events(&self) -> &EventList {
-        &self.events
+        &self.common.origin
     }
 }
 
@@ -94,39 +82,13 @@ pub type EventList = List<Event>;
 #[derive(Clone, Debug)]
 pub struct Event {
     // Meta attributes
-    date: EventDate,
-    document: List<Marked<SourceLink>>,
-    source: List<Marked<SourceLink>>,
-    note: Option<LanguageText>,
+    pub date: EventDate,
+    pub document: List<Marked<SourceLink>>,
+    pub source: List<Marked<SourceLink>>,
+    pub note: Option<LanguageText>,
 
-    length: Option<Marked<f64>>,
-    name: Option<LocalText>,
-}
-
-impl Event {
-    pub fn date(&self) -> &EventDate {
-        &self.date
-    }
-
-    pub fn document(&self) -> &List<Marked<SourceLink>> {
-        &self.document
-    }
-
-    pub fn source(&self) -> &List<Marked<SourceLink>> {
-        &self.source
-    }
-
-    pub fn note(&self) -> Option<&LanguageText> {
-        self.note.as_ref()
-    }
-
-    pub fn length(&self) -> Option<f64> {
-        self.length.map(Marked::into_value)
-    }
-
-    pub fn name(&self) -> Option<&LocalText> {
-        self.name.as_ref()
-    }
+    pub length: Option<Marked<f64>>,
+    pub name: Option<LocalText>,
 }
 
 impl FromYaml<LibraryBuilder> for Event {

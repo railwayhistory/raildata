@@ -1,4 +1,5 @@
 
+use std::sync::Arc;
 use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
@@ -6,38 +7,35 @@ use crate::types::{EventDate, Key, LanguageText, List, LocalText, Marked, Set};
 use super::{LineLink, PathLink, PointLink, SourceLink};
 use super::common::{Common, Progress};
 
+
 //------------ Point ---------------------------------------------------------
 
 #[derive(Clone, Debug)]
 pub struct Point {
     // Attributes
-    common: Common,
-    events: List<Event>,
-    junction: Option<Marked<bool>>,
-    subtype: Marked<Subtype>,
+    pub common: Common,
+    pub events: List<Event>,
+    pub junction: Option<Marked<bool>>,
+    pub subtype: Marked<Subtype>,
 
     // Crosslinked data.
-    lines: List<LineLink>,
-    connections: Set<PointLink>,
+    pub lines: List<LineLink>,
+    pub connections: Set<PointLink>,
 }
 
 /// # Data Access
 ///
 impl Point {
-    pub fn common(&self) -> &Common {
-        &self.common
-    }
-
     pub fn key(&self) -> &Key {
-        self.common().key()
+        &self.common.key
     }
 
     pub fn progress(&self) -> Progress {
-        self.common().progress()
+        self.common.progress.into_value()
     }
 
     pub fn origin(&self) -> &Origin {
-        &self.common().origin()
+        &self.common.origin
     }
 
     /// Returns whether the point is a junction.
@@ -54,14 +52,6 @@ impl Point {
                 !self.connections.is_empty() || self.lines.len() > 1
             }
         } 
-    }
-
-    pub fn subtype(&self) -> Subtype {
-        self.subtype.into_value()
-    }
-
-    pub fn events(&self) -> &EventList {
-        &self.events
     }
 }
 
@@ -93,27 +83,46 @@ impl Point {
     //--- Crosslinking
 
     pub fn crosslink(
-        &self,
-        _link: PointLink,
-        _library: &LibraryMut,
-        _report: &mut StageReporter
+        &mut self,
+        link: PointLink,
+        library: &LibraryMut,
+        report: &mut StageReporter
     ) {
-        /*
+        // event::connection
+        //
+        // In order to get a complete set of connections, we produce a set of
+        // all connections and add that full set (sans self) to all points.
+        let mut set = Set::new();
         for event in &self.events {
             if let Some(ref conns) = event.connection {
                 for conn in conns {
-                    if conn.as_value().clone() == link {
-                        // XXX Produce an error here!
-                        continue
+                    if conn.into_value() == link {
+                        report.error_at(
+                            self.origin().at(conn.location()),
+                            OwnConnection
+                        );
+                        continue;
                     }
-                    self.connections.insert(conn.as_value().clone());
-                    conn.update(store, |point| {
-                        point.connections.insert(link.clone());
-                    })
+                    set.insert(conn.into_value());
                 }
             }
         }
-        */
+        if !set.is_empty() {
+            self.connections.merge(&set);
+            set.insert(link);
+            let set = Arc::new(set);
+            for target in set.iter() {
+                let set = set.clone();
+                let target = target.clone();
+                target.update(library, move |point| {
+                    for link in set.iter() {
+                        if *link != target {
+                            point.connections.insert(*link);
+                        }
+                    }
+                })
+            }
+        }
     }
 
     pub fn add_line(&mut self, line: LineLink) {
@@ -150,162 +159,40 @@ pub type EventList = List<Event>;
 
 #[derive(Clone, Debug)]
 pub struct Event {
-    date: EventDate,
-    document: List<Marked<SourceLink>>,
-    source: List<Marked<SourceLink>>,
-    note: Option<LanguageText>,
+    pub date: EventDate,
+    pub document: List<Marked<SourceLink>>,
+    pub source: List<Marked<SourceLink>>,
+    pub note: Option<LanguageText>,
 
-    category: Option<Set<Category>>,
-    connection: Option<List<Marked<PointLink>>>,
-    designation: Option<LocalText>,
-    location: Option<Location>,
-    master: Option<Option<List<Marked<PointLink>>>>,
-    merged: Option<Marked<PointLink>>,
-    name: Option<LocalText>,
-    plc: Option<Plc>,
-    public_name: Option<List<LocalText>>,
-    site: Option<Site>,
-    short_name: Option<LocalText>,
-    staff: Option<Staff>,
-    status: Option<Status>,
+    pub category: Option<Set<Category>>,
+    pub connection: Option<List<Marked<PointLink>>>,
+    pub designation: Option<LocalText>,
+    pub location: Option<Location>,
+    pub master: Option<Option<List<Marked<PointLink>>>>,
+    pub merged: Option<Marked<PointLink>>,
+    pub name: Option<LocalText>,
+    pub plc: Option<Plc>,
+    pub public_name: Option<List<LocalText>>,
+    pub site: Option<Site>,
+    pub short_name: Option<LocalText>,
+    pub staff: Option<Staff>,
+    pub status: Option<Status>,
 
-    service: Option<Service>,
-    split_from: Option<Marked<PointLink>>,
+    pub service: Option<Service>,
+    pub split_from: Option<Marked<PointLink>>,
 
-    de_ds100: Option<DeDs100>,
-    de_dstnr: Option<DeDstnr>,
-    de_lknr: Option<List<DeLknr>>,
-    de_name16: Option<DeName16>,
-    de_rang: Option<DeRang>,
-    de_vbl: Option<DeVbl>,
+    pub de_ds100: Option<DeDs100>,
+    pub de_dstnr: Option<DeDstnr>,
+    pub de_lknr: Option<List<DeLknr>>,
+    pub de_name16: Option<DeName16>,
+    pub de_rang: Option<DeRang>,
+    pub de_vbl: Option<DeVbl>,
 
-    dk_ref: Option<Marked<String>>,
+    pub dk_ref: Option<Marked<String>>,
 
-    no_fs: Option<Marked<String>>,
-    no_njk: Option<Marked<String>>,
-    no_nsb: Option<Marked<String>>,
-}
-
-impl Event {
-    pub fn date(&self) -> &EventDate {
-        &self.date
-    }
-
-    pub fn document(&self) -> &List<Marked<SourceLink>> {
-        &self.document
-    }
-
-    pub fn source(&self) -> &List<Marked<SourceLink>> {
-        &self.source
-    }
-
-    pub fn note(&self) -> Option<&LanguageText> {
-        self.note.as_ref()
-    }
-
-    pub fn category(&self) -> Option<&Set<Category>> {
-        self.category.as_ref()
-    }
-
-    pub fn connection(&self) -> Option<&List<Marked<PointLink>>> {
-        self.connection.as_ref()
-    }
-
-    pub fn designation(&self) -> Option<&LocalText> {
-        self.designation.as_ref()
-    }
-
-    pub fn location(&self) -> Option<&Location> {
-        self.location.as_ref()
-    }
-
-    pub fn master(&self) -> Option<Option<&List<Marked<PointLink>>>> {
-        match self.master {
-            Some(Some(ref inner)) => Some(Some(inner)),
-            Some(None) => Some(None),
-            None => None
-        }
-    }
-
-    pub fn merged(&self) -> Option<PointLink> {
-        self.merged.map(Marked::into_value)
-    }
-
-    pub fn name(&self) -> Option<&LocalText> {
-        self.name.as_ref()
-    }
-
-    pub fn plc(&self) -> Option<&Plc> {
-        self.plc.as_ref()
-    }
-
-    pub fn public_name(&self) -> Option<&List<LocalText>> {
-        self.public_name.as_ref()
-    }
-
-    pub fn site(&self) -> Option<&Site> {
-        self.site.as_ref()
-    }
-
-    pub fn short_name(&self) -> Option<&LocalText> {
-        self.short_name.as_ref()
-    }
-
-    pub fn staff(&self) -> Option<Staff> {
-        self.staff
-    }
-
-    pub fn status(&self) -> Option<Status> {
-        self.status
-    }
-
-    pub fn service(&self) -> Option<Service> {
-        self.service
-    }
-
-    pub fn split_from(&self) -> Option<PointLink> {
-        self.split_from.map(Marked::into_value)
-    }
-
-    pub fn de_ds100(&self) -> Option<&DeDs100> {
-        self.de_ds100.as_ref()
-    }
-
-    pub fn de_dstnr(&self) -> Option<&DeDstnr> {
-        self.de_dstnr.as_ref()
-    }
-
-    pub fn de_lknr(&self) -> Option<&List<DeLknr>> {
-        self.de_lknr.as_ref()
-    }
-
-    pub fn de_name16(&self) -> Option<&DeName16> {
-        self.de_name16.as_ref()
-    }
-
-    pub fn de_rang(&self) -> Option<&DeRang> {
-        self.de_rang.as_ref()
-    }
-
-    pub fn de_vbl(&self) -> Option<&DeVbl> {
-        self.de_vbl.as_ref()
-    }
-
-    pub fn dk_ref(&self) -> Option<&str> {
-        self.dk_ref.as_ref().map(|s| s.as_value().as_ref())
-    }
-
-    pub fn no_fs(&self) -> Option<&str> {
-        self.no_fs.as_ref().map(|s| s.as_value().as_ref())
-    }
-
-    pub fn no_njk(&self) -> Option<&str> {
-        self.no_njk.as_ref().map(|s| s.as_value().as_ref())
-    }
-
-    pub fn no_nsb(&self) -> Option<&str> {
-        self.no_nsb.as_ref().map(|s| s.as_value().as_ref())
-    }
+    pub no_fs: Option<Marked<String>>,
+    pub no_njk: Option<Marked<String>>,
+    pub no_nsb: Option<Marked<String>>,
 }
 
 impl FromYaml<LibraryBuilder> for Event {
@@ -435,7 +322,7 @@ data_enum! {
 //------------ Location ------------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Location(List<(Marked<LineLink>, Option<Marked<String>>)>);
+pub struct Location(pub List<(Marked<LineLink>, Option<Marked<String>>)>);
 
 impl FromYaml<LibraryBuilder> for Location {
     fn from_yaml(
@@ -507,7 +394,7 @@ data_enum! {
 //------------ Site ----------------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Site(List<(Marked<PathLink>, Marked<String>)>);
+pub struct Site(pub List<(Marked<PathLink>, Marked<String>)>);
 
 impl FromYaml<LibraryBuilder> for Site {
     fn from_yaml(
@@ -603,4 +490,11 @@ pub type DeVbl = Marked<String>;
 //------------ DeName16 ------------------------------------------------------
 
 pub type DeName16 = Marked<String>;
+
+
+//============ Errors ========================================================
+
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="point listed as its own connection")]
+pub struct OwnConnection;
 

@@ -2,7 +2,7 @@
 use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-use crate::types::{EventDate, Key, LanguageText, LocalText, List, Marked};
+use crate::types::{EventDate, Key, LanguageText, LocalText, List, Marked, Set};
 use super::common::{Basis, Common, Progress};
 use super::{OrganizationLink, SourceLink};
 
@@ -11,34 +11,29 @@ use super::{OrganizationLink, SourceLink};
 
 #[derive(Clone, Debug)]
 pub struct Organization {
-    common: Common,
-    subtype: Marked<Subtype>,
-    events: EventList,
+    // Attributes
+    pub common: Common,
+    pub subtype: Marked<Subtype>,
+    pub events: EventList,
+
+    // Crosslinks
+    pub source_author: Set<SourceLink>,
+    pub source_editor: Set<SourceLink>,
+    pub source_organization: Set<SourceLink>,
+    pub source_publisher: Set<SourceLink>,
 }
 
 impl Organization {
-    pub fn common(&self) -> &Common {
-        &self.common
-    }
-
     pub fn key(&self) -> &Key {
-        self.common().key()
+        &self.common.key
     }
 
     pub fn progress(&self) -> Progress {
-        self.common().progress()
+        self.common.progress.into_value()
     }
 
     pub fn origin(&self) -> &Origin {
-        &self.common().origin()
-    }
-
-    pub fn subtype(&self) -> Subtype {
-        self.subtype.into_value()
-    }
-
-    pub fn events(&self) -> &EventList {
-        &self.events
+        &self.common.origin
     }
 }
 
@@ -57,6 +52,10 @@ impl Organization {
             common: common?,
             subtype: subtype?,
             events: events?,
+            source_author: Set::new(),
+            source_editor: Set::new(),
+            source_organization: Set::new(),
+            source_publisher: Set::new(),
         })
     }
 
@@ -98,75 +97,21 @@ pub type EventList = List<Event>;
 #[derive(Clone, Debug)]
 pub struct Event {
     // Meta attributes
-    date: EventDate,
-    document: List<Marked<SourceLink>>,
-    source: List<Marked<SourceLink>>,
-    basis: List<Basis>,
-    note: Option<LanguageText>,
+    pub date: EventDate,
+    pub document: List<Marked<SourceLink>>,
+    pub source: List<Marked<SourceLink>>,
+    pub basis: List<Basis>,
+    pub note: Option<LanguageText>,
 
     // Organization property attributes
-    domicile: List<Marked<OrganizationLink>>,
-    master: Option<Marked<OrganizationLink>>,
-    name: Option<LocalText>,
-    owner: Option<List<Marked<OrganizationLink>>>,
-    property: Option<Property>,
-    short_name: Option<LocalText>,
-    status: Option<Status>,
-    successor: Option<Marked<OrganizationLink>>,
-}
-
-impl Event {
-    pub fn date(&self) -> &EventDate {
-        &self.date
-    }
-
-    pub fn document(&self) -> &List<Marked<SourceLink>> {
-        &self.document
-    }
-
-    pub fn source(&self) -> &List<Marked<SourceLink>> {
-        &self.source
-    }
-
-    pub fn basis(&self) -> &List<Basis> {
-        &self.basis
-    }
-
-    pub fn note(&self) -> Option<&LanguageText> {
-        self.note.as_ref()
-    }
-
-    pub fn domicile(&self) -> &List<Marked<OrganizationLink>> {
-        &self.domicile
-    }
-
-    pub fn master(&self) -> Option<OrganizationLink> {
-        self.master.map(Marked::into_value)
-    }
-
-    pub fn name(&self) -> Option<&LocalText> {
-        self.name.as_ref()
-    }
-
-    pub fn owner(&self) -> Option<&List<Marked<OrganizationLink>>> {
-        self.owner.as_ref()
-    }
-
-    pub fn property(&self) -> Option<&Property> {
-        self.property.as_ref()
-    }
-
-    pub fn short_name(&self) -> Option<&LocalText> {
-        self.short_name.as_ref()
-    }
-
-    pub fn status(&self) -> Option<Status> {
-        self.status
-    }
-
-    pub fn successor(&self) -> Option<OrganizationLink> {
-        self.successor.map(Marked::into_value)
-    }
+    pub domicile: List<Marked<OrganizationLink>>,
+    pub master: Option<Marked<OrganizationLink>>,
+    pub name: Option<LocalText>,
+    pub owner: Option<List<Marked<OrganizationLink>>>,
+    pub property: Option<Property>,
+    pub short_name: Option<LocalText>,
+    pub status: Option<Status>,
+    pub successor: Option<Marked<OrganizationLink>>,
 }
 
 impl FromYaml<LibraryBuilder> for Event {
@@ -213,28 +158,10 @@ impl FromYaml<LibraryBuilder> for Event {
 
 #[derive(Clone, Debug)]
 pub struct Property {
-    role: Marked<PropertyRole>,
-    constructor: List<Marked<OrganizationLink>>,
-    operator: List<Marked<OrganizationLink>>,
-    owner: List<Marked<OrganizationLink>>,
-}
-
-impl Property {
-    pub fn role(&self) -> PropertyRole {
-        self.role.into_value()
-    }
-
-    pub fn constructor(&self) -> &List<Marked<OrganizationLink>> {
-        &self.constructor
-    }
-
-    pub fn operator(&self) -> &List<Marked<OrganizationLink>> {
-        &self.operator
-    }
-
-    pub fn owner(&self) -> &List<Marked<OrganizationLink>> {
-        &self.owner
-    }
+    pub role: Marked<PropertyRole>,
+    pub constructor: List<Marked<OrganizationLink>>,
+    pub operator: List<Marked<OrganizationLink>>,
+    pub owner: List<Marked<OrganizationLink>>,
 }
 
 impl FromYaml<LibraryBuilder> for Property {

@@ -4,7 +4,7 @@ use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::store::Link;
 use crate::types::{Key, Location, Marked};
 use super::{Line, Organization, Path, Point, Source, Structure};
-use super::common::DocumentType;
+use super::common::{Common, DocumentType};
 
 macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                               $vlink:ident ), )* ) => {
@@ -19,12 +19,24 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
     }
 
     impl Document {
-        pub fn key(&self) -> &Key {
+        pub fn common(&self) -> &Common {
             match *self {
                 $(
-                    Document::$vtype(ref inner) => inner.key(),
+                    Document::$vtype(ref inner) => &inner.common,
                 )*
             }
+        }
+
+        pub fn common_mut(&mut self) -> &mut Common {
+            match *self {
+                $(
+                    Document::$vtype(ref mut inner) => &mut inner.common,
+                )*
+            }
+        }
+
+        pub fn key(&self) -> &Key {
+            &self.common().key
         }
 
         pub fn doctype(&self) -> DocumentType {
@@ -36,11 +48,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
         }
 
         pub fn origin(&self) -> &Origin {
-            match *self {
-                $(
-                    Document::$vtype(ref inner) => inner.origin(),
-                )*
-            }
+            &self.common().origin
         }
 
         pub fn location(&self) -> Location {
@@ -67,14 +75,14 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
         }
 
         pub fn crosslink(
-            &self,
+            &mut self,
             link: DocumentLink,
             library: &LibraryMut,
             report: &mut StageReporter
         ) {
             match *self {
                 $(
-                    Document::$vtype(ref inner) => {
+                    Document::$vtype(ref mut inner) => {
                         inner.crosslink(link.into(), library, report)
                     }
                 )*

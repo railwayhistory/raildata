@@ -14,39 +14,27 @@ use super::common::{Common, Progress};
 
 #[derive(Clone, Debug)]
 pub struct Path {
-    common: Common,
+    pub common: Common,
 
-    name: Option<String>,
-    nodes: Vec<Node>,
-    source: Vec<SourceLink>,
+    pub name: Option<String>,
+    pub nodes: Vec<Node>,
+    pub source: Vec<SourceLink>,
 
-    node_names: Vec<(String, usize)>,
-    node_descr: Vec<(usize, String)>,
+    pub node_names: Vec<(String, usize)>,
+    pub node_descr: Vec<(usize, String)>,
 }
 
 impl Path {
-    pub fn common(&self) -> &Common {
-        &self.common
-    }
-
     pub fn key(&self) -> &Key {
-        self.common().key()
+        &self.common.key
     }
 
     pub fn progress(&self) -> Progress {
-        self.common().progress()
+        self.common.progress.into_value()
     }
 
     pub fn origin(&self) -> &Origin {
-        &self.common().origin()
-    }
-
-    pub fn name(&self) -> Option<&str> {
-        self.name.as_ref().map(AsRef::as_ref)
-    }
-
-    pub fn nodes(&self) -> &[Node] {
-        self.nodes.as_ref()
+        &self.common.origin
     }
 
     pub fn node(&self, pos: usize) -> Option<&Node> {
@@ -57,10 +45,6 @@ impl Path {
         self.node_names.binary_search_by(|item|
             AsRef::<str>::as_ref(&item.0).cmp(name)
         ).ok()
-    }
-
-    pub fn source(&self) -> &[SourceLink] {
-        self.source.as_ref()
     }
 }
 
@@ -305,23 +289,15 @@ impl Path {
 
 #[derive(Clone, Debug)]
 pub struct Node {
-    lon: f64,
-    lat: f64,
-    pre: f64,
-    post: f64,
+    pub lon: f64,
+    pub lat: f64,
+    pub pre: f64,
+    pub post: f64,
 }
 
 impl Node {
     pub fn new(lon: f64, lat: f64, pre: f64, post: f64) -> Self {
         Node { lon, lat, pre, post }
-    }
-
-    pub fn lon(&self) -> f64 { 
-        self.lon
-    }
-
-    pub fn lat(&self) -> f64 { 
-        self.lat
     }
 }
 

@@ -65,6 +65,13 @@ impl Origin {
     pub fn location(&self) -> Location {
         self.location
     }
+
+    pub fn at(&self, location: Location) -> Origin {
+        Origin {
+            path: self.path.clone(),
+            location
+        }
+    }
 }
 
 impl Display for Origin {

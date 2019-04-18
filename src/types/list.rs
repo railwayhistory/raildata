@@ -26,6 +26,14 @@ impl<T> List<T> {
         List { inner: Inner::Empty, location: Location::default() }
     }
 
+    pub fn as_slice(&self) -> &[T] {
+        match self.inner {
+            Inner::Empty => &[],
+            Inner::One(ref inner) => slice::from_ref(inner),
+            Inner::Many(ref inner) => inner.as_ref(),
+        }
+    }
+
     pub fn location(&self) -> Location {
         self.location
     }

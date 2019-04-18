@@ -64,6 +64,14 @@ impl<T: Hash + Eq> Set<T> {
         }
     }
 
+    pub fn merge(&mut self, other: &Self)
+    where T: Clone {
+        // XXX There maybe optimizations here ...
+        for item in other.iter() {
+            self.insert(item.clone());
+        }
+    }
+
     pub fn contains(&self, value: &T) -> bool {
         match self.inner {
             Inner::Empty => false,

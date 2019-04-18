@@ -3,7 +3,7 @@
 use crate::library::LibraryBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-use crate::types::{EventDate, Key, LanguageText, List, Marked};
+use crate::types::{EventDate, Key, LanguageText, List, Marked, Set};
 use super::{OrganizationLink, SourceLink};
 
 
@@ -11,23 +11,15 @@ use super::{OrganizationLink, SourceLink};
 
 #[derive(Clone, Debug)]
 pub struct Common {
-    key: Marked<Key>,
-    progress: Marked<Progress>,
-    origin: Origin,
-}
+    //--- Attributes
+    pub key: Marked<Key>,
+    pub progress: Marked<Progress>,
+    pub origin: Origin,
 
-impl Common {
-    pub fn key(&self) -> &Key {
-        &self.key
-    }
+    //--- Cross-links
 
-    pub fn progress(&self) -> Progress {
-        self.progress.into_value()
-    }
-
-    pub fn origin(&self) -> &Origin {
-        &self.origin
-    }
+    /// Sources that have `regards` entries for this document.
+    pub sources: Set<SourceLink>,
 }
 
 impl Common {
@@ -36,7 +28,12 @@ impl Common {
         progress: Marked<Progress>,
         origin: Origin
     ) -> Self {
-        Common { key, progress, origin }
+        Common {
+            key,
+            progress,
+            origin,
+            sources: Set::new(),
+        }
     }
 
     pub fn from_yaml(
@@ -48,7 +45,8 @@ impl Common {
         Ok(Common {
             key: key,
             progress: doc.take_default("progress", context, report)?,
-            origin: Origin::new(report.path().clone(), doc.location())
+            origin: Origin::new(report.path().clone(), doc.location()),
+            sources: Set::new(),
         })
     }
 }
@@ -85,24 +83,11 @@ data_enum! {
 
 #[derive(Clone, Debug)]
 pub struct Alternative {
-    date: EventDate,
-    document: List<Marked<SourceLink>>,
-    source: List<Marked<SourceLink>>,
+    pub date: EventDate,
+    pub document: List<Marked<SourceLink>>,
+    pub source: List<Marked<SourceLink>>,
 }
 
-impl Alternative {
-    pub fn date(&self) -> &EventDate {
-        &self.date
-    }
-
-    pub fn document(&self) -> &List<Marked<SourceLink>> {
-        &self.document
-    }
-
-    pub fn source(&self) -> &List<Marked<SourceLink>> {
-        &self.source
-    }
-}
 
 impl FromYaml<LibraryBuilder> for Alternative {
     fn from_yaml(
@@ -128,38 +113,12 @@ impl FromYaml<LibraryBuilder> for Alternative {
 
 #[derive(Clone, Debug)]
 pub struct Basis {
-    date: Option<EventDate>,
-    document: List<Marked<SourceLink>>,
-    source: List<Marked<SourceLink>>,
-    contract: Option<Contract>,
-    treaty: Option<Contract>,
-    note: Option<LanguageText>,
-}
-
-impl Basis {
-    pub fn date(&self) -> Option<&EventDate> {
-        self.date.as_ref()
-    }
-
-    pub fn document(&self) -> &List<Marked<SourceLink>> {
-        &self.document
-    }
-
-    pub fn source(&self) -> &List<Marked<SourceLink>> {
-        &self.source
-    }
-
-    pub fn contract(&self) -> Option<&Contract> {
-        self.contract.as_ref()
-    }
-
-    pub fn treaty(&self) -> Option<&Contract> {
-        self.treaty.as_ref()
-    }
-
-    pub fn note(&self) -> Option<&LanguageText> {
-        self.note.as_ref()
-    }
+    pub date: Option<EventDate>,
+    pub document: List<Marked<SourceLink>>,
+    pub source: List<Marked<SourceLink>>,
+    pub contract: Option<Contract>,
+    pub treaty: Option<Contract>,
+    pub note: Option<LanguageText>,
 }
 
 impl FromYaml<LibraryBuilder> for Basis {
@@ -192,13 +151,7 @@ impl FromYaml<LibraryBuilder> for Basis {
 
 #[derive(Clone, Debug)]
 pub struct Contract {
-    parties: List<Marked<OrganizationLink>>,
-}
-
-impl Contract {
-    pub fn parties(&self) -> &List<Marked<OrganizationLink>> {
-        &self.parties
-    }
+    pub parties: List<Marked<OrganizationLink>>,
 }
 
 impl FromYaml<LibraryBuilder> for Contract {

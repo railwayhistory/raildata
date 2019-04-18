@@ -16,24 +16,24 @@ use super::common::{Alternative, Basis, Common, Contract, Progress};
 
 #[derive(Clone, Debug)]
 pub struct Line {
-    common: Common,
-    label: Set<Label>,
-    note: Option<LanguageText>,
-    events: EventList,
-    points: Points,
+    pub common: Common,
+    pub label: Set<Label>,
+    pub note: Option<LanguageText>,
+    pub events: EventList,
+    pub points: Points,
 }
 
 impl Line {
-    pub fn common(&self) -> &Common {
-        &self.common
+    pub fn key(&self) -> &Key {
+        &self.common.key
     }
 
-    pub fn key(&self) -> &Key {
-        self.common().key()
+    pub fn progress(&self) -> Progress {
+        self.common.progress.into_value()
     }
 
     pub fn origin(&self) -> &Origin {
-        &self.common().origin()
+        &self.common.origin
     }
 
     pub fn code(&self) -> Result<(&str, &str), &str> {
@@ -44,26 +44,6 @@ impl Line {
         else {
             Err(code)
         }
-    }
-
-    pub fn progress(&self) -> Progress {
-        self.common().progress()
-    }
-
-    pub fn label(&self) -> &Set<Label> {
-        &self.label
-    }
-
-    pub fn note(&self) -> Option<&LanguageText> {
-        self.note.as_ref()
-    }
-
-    pub fn events(&self) -> &EventList {
-        &self.events
-    }
-
-    pub fn points(&self) -> &Points {
-        &self.points
     }
 }
 
@@ -124,8 +104,8 @@ data_enum! {
 
 #[derive(Clone, Debug)]
 pub struct Points {
-    points: Vec<Marked<PointLink>>,
-    indexes: Vec<(PointLink, usize)>,
+    pub points: Vec<Marked<PointLink>>,
+    pub indexes: Vec<(PointLink, usize)>,
 }
 
 impl Points {
@@ -165,155 +145,40 @@ pub type EventList = List<Event>;
 
 #[derive(Clone, Debug)]
 pub struct Event {
-    date: EventDate,
-    sections: List<Section>,
-    document: List<Marked<SourceLink>>,
-    source: List<Marked<SourceLink>>,
-    alternative: List<Alternative>,
-    basis: List<Basis>,
-    note: Option<LanguageText>,
+    pub date: EventDate,
+    pub sections: List<Section>,
+    pub document: List<Marked<SourceLink>>,
+    pub source: List<Marked<SourceLink>>,
+    pub alternative: List<Alternative>,
+    pub basis: List<Basis>,
+    pub note: Option<LanguageText>,
 
-    concession: Option<Concession>,
-    expropriation: Option<Concession>,
-    contract: Option<Contract>,
-    treaty: Option<Contract>,
+    pub concession: Option<Concession>,
+    pub expropriation: Option<Concession>,
+    pub contract: Option<Contract>,
+    pub treaty: Option<Contract>,
 
-    category: Option<Set<Category>>,
-    constructor: Option<List<Marked<OrganizationLink>>>,
-    course: Option<List<CourseSegment>>,
-    electrified: Option<Option<Set<Electrified>>>,
-    freight: Option<Freight>,
-    gauge: Option<Set<Gauge>>,
-    local_name: Option<LocalText>, // XXX Drop
-    name: Option<LocalText>,
-    operator: Option<List<Marked<OrganizationLink>>>,
-    owner: Option<List<Marked<OrganizationLink>>>,
-    passenger: Option<Passenger>,
-    rails: Option<Marked<u8>>,
-    region: Option<List<Marked<OrganizationLink>>>,
-    reused: Option<List<Marked<LineLink>>>,
-    status: Option<Status>,
-    tracks: Option<Marked<u8>>,
+    pub category: Option<Set<Category>>,
+    pub constructor: Option<List<Marked<OrganizationLink>>>,
+    pub course: Option<List<CourseSegment>>,
+    pub electrified: Option<Option<Set<Electrified>>>,
+    pub freight: Option<Freight>,
+    pub gauge: Option<Set<Gauge>>,
+    pub local_name: Option<LocalText>, // XXX Drop
+    pub name: Option<LocalText>,
+    pub operator: Option<List<Marked<OrganizationLink>>>,
+    pub owner: Option<List<Marked<OrganizationLink>>>,
+    pub passenger: Option<Passenger>,
+    pub rails: Option<Marked<u8>>,
+    pub region: Option<List<Marked<OrganizationLink>>>,
+    pub reused: Option<List<Marked<LineLink>>>,
+    pub status: Option<Status>,
+    pub tracks: Option<Marked<u8>>,
 
-    de_vzg: Option<DeVzg>,
+    pub de_vzg: Option<DeVzg>,
 }
 
 impl Event {
-    pub fn date(&self) -> &EventDate {
-        &self.date
-    }
-
-    pub fn sections(&self) -> &List<Section> {
-        &self.sections
-    }
-
-    pub fn document(&self) -> &List<Marked<SourceLink>> {
-        &self.document
-    }
-
-    pub fn source(&self) -> &List<Marked<SourceLink>> {
-        &self.source
-    }
-
-    pub fn alternative(&self) -> &List<Alternative> {
-        &self.alternative
-    }
-
-    pub fn basis(&self) -> &List<Basis> {
-        &self.basis
-    }
-
-    pub fn note(&self) -> Option<&LanguageText> {
-        self.note.as_ref()
-    }
-
-    pub fn concession(&self) -> Option<&Concession> {
-        self.concession.as_ref()
-    }
-
-    pub fn expropriation(&self) -> Option<&Concession> {
-        self.expropriation.as_ref()
-    }
-
-    pub fn contract(&self) -> Option<&Contract> {
-        self.contract.as_ref()
-    }
-
-    pub fn treaty(&self) -> Option<&Contract> {
-        self.treaty.as_ref()
-    }
-
-    pub fn category(&self) -> Option<&Set<Category>> {
-        self.category.as_ref()
-    }
-
-    pub fn constructor(&self) -> Option<&List<Marked<OrganizationLink>>> {
-        self.constructor.as_ref()
-    }
-
-    pub fn course(&self) -> Option<&List<CourseSegment>> {
-        self.course.as_ref()
-    }
-
-    pub fn electrified(&self) -> Option<Option<&Set<Electrified>>> {
-        match self.electrified {
-            Some(Some(ref some)) => Some(Some(some)),
-            Some(None) => Some(None),
-            None => None
-        }
-    }
-
-    pub fn freight(&self) -> Option<Freight> {
-        self.freight
-    }
-
-    pub fn gauge(&self) -> Option<&Set<Gauge>> {
-        self.gauge.as_ref()
-    }
-
-    pub fn local_name(&self) -> Option<&LocalText> {
-        self.local_name.as_ref()
-    }
-
-    pub fn name(&self) -> Option<&LocalText> {
-        self.name.as_ref()
-    }
-
-    pub fn operator(&self) -> Option<&List<Marked<OrganizationLink>>> {
-        self.operator.as_ref()
-    }
-
-    pub fn owner(&self) -> Option<&List<Marked<OrganizationLink>>> {
-        self.owner.as_ref()
-    }
-
-    pub fn passenger(&self) -> Option<Passenger> {
-        self.passenger
-    }
-
-    pub fn rails(&self) -> Option<u8> {
-        self.rails.map(Marked::into_value)
-    }
-
-    pub fn region(&self) -> Option<&List<Marked<OrganizationLink>>> {
-        self.region.as_ref()
-    }
-
-    pub fn reused(&self) -> Option<&List<Marked<LineLink>>> {
-        self.reused.as_ref()
-    }
-
-    pub fn status(&self) -> Option<Status> {
-        self.status
-    }
-
-    pub fn tracks(&self) -> Option<u8> {
-        self.tracks.map(Marked::into_value)
-    }
-
-    pub fn de_vzg(&self) -> Option<&DeVzg> {
-        self.de_vzg.as_ref()
-    }
 }
 
 impl FromYaml<LibraryBuilder> for Event {
@@ -421,20 +286,9 @@ impl FromYaml<LibraryBuilder> for Event {
 
 #[derive(Clone, Debug)]
 pub struct Section {
-    start: Option<Marked<PointLink>>,
-    end: Option<Marked<PointLink>>,
+    pub start: Option<Marked<PointLink>>,
+    pub end: Option<Marked<PointLink>>,
 }
-
-impl Section {
-    pub fn start(&self) -> Option<PointLink> {
-        self.start.map(Marked::into_value)
-    }
-
-    pub fn end(&self) -> Option<PointLink> {
-        self.end.map(Marked::into_value)
-    }
-}
-
 
 impl FromYaml<LibraryBuilder> for Section {
     fn from_yaml(
@@ -472,24 +326,11 @@ data_enum! {
 
 #[derive(Clone, Debug)]
 pub struct Concession {
-    by: List<Marked<OrganizationLink>>,
-    to: List<Marked<OrganizationLink>>,
-    until: Option<Marked<Date>>,
+    pub by: List<Marked<OrganizationLink>>,
+    pub to: List<Marked<OrganizationLink>>,
+    pub until: Option<Marked<Date>>,
 }
 
-impl Concession {
-    pub fn by(&self) -> &List<Marked<OrganizationLink>> {
-        &self.by
-    }
-
-    pub fn to(&self) -> &List<Marked<OrganizationLink>> {
-        &self.to
-    }
-
-    pub fn until(&self) -> Option<&Date> {
-        self.until.as_ref().map(Marked::as_value)
-    }
-}
 
 impl FromYaml<LibraryBuilder> for Concession {
     fn from_yaml(
@@ -511,23 +352,9 @@ impl FromYaml<LibraryBuilder> for Concession {
 
 #[derive(Clone, Debug)]
 pub struct CourseSegment {
-    path: Marked<PathLink>,
-    start: Marked<String>,
-    end: Marked<String>,
-}
-
-impl CourseSegment {
-    pub fn path(&self) -> PathLink {
-        self.path.into_value()
-    }
-
-    pub fn start(&self) -> &str {
-        self.start.as_value().as_ref()
-    }
-    
-    pub fn end(&self) -> &str {
-        self.end.as_value().as_ref()
-    }
+    pub path: Marked<PathLink>,
+    pub start: Marked<String>,
+    pub end: Marked<String>,
 }
 
 impl FromYaml<LibraryBuilder> for CourseSegment {
@@ -597,7 +424,7 @@ data_enum! {
 //------------ Gauge ---------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Gauge(Marked<u16>);
+pub struct Gauge(pub Marked<u16>);
 
 impl Gauge {
     pub fn gauge(&self) -> u16 {

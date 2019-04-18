@@ -1,9 +1,10 @@
 
 use std::ops;
+use std::sync::Arc;
 use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-use crate::types::{Date, Key, LanguageText, List, Marked, Url};
+use crate::types::{Date, Key, LanguageText, List, Marked, Set, Url};
 use super::{DocumentLink, OrganizationLink, SourceLink};
 use super::common::{Common, Progress};
 
@@ -11,123 +12,52 @@ use super::common::{Common, Progress};
 
 #[derive(Clone, Debug)]
 pub struct Source {
-    common: Common,
-    subtype: Subtype,
+    pub common: Common,
+    pub subtype: Subtype,
     
     // Type-dependent attributes
-    author: List<Marked<OrganizationLink>>,
-    collection: Option<Marked<SourceLink>>,
-    date: Option<Marked<Date>>,
-    designation: Option<Marked<String>>,
-    digital: List<Marked<Url>>,
-    edition: Option<Marked<String>>,
-    editor: List<Marked<OrganizationLink>>,
-    isbn: Option<Isbn>,
-    number: Option<Marked<String>>,
-    organization: List<Marked<OrganizationLink>>,
-    pages: Option<Pages>,
-    publisher: List<Marked<OrganizationLink>>,
-    revision: Option<Marked<String>>,
-    short_title: Option<Marked<String>>,
-    title: Option<Marked<String>>,
-    url: Option<Marked<Url>>,
-    volume: Option<Marked<String>>,
+    pub author: List<Marked<OrganizationLink>>,
+    pub collection: Option<Marked<SourceLink>>,
+    pub date: Option<Marked<Date>>,
+    pub designation: Option<Marked<String>>,
+    pub digital: List<Marked<Url>>,
+    pub edition: Option<Marked<String>>,
+    pub editor: List<Marked<OrganizationLink>>,
+    pub isbn: Option<Isbn>,
+    pub number: Option<Marked<String>>,
+    pub organization: List<Marked<OrganizationLink>>,
+    pub pages: Option<Pages>,
+    pub publisher: List<Marked<OrganizationLink>>,
+    pub revision: Option<Marked<String>>,
+    pub short_title: Option<Marked<String>>,
+    pub title: Option<Marked<String>>,
+    pub url: Option<Marked<Url>>,
+    pub volume: Option<Marked<String>>,
 
     // Additional attributes
-    also: List<Marked<SourceLink>>,
-    attribution: Option<Marked<String>>,
-    crossref: List<Marked<SourceLink>>,
-    note: Option<LanguageText>,
-    regards: List<Marked<DocumentLink>>,
+    pub also: List<Marked<SourceLink>>,
+    pub attribution: Option<Marked<String>>,
+    pub crossref: List<Marked<SourceLink>>,
+    pub note: Option<LanguageText>,
+    pub regards: List<Marked<DocumentLink>>,
+
+    // Crosslinks
+    pub in_collection: Set<SourceLink>,
+    pub variants: Set<SourceLink>, // based on the also field
+    pub crossrefed: Set<SourceLink>,
 }
 
 impl Source {
-    pub fn common(&self) -> &Common {
-        &self.common
-    }
-
     pub fn key(&self) -> &Key {
-        self.common().key()
+        &self.common.key
     }
 
     pub fn progress(&self) -> Progress {
-        self.common().progress()
+        self.common.progress.into_value()
     }
 
     pub fn origin(&self) -> &Origin {
-        &self.common().origin()
-    }
-
-    pub fn subtype(&self) -> Subtype {
-        self.subtype
-    }
-
-    pub fn author(&self) -> &List<Marked<OrganizationLink>> {
-        &self.author
-    }
-
-    pub fn collection(&self) -> Option<SourceLink> {
-        self.collection.map(Marked::into_value)
-    }
-
-    pub fn date(&self) -> Option<&Date> {
-        self.date.as_ref().map(Marked::as_value)
-    }
-
-    pub fn designation(&self) -> Option<&str> {
-        self.designation.as_ref().map(|x| x.as_value().as_ref())
-    }
-
-    pub fn digital(&self) -> &List<Marked<Url>> {
-        &self.digital
-    }
-
-    pub fn edition(&self) -> Option<&str> {
-        self.edition.as_ref().map(|x| x.as_value().as_ref())
-    }
-
-    pub fn editor(&self) -> &List<Marked<OrganizationLink>> {
-        &self.editor
-    }
-
-    pub fn isbn(&self) -> Option<&Isbn> {
-        self.isbn.as_ref()
-    }
-
-    pub fn number(&self) -> Option<&str> {
-        self.number.as_ref().map(|x| x.as_value().as_ref())
-    }
-
-    pub fn organization(&self) -> &List<Marked<OrganizationLink>> {
-        &self.organization
-    }
-
-    pub fn pages(&self) -> Option<&Pages> {
-        self.pages.as_ref()
-    }
-
-    pub fn publisher(&self) -> &List<Marked<OrganizationLink>> {
-        &self.publisher
-    }
-
-    pub fn revision(&self) -> Option<&str> {
-        self.revision.as_ref().map(|x| x.as_value().as_ref())
-    }
-
-    pub fn short_title(&self) -> Option<&str> {
-        self.short_title.as_ref().map(|x| x.as_value().as_ref())
-    }
-
-    pub fn title(&self) -> Option<&str> {
-        self.title.as_ref().map(|x| x.as_value().as_ref())
-    }
-
-    pub fn url(&self) -> Option<&Url> {
-        self.url.as_ref().map(Marked::as_value)
-    }
-
-    pub fn volume(&self) -> Option<&str> {
-        self.volume.as_ref().map(|x| x.as_value().as_ref())
+        &self.common.origin
     }
 }
 
@@ -188,15 +118,83 @@ impl Source {
             crossref: crossref?,
             note: note?,
             regards: regards?,
+            in_collection: Set::new(),
+            variants: Set::new(),
+            crossrefed: Set::new(),
         })
     }
 
     pub fn crosslink(
         &self,
-        _link: SourceLink,
-        _library: &LibraryMut,
+        link: SourceLink,
+        library: &LibraryMut,
         _report: &mut StageReporter
     ) {
+        // author
+        for target in &self.author {
+            target.update(library, move |org| {
+                org.source_author.insert(link);
+            })
+        }
+
+        // collection
+        if let Some(target) = self.collection {
+            target.update(library, move |source| {
+                source.in_collection.insert(link);
+            })
+        }
+
+        // editor
+        for target in &self.editor {
+            target.update(library, move |org| {
+                org.source_editor.insert(link);
+            })
+        }
+
+        // organization
+        for target in &self.organization {
+            target.update(library, move |org| {
+                org.source_organization.insert(link);
+            })
+        }
+
+        // publisher
+        for target in &self.publisher {
+            target.update(library, move |org| {
+                org.source_publisher.insert(link);
+            })
+        }
+
+        // also -- to make sure we don’t miss any, we add the full also list
+        // to all mentioned sources.
+        if !self.also.is_empty() {
+            let mut also = Vec::with_capacity(self.also.len() + 1);
+            also.push(link);
+            also.extend(self.also.iter().map(|item| item.into_value()));
+            let also = Arc::new(also);
+            for target in also.clone().iter() {
+                let also = also.clone();
+                target.update(library, move |source| {
+                    for item in also.iter() {
+                        source.variants.insert(*item);
+                    }
+                })
+            }
+        }
+
+        // crossref
+        for target in &self.crossref {
+            target.update(library, move |source| {
+                source.crossrefed.insert(link);
+            })
+        }
+
+        // regards
+        for target in &self.regards {
+            target.update(library, move |document| {
+                document.common_mut().sources.insert(link);
+            })
+        }
     }
 
     /*
