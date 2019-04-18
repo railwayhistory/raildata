@@ -1,7 +1,7 @@
 
 use std::str::FromStr;
-use crate::library::LibraryBuilder;
-use crate::load::report::{Failed, Origin, PathReporter};
+use crate::library::{LibraryBuilder, LibraryMut};
+use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{
     Date, EventDate, IntoMarked, Key, LanguageText, List, LocalText, Location,
@@ -89,18 +89,18 @@ impl Line {
         })
     }
 
-/*
     pub fn crosslink(
-        &mut self,
+        &self,
         link: LineLink,
-        store: &mut UpdateStore,
+        library: &LibraryMut,
         _report: &mut StageReporter
     ) {
         for point in self.points.iter() {
-            point.update(store, |point| point.add_line(link.clone()))
+            point.update(library, move |point| point.add_line(link))
         }
     }
 
+/*
     pub fn verify(&self, report: &mut StageReporter) {
         verify::verify(self, report)
     }

@@ -3,11 +3,12 @@ use std::borrow;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Bound;
 use std::sync::{Arc, Mutex};
+use rayon::prelude::*;
 use crate::document::{Document, DocumentLink};
 use crate::document::common::DocumentType;
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::Value;
-use crate::store::{Store, StoreBuilder, StoreMut};
+use crate::store::{ItemGuard, Store, StoreBuilder, StoreMut};
 use crate::types::{IntoMarked, Key, Location, Marked};
 
 
@@ -266,6 +267,19 @@ impl LibraryMut {
                 keys: data.keys
             }
         ))
+    }
+
+    pub fn update<F>(&self, link: DocumentLink, op: F)
+    where F: Fn(&mut Document) + 'static + Send {
+        self.0.store.update(link.into(), op)
+    }
+
+    pub fn par_iter(&self) -> impl ParallelIterator<Item=DocumentLink> {
+        self.0.store.par_iter().map(Into::into)
+    }
+
+    pub fn resolve_mut(&self, link: DocumentLink) -> ItemGuard<Document> {
+        self.0.store.resolve_mut(link.into())
     }
 }
 

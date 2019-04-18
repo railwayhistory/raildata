@@ -1,13 +1,13 @@
 use std::f64::INFINITY;
 use std::str::FromStr;
 use osmxml::elements::{MemberType, Osm, Relation};
-use crate::library::LibraryBuilder;
+use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report;
-use crate::load::report::{Failed, Origin, PathReporter};
+use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::Mapping;
 use crate::types::{IntoMarked, Location, Key, Marked};
 use crate::types::key::InvalidKey;
-use super::SourceLink;
+use super::{PathLink, SourceLink};
 use super::common::{Common, Progress};
 
 //------------ Path ----------------------------------------------------------
@@ -286,15 +286,15 @@ impl Path {
         Ok(())
     }
 
-    /*
     pub fn crosslink(
         &self,
         _link: PathLink,
-        _store: &mut UpdateStore,
+        _library: &LibraryMut,
         _report: &mut StageReporter
     ) {
     }
 
+    /*
     pub fn verify(&self, _report: &mut StageReporter) {
     }
     */

@@ -5,6 +5,7 @@ use std::fs::File;
 use ignore::{WalkBuilder, WalkState};
 use ignore::types::TypesBuilder;
 use osmxml::read::read_xml;
+use rayon::iter::ParallelIterator;
 use crate::document::Path;
 use crate::document::common::DocumentType;
 use crate::library::{LibraryBuilder, LibraryMut, Library};
@@ -177,17 +178,12 @@ fn load_osm_file<R: io::Read>(
 //------------ crosslink -----------------------------------------------------
 
 fn crosslink(
-    docs: &LibraryMut,
+    library: &LibraryMut,
     report: Reporter
 ) {
-    let _ = (docs, report);
-    /*
-    let mut report = report.stage(Stage::Crosslink);
-    for pos in 0..docs.len() {
-        let mut doc = docs.take_document(pos);
-        doc.crosslink(DocumentLink::new(pos), docs, &mut report);
-        docs.return_document(pos, doc);
-    }
-    */
+    let report = report.stage(Stage::Crosslink);
+    library.par_iter().for_each(move |link| {
+        library.resolve_mut(link).crosslink(link, library, &mut report.clone())
+    })
 }
 

@@ -1,3 +1,4 @@
+extern crate crossbeam;
 #[macro_use] extern crate derive_more;
 extern crate ignore;
 extern crate osmxml;

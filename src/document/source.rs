@@ -1,7 +1,7 @@
 
 use std::ops;
-use crate::library::LibraryBuilder;
-use crate::load::report::{Failed, Origin, PathReporter};
+use crate::library::{LibraryBuilder, LibraryMut};
+use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{Date, Key, LanguageText, List, Marked, Url};
 use super::{DocumentLink, OrganizationLink, SourceLink};
@@ -191,15 +191,15 @@ impl Source {
         })
     }
 
-    /*
     pub fn crosslink(
         &self,
         _link: SourceLink,
-        _store: &mut UpdateStore,
+        _library: &LibraryMut,
         _report: &mut StageReporter
     ) {
     }
 
+    /*
     pub fn verify(&self, _report: &mut StageReporter) {
     }
     */

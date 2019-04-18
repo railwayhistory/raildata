@@ -1,9 +1,9 @@
 
-use crate::library::LibraryBuilder;
-use crate::load::report::{Failed, Origin, PathReporter};
+use crate::library::{LibraryBuilder, LibraryMut};
+use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{EventDate, Key, LanguageText, List, LocalText, Marked};
-use super::SourceLink;
+use super::{SourceLink, StructureLink};
 use super::common::{Common, Progress};
 
 //------------ Structure -----------------------------------------------------
@@ -58,17 +58,16 @@ impl Structure {
             events: events?,
         })
     }
-    /*
 
     pub fn crosslink(
         &self,
         _link: StructureLink,
-        _store: &mut UpdateStore,
+        _library: &LibraryMut,
         _report: &mut StageReporter
     ) {
     }
 
-
+    /*
     pub fn verify(&self, _report: &mut StageReporter) {
     }
     */

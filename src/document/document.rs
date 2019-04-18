@@ -1,5 +1,5 @@
-use crate::library::{Library, LibraryBuilder};
-use crate::load::report::{Failed, Origin, PathReporter};
+use crate::library::{Library, LibraryBuilder, LibraryMut};
+use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::store::Link;
 use crate::types::{Key, Location, Marked};
@@ -65,6 +65,21 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                 )*
             }
         }
+
+        pub fn crosslink(
+            &self,
+            link: DocumentLink,
+            library: &LibraryMut,
+            report: &mut StageReporter
+        ) {
+            match *self {
+                $(
+                    Document::$vtype(ref inner) => {
+                        inner.crosslink(link.into(), library, report)
+                    }
+                )*
+            }
+        }
     }
 
 
@@ -90,11 +105,27 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                     _ => panic!("link to wrong document type")
                 }
             }
+
+            pub fn update<F>(self, library: &LibraryMut, op: F)
+            where F: Fn(&mut $vtype) + 'static + Send {
+                library.update(self.into(), move |document| {
+                    match *document {
+                        Document::$vtype(ref mut inner) => op(inner),
+                        _ => panic!("link to wrong document type")
+                    }
+                })
+            }
         }
 
         impl From<DocumentLink> for $vlink {
             fn from(link: DocumentLink) -> $vlink {
                 $vlink(link.0)
+            }
+        }
+
+        impl From<$vlink> for DocumentLink {
+            fn from(link: $vlink) -> DocumentLink {
+                DocumentLink(link.0)
             }
         }
 
@@ -125,6 +156,11 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
             report: &mut PathReporter,
         ) -> Marked<Self> {
             store.build_link(key, None, report).map(Into::into)
+        }
+
+        pub fn update<F>(self, library: &LibraryMut, op: F)
+        where F: Fn(&mut Document) + 'static + Send {
+            library.update(self, op)
         }
     }
 

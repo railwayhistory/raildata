@@ -1,6 +1,6 @@
 
-use crate::library::LibraryBuilder;
-use crate::load::report::{Failed, Origin, PathReporter};
+use crate::library::{LibraryBuilder, LibraryMut};
+use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{EventDate, Key, LanguageText, List, LocalText, Marked, Set};
 use super::{LineLink, PathLink, PointLink, SourceLink};
@@ -90,13 +90,12 @@ impl Point {
         })
     }
 
-    /*
     //--- Crosslinking
 
     pub fn crosslink(
-        &mut self,
+        &self,
         _link: PointLink,
-        _store: &mut UpdateStore,
+        _library: &LibraryMut,
         _report: &mut StageReporter
     ) {
         /*
@@ -121,6 +120,7 @@ impl Point {
         self.lines.push(line);
     }
 
+    /*
     pub fn verify(&self, _report: &mut StageReporter) {
     }
     */

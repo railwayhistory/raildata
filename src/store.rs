@@ -1,8 +1,10 @@
 //! A document store.
 
-use std::{cmp, hash, mem};
+use std::{cmp, fmt, hash, mem, ops};
 use std::sync::{Mutex, MutexGuard, TryLockError};
 use std::marker::PhantomData;
+use crossbeam::sync::MsQueue;
+use rayon::prelude::*;
 
 
 //------------ Store ---------------------------------------------------------
@@ -32,7 +34,9 @@ impl<S> Store<S> {
 impl<S> From<StoreMut<S>> for Store<S> {
     fn from(store: StoreMut<S>) -> Self {
         Self::from_iter(
-            store.items.into_iter().map(|item| item.into_inner().unwrap())
+            store.items.into_iter().map(|item| {
+                item.item.into_inner().unwrap()
+            })
         )
     }
 }
@@ -49,15 +53,24 @@ impl<S> From<StoreBuilder<S>> for Store<S> {
 //------------ StoreMut ------------------------------------------------------
 
 /// An imutable place to store mutable items.
-#[derive(Debug)]
 pub struct StoreMut<S> {
-    items: Vec<Mutex<S>>,
+    items: Vec<ItemMut<S>>,
+}
+
+struct ItemMut<S> {
+    item: Mutex<S>,
+    queue: MsQueue<Box<dyn Fn(&mut S) + Send>>,
 }
 
 impl<S> StoreMut<S> {
     /// Creates a new store from an iterator over items.
     pub fn from_iter<I: Iterator<Item=S>>(iter: I) -> Self {
-        StoreMut { items: iter.map(Mutex::new).collect() }
+        StoreMut {
+            items: iter.map(|item| ItemMut {
+                item: Mutex::new(item),
+                queue: MsQueue::new()
+            }).collect()
+        }
     }
 
     /// Resolves a link.
@@ -67,20 +80,48 @@ impl<S> StoreMut<S> {
     ///
     /// For simplicity, this panics if the item has been poisoned. This also
     /// panics if the link isn’t pointing to an item.
-    pub fn resolve_mut(&self, link: Link<S>) -> MutexGuard<S> {
-        self.items[link.index].lock().unwrap()
+    pub fn resolve_mut(&self, link: Link<S>) -> ItemGuard<S> {
+        Self::_resolve_mut(&self.items[link.index])
+    }
+
+    fn _resolve_mut(item: &ItemMut<S>) -> ItemGuard<S> {
+        ItemGuard {
+            guard: item.item.lock().unwrap(),
+            queue: &item.queue
+        }
     }
 
     /// Attempts to resolve a link.
     ///
     /// If resolving would block the thread, returns `None`. The same caveats
     /// as for `resolve_mut` apply.
-    fn try_resolve_mut(&self, link: Link<S>) -> Option<MutexGuard<S>> {
-        match self.items[link.index].try_lock() {
-            Ok(item) => Some(item),
-            Err(TryLockError::Poisoned(_)) => panic!("poisoned mutex"),
-            Err(TryLockError::WouldBlock) => None,
+    fn try_resolve_mut(&self, link: Link<S>) -> Option<ItemGuard<S>> {
+        Self::_try_resolve_mut(&self.items[link.index])
+    }
+
+    fn _try_resolve_mut(item: &ItemMut<S>) -> Option<ItemGuard<S>> {
+        Some(ItemGuard {
+            guard: match item.item.try_lock() {
+                Ok(guard) => guard,
+                Err(TryLockError::Poisoned(_)) => panic!("poisoned mutex"),
+                Err(TryLockError::WouldBlock) => return None,
+            },
+            queue: &item.queue
+        })
+    }
+
+    pub fn update<F: Fn(&mut S) + 'static + Send>(&self, link: Link<S>, op: F) {
+        let item = &self.items[link.index];
+        if let Some(mut guard) = Self::_try_resolve_mut(item) {
+            op(&mut guard)
         }
+        else {
+            item.queue.push(Box::new(op))
+        }
+    }
+
+    pub fn par_iter(&self) -> impl ParallelIterator<Item=Link<S>> {
+        (0..self.items.len()).into_par_iter().map(Link::new)
     }
 }
 
@@ -89,6 +130,42 @@ impl<T> From<StoreBuilder<T>> for StoreMut<T> {
         Self::from_iter(
             store.items.into_inner().unwrap().into_iter().map(Option::unwrap)
         )
+    }
+}
+
+impl<T> fmt::Debug for StoreMut<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "StoreMut {{ ... }}")
+    }
+}
+
+
+//------------ ItemGuard ----------------------------------------------------
+
+pub struct ItemGuard<'a, T> {
+    guard: MutexGuard<'a, T>,
+    queue: &'a MsQueue<Box<dyn Fn(&mut T) + Send>>
+}
+
+impl<'a, T> ops::Deref for ItemGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        self.guard.deref()
+    }
+}
+
+impl<'a, T> ops::DerefMut for ItemGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.guard.deref_mut()
+    }
+}
+
+impl<'a, T> Drop for ItemGuard<'a, T> {
+    fn drop(&mut self) {
+        while let Some(ref op) = self.queue.try_pop() {
+            op(&mut self.guard)
+        }
     }
 }
 
@@ -165,14 +242,16 @@ impl<T> Link<T> {
         store.resolve(self)
     }
 
-    pub fn follow_mut(self, store: &StoreMut<T>) -> MutexGuard<T> {
+    pub fn follow_mut(self, store: &StoreMut<T>) -> ItemGuard<T> {
         store.resolve_mut(self)
     }
 
-    pub fn try_follow_mut(self, store: &StoreMut<T>) -> Option<MutexGuard<T>> {
+    pub fn try_follow_mut(self, store: &StoreMut<T>) -> Option<ItemGuard<T>> {
         store.try_resolve_mut(self)
     }
 }
+
+unsafe impl<T> Send for Link<T> { }
 
 impl<T> Clone for Link<T> {
     fn clone(&self) -> Self {
