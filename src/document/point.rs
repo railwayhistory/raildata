@@ -1,13 +1,10 @@
 
-use ::load::report::{Failed, Origin, PathReporter, StageReporter};
-use ::load::yaml::{FromYaml, Mapping, Value};
-use ::store::{
-    LoadStore, Stored, UpdateStore,
-    LineLink, PathLink, PointLink, SourceLink
-};
-use ::types::{EventDate, Key, LanguageText, List, LocalText, Marked, Set};
+use crate::library::LibraryBuilder;
+use crate::load::report::{Failed, Origin, PathReporter};
+use crate::load::yaml::{FromYaml, Mapping, Value};
+use crate::types::{EventDate, Key, LanguageText, List, LocalText, Marked, Set};
+use super::{LineLink, PathLink, PointLink, SourceLink};
 use super::common::{Common, Progress};
-
 
 //------------ Point ---------------------------------------------------------
 
@@ -23,7 +20,6 @@ pub struct Point {
     lines: List<LineLink>,
     connections: Set<PointLink>,
 }
-
 
 /// # Data Access
 ///
@@ -63,11 +59,9 @@ impl Point {
     pub fn subtype(&self) -> Subtype {
         self.subtype.into_value()
     }
-}
 
-impl<'a> Stored<'a, Point> {
-    pub fn events(&self) -> Stored<'a, EventList> {
-        self.map(|item| &item.events)
+    pub fn events(&self) -> &EventList {
+        &self.events
     }
 }
 
@@ -78,7 +72,7 @@ impl Point {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -96,6 +90,7 @@ impl Point {
         })
     }
 
+    /*
     //--- Crosslinking
 
     pub fn crosslink(
@@ -128,6 +123,7 @@ impl Point {
 
     pub fn verify(&self, _report: &mut StageReporter) {
     }
+    */
 }
 
 
@@ -190,130 +186,132 @@ pub struct Event {
     no_nsb: Option<Marked<String>>,
 }
 
-impl<'a> Stored<'a, Event> {
+impl Event {
     pub fn date(&self) -> &EventDate {
-        &self.access().date
+        &self.date
     }
 
-    pub fn document(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.document)
+    pub fn document(&self) -> &List<Marked<SourceLink>> {
+        &self.document
     }
 
-    pub fn source(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.source)
+    pub fn source(&self) -> &List<Marked<SourceLink>> {
+        &self.source
     }
 
     pub fn note(&self) -> Option<&LanguageText> {
-        self.access().note.as_ref()
+        self.note.as_ref()
     }
 
     pub fn category(&self) -> Option<&Set<Category>> {
-        self.access().category.as_ref()
+        self.category.as_ref()
     }
 
-    pub fn connection(&self) -> Option<Stored<'a, List<Marked<PointLink>>>> {
-        self.map_opt(|item| item.connection.as_ref())
+    pub fn connection(&self) -> Option<&List<Marked<PointLink>>> {
+        self.connection.as_ref()
     }
 
     pub fn designation(&self) -> Option<&LocalText> {
-        self.access().designation.as_ref()
+        self.designation.as_ref()
     }
 
-    pub fn location(&self) -> Option<Stored<'a, Location>> {
-        self.map_opt(|item| item.location.as_ref())
+    pub fn location(&self) -> Option<&Location> {
+        self.location.as_ref()
     }
 
-    pub fn master(
-        &self
-    ) -> Stored<'a, Option<Option<List<Marked<PointLink>>>>> {
-        self.map(|item| &item.master)
+    pub fn master(&self) -> Option<Option<&List<Marked<PointLink>>>> {
+        match self.master {
+            Some(Some(ref inner)) => Some(Some(inner)),
+            Some(None) => Some(None),
+            None => None
+        }
     }
 
-    pub fn merged(&self) -> Option<Stored<Point>> {
-        self.map_opt(|item| item.merged.as_ref()).map(|x| x.follow())
+    pub fn merged(&self) -> Option<PointLink> {
+        self.merged.map(Marked::into_value)
     }
 
     pub fn name(&self) -> Option<&LocalText> {
-        self.access().name.as_ref()
+        self.name.as_ref()
     }
 
     pub fn plc(&self) -> Option<&Plc> {
-        self.access().plc.as_ref()
+        self.plc.as_ref()
     }
 
     pub fn public_name(&self) -> Option<&List<LocalText>> {
-        self.access().public_name.as_ref()
+        self.public_name.as_ref()
     }
 
-    pub fn site(&self) -> Option<Stored<'a, Site>> {
-        self.map_opt(|item| item.site.as_ref())
+    pub fn site(&self) -> Option<&Site> {
+        self.site.as_ref()
     }
 
     pub fn short_name(&self) -> Option<&LocalText> {
-        self.access().short_name.as_ref()
+        self.short_name.as_ref()
     }
 
     pub fn staff(&self) -> Option<Staff> {
-        self.access().staff
+        self.staff
     }
 
     pub fn status(&self) -> Option<Status> {
-        self.access().status
+        self.status
     }
 
     pub fn service(&self) -> Option<Service> {
-        self.access().service
+        self.service
     }
 
-    pub fn split_from(&self) -> Option<Stored<Point>> {
-        self.map_opt(|item| item.split_from.as_ref()).map(|x| x.follow())
+    pub fn split_from(&self) -> Option<PointLink> {
+        self.split_from.map(Marked::into_value)
     }
 
     pub fn de_ds100(&self) -> Option<&DeDs100> {
-        self.access().de_ds100.as_ref()
+        self.de_ds100.as_ref()
     }
 
     pub fn de_dstnr(&self) -> Option<&DeDstnr> {
-        self.access().de_dstnr.as_ref()
+        self.de_dstnr.as_ref()
     }
 
     pub fn de_lknr(&self) -> Option<&List<DeLknr>> {
-        self.access().de_lknr.as_ref()
+        self.de_lknr.as_ref()
     }
 
     pub fn de_name16(&self) -> Option<&DeName16> {
-        self.access().de_name16.as_ref()
+        self.de_name16.as_ref()
     }
 
     pub fn de_rang(&self) -> Option<&DeRang> {
-        self.access().de_rang.as_ref()
+        self.de_rang.as_ref()
     }
 
     pub fn de_vbl(&self) -> Option<&DeVbl> {
-        self.access().de_vbl.as_ref()
+        self.de_vbl.as_ref()
     }
 
     pub fn dk_ref(&self) -> Option<&str> {
-        self.access().dk_ref.as_ref().map(|x| x.as_value().as_ref())
+        self.dk_ref.as_ref().map(|s| s.as_value().as_ref())
     }
 
     pub fn no_fs(&self) -> Option<&str> {
-        self.access().no_fs.as_ref().map(|x| x.as_value().as_ref())
+        self.no_fs.as_ref().map(|s| s.as_value().as_ref())
     }
 
     pub fn no_njk(&self) -> Option<&str> {
-        self.access().no_njk.as_ref().map(|x| x.as_value().as_ref())
+        self.no_njk.as_ref().map(|s| s.as_value().as_ref())
     }
 
     pub fn no_nsb(&self) -> Option<&str> {
-        self.access().no_nsb.as_ref().map(|x| x.as_value().as_ref())
+        self.no_nsb.as_ref().map(|s| s.as_value().as_ref())
     }
 }
 
-impl FromYaml<LoadStore> for Event {
+impl FromYaml<LibraryBuilder> for Event {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -439,10 +437,10 @@ data_enum! {
 #[derive(Clone, Debug)]
 pub struct Location(List<(Marked<LineLink>, Option<Marked<String>>)>);
 
-impl FromYaml<LoadStore> for Location {
+impl FromYaml<LibraryBuilder> for Location {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut res = List::new();
@@ -455,13 +453,7 @@ impl FromYaml<LoadStore> for Location {
                     continue;
                 }
             };
-            let key = match LineLink::forge(key, context, report) {
-                Ok(key) => key,
-                Err(_) => {
-                    err = true;
-                    continue
-                }
-            };
+            let key = LineLink:: build(key, context, report);
             if value.is_null() {
                 res.push((key, None))
             }
@@ -517,10 +509,10 @@ data_enum! {
 #[derive(Clone, Debug)]
 pub struct Site(List<(Marked<PathLink>, Marked<String>)>);
 
-impl FromYaml<LoadStore> for Site {
+impl FromYaml<LibraryBuilder> for Site {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut res = List::new();
@@ -533,13 +525,7 @@ impl FromYaml<LoadStore> for Site {
                     continue;
                 }
             };
-            let key = match PathLink::forge(key, context, report) {
-                Ok(key) => key,
-                Err(_) => {
-                    err = true;
-                    continue
-                }
-            };
+            let key = PathLink::build(key, context, report);
             match value.into_string(report) {
                 Ok(value) => res.push((key, value)),
                 Err(_) => { err = true }

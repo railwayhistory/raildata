@@ -2,8 +2,8 @@
 
 use std::{cmp, fmt, ops, str};
 use std::str::FromStr;
-use ::load::yaml::{FromYaml, Value};
-use ::load::report::{Failed, PathReporter};
+use crate::load::yaml::{FromYaml, Value};
+use crate::load::report::{Failed, PathReporter};
 use super::list::List;
 use super::marked::Marked;
 
@@ -150,7 +150,7 @@ impl Date {
 impl<C> FromYaml<C> for Marked<Date> {
     fn from_yaml(
         value: Value,
-        _: &mut C,
+        _: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let value = match value.try_into_integer() {
@@ -327,7 +327,7 @@ impl ops::Deref for EventDate {
 impl<C> FromYaml<C> for EventDate {
     fn from_yaml(
         value: Value,
-        context: &mut C,
+        context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         match value.try_into_null() {

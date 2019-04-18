@@ -27,7 +27,7 @@ impl ops::Deref for CountryCode {
 impl<C> FromYaml<C> for Marked<CountryCode> {
     fn from_yaml(
         value: Value,
-        _: &mut C,
+        _: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         value.into_string(report)?
@@ -67,7 +67,7 @@ impl ops::Deref for LanguageCode {
 impl<C> FromYaml<C> for Marked<LanguageCode> {
     fn from_yaml(
         value: Value,
-        _: &mut C,
+        _: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         value.into_string(report)?
@@ -129,7 +129,7 @@ impl From<LanguageCode> for LocalCode {
 impl<C> FromYaml<C> for Marked<LocalCode> {
     fn from_yaml(
         value: Value,
-        _: &mut C,
+        _: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         value.into_string(report)?
@@ -178,7 +178,7 @@ impl<Ctx, C: Ord + FromStr> FromYaml<Ctx> for CodedText<C>
 where <C as FromStr>::Err: Message {
     fn from_yaml(
         value: Value,
-        _: &mut Ctx,
+        _: &Ctx,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         match value.try_into_mapping() {
@@ -222,8 +222,8 @@ pub type LanguageText = CodedText<LanguageCode>;
 
 //------------ CountryCodeError ----------------------------------------------
 
-#[derive(Clone, Debug, Fail)]
-#[fail(display="invalid country code '{}'", _0)]
+#[derive(Clone, Debug, Display)]
+#[display(fmt="invalid country code '{}'", _0)]
 pub struct CountryCodeError(String);
 
 impl From<String> for CountryCodeError {
@@ -235,8 +235,8 @@ impl From<String> for CountryCodeError {
 
 //------------ LanguageCodeError ---------------------------------------------
 
-#[derive(Clone, Debug, Fail)]
-#[fail(display="invalid language code '{}'", _0)]
+#[derive(Clone, Debug, Display)]
+#[display(fmt="invalid language code '{}'", _0)]
 pub struct LanguageCodeError(String);
 
 impl From<String> for LanguageCodeError {
@@ -248,8 +248,8 @@ impl From<String> for LanguageCodeError {
 
 //------------ LocalCodeError ------------------------------------------------
 
-#[derive(Clone, Debug, Fail)]
-#[fail(display="invalid country or language code '{}'", _0)]
+#[derive(Clone, Debug, Display)]
+#[display(fmt="invalid country or language code '{}'", _0)]
 pub struct LocalCodeError(String);
 
 impl From<String> for LocalCodeError {

@@ -58,7 +58,7 @@ impl str::FromStr for Key {
 impl<C> FromYaml<C> for Marked<Key> {
     fn from_yaml(
         value: Value,
-        _: &mut C,
+        _: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         Ok(value.into_string(report)?.map(Key))
@@ -75,7 +75,7 @@ impl fmt::Display for Key {
 
 //------------ InvalidKey ----------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="invalid key")]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="invalid key")]
 pub struct InvalidKey;
 

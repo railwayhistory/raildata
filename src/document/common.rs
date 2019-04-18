@@ -1,9 +1,10 @@
 //! Attributes and attribute types common to all documents.
 
-use ::load::report::{Failed, Origin, PathReporter};
-use ::load::yaml::{FromYaml, Mapping, Value};
-use ::store::{LoadStore, Stored, OrganizationLink, SourceLink};
-use ::types::{Date, EventDate, Key, LanguageText, List, Marked};
+use crate::library::LibraryBuilder;
+use crate::load::report::{Failed, Origin, PathReporter};
+use crate::load::yaml::{FromYaml, Mapping, Value};
+use crate::types::{EventDate, Key, LanguageText, List, Marked};
+use super::{OrganizationLink, SourceLink};
 
 
 //------------ Common --------------------------------------------------------
@@ -41,7 +42,7 @@ impl Common {
     pub fn from_yaml(
         key: Marked<Key>,
         doc: &mut Mapping,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         Ok(Common {
@@ -89,24 +90,24 @@ pub struct Alternative {
     source: List<Marked<SourceLink>>,
 }
 
-impl<'a> Stored<'a, Alternative> {
-    pub fn date(&self) -> &'a EventDate {
-        &self.access().date
+impl Alternative {
+    pub fn date(&self) -> &EventDate {
+        &self.date
     }
 
-    pub fn document(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.document)
+    pub fn document(&self) -> &List<Marked<SourceLink>> {
+        &self.document
     }
 
-    pub fn source(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.source)
+    pub fn source(&self) -> &List<Marked<SourceLink>> {
+        &self.source
     }
 }
 
-impl FromYaml<LoadStore> for Alternative {
+impl FromYaml<LibraryBuilder> for Alternative {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -127,7 +128,7 @@ impl FromYaml<LoadStore> for Alternative {
 
 #[derive(Clone, Debug)]
 pub struct Basis {
-    date: Option<List<Marked<Date>>>,
+    date: Option<EventDate>,
     document: List<Marked<SourceLink>>,
     source: List<Marked<SourceLink>>,
     contract: Option<Contract>,
@@ -135,36 +136,36 @@ pub struct Basis {
     note: Option<LanguageText>,
 }
 
-impl<'a> Stored<'a, Basis> {
-    pub fn date(&self) -> Option<&List<Marked<Date>>> {
-        self.access().date.as_ref()
+impl Basis {
+    pub fn date(&self) -> Option<&EventDate> {
+        self.date.as_ref()
     }
 
-    pub fn document(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.document)
+    pub fn document(&self) -> &List<Marked<SourceLink>> {
+        &self.document
     }
 
-    pub fn source(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.source)
+    pub fn source(&self) -> &List<Marked<SourceLink>> {
+        &self.source
     }
 
-    pub fn contract(&self) -> Option<Stored<'a, Contract>> {
-        self.map_opt(|item| item.contract.as_ref())
+    pub fn contract(&self) -> Option<&Contract> {
+        self.contract.as_ref()
     }
 
-    pub fn treaty(&self) -> Option<Stored<'a, Contract>> {
-        self.map_opt(|item| item.treaty.as_ref())
+    pub fn treaty(&self) -> Option<&Contract> {
+        self.treaty.as_ref()
     }
 
     pub fn note(&self) -> Option<&LanguageText> {
-        self.access().note.as_ref()
+        self.note.as_ref()
     }
 }
 
-impl FromYaml<LoadStore> for Basis {
+impl FromYaml<LibraryBuilder> for Basis {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -194,16 +195,16 @@ pub struct Contract {
     parties: List<Marked<OrganizationLink>>,
 }
 
-impl<'a> Stored<'a, Contract> {
-    pub fn parties(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.parties)
+impl Contract {
+    pub fn parties(&self) -> &List<Marked<OrganizationLink>> {
+        &self.parties
     }
 }
 
-impl FromYaml<LoadStore> for Contract {
+impl FromYaml<LibraryBuilder> for Contract {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;

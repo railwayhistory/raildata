@@ -1,14 +1,11 @@
 
 use std::ops;
-use ::load::report::{Failed, Origin, PathReporter, StageReporter};
-use ::load::yaml::{FromYaml, Mapping, Value};
-use ::store::{
-    LoadStore, Stored, UpdateStore,
-    DocumentLink, OrganizationLink, SourceLink,
-};
-use ::types::{Date, Key, LanguageText, List, Marked, Url};
+use crate::library::LibraryBuilder;
+use crate::load::report::{Failed, Origin, PathReporter};
+use crate::load::yaml::{FromYaml, Mapping, Value};
+use crate::types::{Date, Key, LanguageText, List, Marked, Url};
+use super::{DocumentLink, OrganizationLink, SourceLink};
 use super::common::{Common, Progress};
-
 
 //------------ Source --------------------------------------------------------
 
@@ -64,75 +61,73 @@ impl Source {
     pub fn subtype(&self) -> Subtype {
         self.subtype
     }
-}
 
-impl<'a> Stored<'a, Source> {
-    pub fn author(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.author)
+    pub fn author(&self) -> &List<Marked<OrganizationLink>> {
+        &self.author
     }
 
-    pub fn collection(&self) -> Option<Stored<Source>> {
-        self.map_opt(|item| item.collection.as_ref()).map(|x| x.follow())
+    pub fn collection(&self) -> Option<SourceLink> {
+        self.collection.map(Marked::into_value)
     }
 
     pub fn date(&self) -> Option<&Date> {
-        self.access().date.as_ref().map(Marked::as_value)
+        self.date.as_ref().map(Marked::as_value)
     }
 
     pub fn designation(&self) -> Option<&str> {
-        self.access().designation.as_ref().map(|x| x.as_value().as_ref())
+        self.designation.as_ref().map(|x| x.as_value().as_ref())
     }
 
     pub fn digital(&self) -> &List<Marked<Url>> {
-        &self.access().digital
+        &self.digital
     }
 
     pub fn edition(&self) -> Option<&str> {
-        self.access().edition.as_ref().map(|x| x.as_value().as_ref())
+        self.edition.as_ref().map(|x| x.as_value().as_ref())
     }
 
-    pub fn editor(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.editor)
+    pub fn editor(&self) -> &List<Marked<OrganizationLink>> {
+        &self.editor
     }
 
     pub fn isbn(&self) -> Option<&Isbn> {
-        self.access().isbn.as_ref()
+        self.isbn.as_ref()
     }
 
     pub fn number(&self) -> Option<&str> {
-        self.access().number.as_ref().map(|x| x.as_value().as_ref())
+        self.number.as_ref().map(|x| x.as_value().as_ref())
     }
 
-    pub fn organization(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.organization)
+    pub fn organization(&self) -> &List<Marked<OrganizationLink>> {
+        &self.organization
     }
 
     pub fn pages(&self) -> Option<&Pages> {
-        self.access().pages.as_ref()
+        self.pages.as_ref()
     }
 
-    pub fn publisher(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.publisher)
+    pub fn publisher(&self) -> &List<Marked<OrganizationLink>> {
+        &self.publisher
     }
 
     pub fn revision(&self) -> Option<&str> {
-        self.access().revision.as_ref().map(|x| x.as_value().as_ref())
+        self.revision.as_ref().map(|x| x.as_value().as_ref())
     }
 
     pub fn short_title(&self) -> Option<&str> {
-        self.access().short_title.as_ref().map(|x| x.as_value().as_ref())
+        self.short_title.as_ref().map(|x| x.as_value().as_ref())
     }
 
     pub fn title(&self) -> Option<&str> {
-        self.access().title.as_ref().map(|x| x.as_value().as_ref())
+        self.title.as_ref().map(|x| x.as_value().as_ref())
     }
 
     pub fn url(&self) -> Option<&Url> {
-        self.access().url.as_ref().map(Marked::as_value)
+        self.url.as_ref().map(Marked::as_value)
     }
 
     pub fn volume(&self) -> Option<&str> {
-        self.access().volume.as_ref().map(|x| x.as_value().as_ref())
+        self.volume.as_ref().map(|x| x.as_value().as_ref())
     }
 }
 
@@ -140,7 +135,7 @@ impl Source {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -196,6 +191,7 @@ impl Source {
         })
     }
 
+    /*
     pub fn crosslink(
         &self,
         _link: SourceLink,
@@ -206,6 +202,7 @@ impl Source {
 
     pub fn verify(&self, _report: &mut StageReporter) {
     }
+    */
 }
 
 
@@ -240,7 +237,7 @@ pub struct Pages(Marked<String>);
 impl<C> FromYaml<C> for Pages {
     fn from_yaml(
         value: Value,
-        context: &mut C,
+        context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         match value.try_into_integer() {
@@ -269,7 +266,7 @@ pub struct Isbn(Marked<String>);
 impl<C> FromYaml<C> for Isbn {
     fn from_yaml(
         value: Value,
-        context: &mut C,
+        context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         Marked::from_yaml(value, context, report).map(Isbn)

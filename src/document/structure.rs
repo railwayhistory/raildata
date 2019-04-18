@@ -1,10 +1,10 @@
 
-use ::load::report::{Failed, Origin, PathReporter, StageReporter};
-use ::load::yaml::{FromYaml, Mapping, Value};
-use ::store::{LoadStore, Stored, UpdateStore, SourceLink, StructureLink};
-use ::types::{EventDate, Key, LanguageText, List, LocalText, Marked};
+use crate::library::LibraryBuilder;
+use crate::load::report::{Failed, Origin, PathReporter};
+use crate::load::yaml::{FromYaml, Mapping, Value};
+use crate::types::{EventDate, Key, LanguageText, List, LocalText, Marked};
+use super::SourceLink;
 use super::common::{Common, Progress};
-
 
 //------------ Structure -----------------------------------------------------
 
@@ -35,11 +35,9 @@ impl Structure {
     pub fn subtype(&self) -> Subtype {
         self.subtype.into_value()
     }
-}
 
-impl<'a> Stored<'a, Structure> {
-    pub fn events(&self) -> Stored<'a, EventList> {
-        self.map(|item| &item.events)
+    pub fn events(&self) -> &EventList {
+        &self.events
     }
 }
 
@@ -47,7 +45,7 @@ impl Structure {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -60,6 +58,7 @@ impl Structure {
             events: events?,
         })
     }
+    /*
 
     pub fn crosslink(
         &self,
@@ -69,8 +68,10 @@ impl Structure {
     ) {
     }
 
+
     pub fn verify(&self, _report: &mut StageReporter) {
     }
+    */
 }
 
 
@@ -103,36 +104,36 @@ pub struct Event {
     name: Option<LocalText>,
 }
 
-impl<'a> Stored<'a, Event> {
+impl Event {
     pub fn date(&self) -> &EventDate {
-        &self.access().date
+        &self.date
     }
 
-    pub fn document(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.document)
+    pub fn document(&self) -> &List<Marked<SourceLink>> {
+        &self.document
     }
 
-    pub fn source(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.source)
+    pub fn source(&self) -> &List<Marked<SourceLink>> {
+        &self.source
     }
 
     pub fn note(&self) -> Option<&LanguageText> {
-        self.access().note.as_ref()
+        self.note.as_ref()
     }
 
     pub fn length(&self) -> Option<f64> {
-        self.access().length.map(Marked::into_value)
+        self.length.map(Marked::into_value)
     }
 
     pub fn name(&self) -> Option<&LocalText> {
-        self.access().name.as_ref()
+        self.name.as_ref()
     }
 }
 
-impl FromYaml<LoadStore> for Event {
+impl FromYaml<LibraryBuilder> for Event {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;

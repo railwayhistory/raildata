@@ -8,7 +8,7 @@ pub use url::Url;
 impl<C> FromYaml<C> for Marked<Url> {
     fn from_yaml(
         value: Value,
-        _: &mut C,
+        _: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let value = value.into_string(report)?;
@@ -23,7 +23,7 @@ impl<C> FromYaml<C> for Marked<Url> {
 }
 
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="invalid URL, {}", _0)]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="invalid URL, {}", _0)]
 struct UrlError(url::ParseError);
 

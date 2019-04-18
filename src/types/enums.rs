@@ -46,7 +46,7 @@ macro_rules! data_enum {
         impl<C> $crate::load::yaml::FromYaml<C> for $name {
             fn from_yaml(
                 value: $crate::load::yaml::Value,
-                context: &mut C,
+                context: &C,
                 report: &mut $crate::load::report::PathReporter
             ) -> Result<Self, $crate::load::report::Failed> {
                 $crate::types::Marked::from_yaml(value, context, report)
@@ -59,7 +59,7 @@ macro_rules! data_enum {
         for $crate::types::Marked<$name> {
             fn from_yaml(
                 value: $crate::load::yaml::Value,
-                _: &mut C,
+                _: &C,
                 report: &mut $crate::load::report::PathReporter
             ) -> Result<Self, $crate::load::report::Failed> {
                 let text = value.into_string(report)?;
@@ -92,8 +92,8 @@ macro_rules! data_enum {
 
 //------------ EnumError -----------------------------------------------------
 
-#[derive(Clone, Debug, Fail)]
-#[fail(display="invalid enum value '{}'", _0)]
+#[derive(Clone, Debug, Display)]
+#[display(fmt="invalid enum value '{}'", _0)]
 pub struct EnumError(String);
 
 impl EnumError {

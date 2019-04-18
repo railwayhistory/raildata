@@ -1,14 +1,14 @@
-
 use std::f64::INFINITY;
 use std::str::FromStr;
 use osmxml::elements::{MemberType, Osm, Relation};
-use ::load::report::{self, Failed, Origin, PathReporter, StageReporter};
-use ::load::yaml::Mapping;
-use ::store::{LoadStore, Stored, UpdateStore, PathLink, SourceLink};
-use ::types::{IntoMarked, Location, Key, Marked};
-use ::types::key::InvalidKey;
+use crate::library::LibraryBuilder;
+use crate::load::report;
+use crate::load::report::{Failed, Origin, PathReporter};
+use crate::load::yaml::Mapping;
+use crate::types::{IntoMarked, Location, Key, Marked};
+use crate::types::key::InvalidKey;
+use super::SourceLink;
 use super::common::{Common, Progress};
-
 
 //------------ Path ----------------------------------------------------------
 
@@ -58,11 +58,9 @@ impl Path {
             AsRef::<str>::as_ref(&item.0).cmp(name)
         ).ok()
     }
-}
 
-impl<'a> Stored<'a, Path> {
-    pub fn source(&self) -> Stored<'a, Vec<SourceLink>> {
-        self.map(|item| &item.source)
+    pub fn source(&self) -> &[SourceLink] {
+        self.source.as_ref()
     }
 }
 
@@ -85,7 +83,7 @@ impl Path {
     pub fn from_yaml(
         _key: Marked<Key>,
         doc: Mapping,
-        _context: &mut LoadStore,
+        _context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         report.error(PathInYaml.marked(doc.location()));
@@ -95,7 +93,7 @@ impl Path {
     pub fn from_osm(
         mut relation: Relation,
         osm: &Osm,
-        documents: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Option<Key>> {
         if relation.tags().get("type") != Some("path") {
@@ -123,7 +121,7 @@ impl Path {
         if let Err(_) = path.load_nodes(&mut relation, osm, report) {
             return Err(Some(key))
         }
-        if let Err(_) = path.load_source(&mut relation, documents, report) {
+        if let Err(_) = path.load_source(&mut relation, context, report) {
             return Err(Some(key))
         }
         path.name = relation.tags_mut().remove("name");
@@ -266,7 +264,7 @@ impl Path {
     fn load_source(
         &mut self,
         relation: &mut Relation,
-        documents: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<(), Failed> {
         let source = match relation.tags_mut().remove("source") {
@@ -281,17 +279,14 @@ impl Path {
                     return Err(Failed)
                 }
             };
-            let key = key.marked(Location::NONE);
-            if let Ok(link) = SourceLink::forge(key, documents, report) {
-                self.source.push(link.into_value())
-            }
-            else {
-                return Err(Failed)
-            }
+            self.source.push(SourceLink::build(
+                key.marked(Location::NONE), context, report
+            ).into_value());
         }
         Ok(())
     }
 
+    /*
     pub fn crosslink(
         &self,
         _link: PathLink,
@@ -302,6 +297,7 @@ impl Path {
 
     pub fn verify(&self, _report: &mut StageReporter) {
     }
+    */
 }
 
 
@@ -332,68 +328,67 @@ impl Node {
 
 //============ Errors ========================================================
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="path documents in YAML files currently not supported")]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="path documents in YAML files currently not supported")]
 pub struct PathInYaml;
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="relation {} is not a path", _0)]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="relation {} is not a path", _0)]
 pub struct NonPathRelation(i64);
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="relation {} is missing the 'key' attribute", _0)]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="relation {} is missing the 'key' attribute", _0)]
 pub struct MissingKey(i64);
 
-#[derive(Clone, Debug, Fail)]
-#[fail(display="relation {}: {}", _0, _1)]
+#[derive(Clone, Debug, Display)]
+#[display(fmt="relation {}: {}", _0, _1)]
 pub struct InvalidRelationKey(i64, InvalidKey);
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="relation {} has non-way member {}", rel, target)]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="relation {} has non-way member {}", rel, target)]
 pub struct NonWayMember {
     rel: i64,
     target: i64,
 }
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="relation {} references non-exisitng way {}", rel, way)]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="relation {} references non-exisitng way {}", rel, way)]
 pub struct MissingWay {
     rel: i64,
     way: i64,
 }
 
-#[derive(Clone, Debug, Fail)]
-#[fail(display="way {} has invalid type '{}'", way, value)]
+#[derive(Clone, Debug, Display)]
+#[display(fmt="way {} has invalid type '{}'", way, value)]
 pub struct IllegalWayType {
     way: i64,
     value: String,
 }
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="way {} is empty", _0)]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="way {} is empty", _0)]
 pub struct EmptyWay(i64);
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="relation {} is non-contiguous at way {}", rel, way)]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="relation {} is non-contiguous at way {}", rel, way)]
 pub struct NonContiguous {
     rel: i64,
     way: i64
 }
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="missing node {}", _0)]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="missing node {}", _0)]
 pub struct MissingNode(i64);
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="invalid pre tag in node {}", _0)]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="invalid pre tag in node {}", _0)]
 pub struct InvalidPre(i64);
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="invalid post tag in node {}", _0)]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="invalid post tag in node {}", _0)]
 pub struct InvalidPost(i64);
 
-#[derive(Clone, Debug, Fail)]
-#[fail(display="duplicate node name '{}'", _0)]
+#[derive(Clone, Debug, Display)]
+#[display(fmt="duplicate node name '{}'", _0)]
 pub struct DuplicateName(String);
-
 

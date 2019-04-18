@@ -3,7 +3,7 @@
 use std::{fmt, ops, path};
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
-use ::types::{IntoMarked, Location, Marked};
+use crate::types::{IntoMarked, Location, Marked};
 
 
 //------------ Severity ------------------------------------------------------
@@ -203,21 +203,32 @@ impl Display for Notice {
 /// A report is a collection of notices.
 pub struct Report {
     notices: Vec<Notice>,
+    stage_count: [usize; 4],
 }
 
 impl Report {
     pub fn new() -> Self {
         Report {
-            notices: Vec::new()
+            notices: Vec::new(),
+            stage_count: [0; 4],
         }
     }
 
     pub fn notice(&mut self, notice: Notice) {
+        self.stage_count[notice.stage as usize] += 1;
         self.notices.push(notice)
     }
 
     pub fn sort(&mut self) {
         self.notices.sort_by(|l, r| l.origin.cmp(&r.origin))
+    }
+
+    pub fn has_stage(&self, stage: Stage) -> bool {
+        self.stage_count[stage as usize] > 0
+    }
+
+    pub fn stage_count(&self, stage: Stage) -> usize {
+        self.stage_count[stage as usize]
     }
 }
 
@@ -232,7 +243,7 @@ impl ops::Deref for Report {
 
 //------------ Reporter ------------------------------------------------------
 
-/// A type allowing to access to a report.
+/// A type allowing access to a report.
 ///
 /// This type doesn’t allow adding notices to the report just yet. You need
 /// to convert it into a `StageReporter` first.

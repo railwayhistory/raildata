@@ -102,7 +102,7 @@ impl<T: Hash + Eq> Default for Set<T> {
 impl<C, T: FromYaml<C> + Hash + Eq> FromYaml<C> for Set<T> {
     fn from_yaml(
         value: Value,
-        context: &mut C,
+        context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         match value.try_into_sequence() {

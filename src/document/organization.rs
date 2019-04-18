@@ -1,9 +1,10 @@
 
-use ::load::yaml::{FromYaml, Mapping, Value};
-use ::load::report::{Failed, Origin, PathReporter, StageReporter};
-use ::types::{EventDate, Key, LanguageText, LocalText, List, Marked};
-use ::store::{LoadStore, Stored, UpdateStore, OrganizationLink, SourceLink};
+use crate::library::LibraryBuilder;
+use crate::load::report::{Failed, Origin, PathReporter};
+use crate::load::yaml::{FromYaml, Mapping, Value};
+use crate::types::{EventDate, Key, LanguageText, LocalText, List, Marked};
 use super::common::{Basis, Common, Progress};
+use super::{OrganizationLink, SourceLink};
 
 
 //------------ Organization --------------------------------------------------
@@ -35,11 +36,9 @@ impl Organization {
     pub fn subtype(&self) -> Subtype {
         self.subtype.into_value()
     }
-}
 
-impl<'a> Stored<'a, Organization> {
-    pub fn events(&self) -> Stored<'a, EventList> {
-        self.map(|item| &item.events)
+    pub fn events(&self) -> &EventList {
+        &self.events
     }
 }
 
@@ -47,7 +46,7 @@ impl Organization {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -61,6 +60,7 @@ impl Organization {
         })
     }
 
+    /*
     pub fn crosslink(
         &mut self,
         _link: OrganizationLink,
@@ -71,6 +71,7 @@ impl Organization {
 
     pub fn verify(&self, _report: &mut StageReporter) {
     }
+    */
 }
 
 
@@ -114,66 +115,64 @@ pub struct Event {
     successor: Option<Marked<OrganizationLink>>,
 }
 
-impl<'a> Stored<'a, Event> {
+impl Event {
     pub fn date(&self) -> &EventDate {
-        &self.access().date
+        &self.date
     }
 
-    pub fn document(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.document)
+    pub fn document(&self) -> &List<Marked<SourceLink>> {
+        &self.document
     }
 
-    pub fn source(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.source)
+    pub fn source(&self) -> &List<Marked<SourceLink>> {
+        &self.source
     }
 
-    pub fn basis(&self) -> Stored<'a, List<Basis>> {
-        self.map(|item| &item.basis)
+    pub fn basis(&self) -> &List<Basis> {
+        &self.basis
     }
 
     pub fn note(&self) -> Option<&LanguageText> {
-        self.access().note.as_ref()
+        self.note.as_ref()
     }
 
-    pub fn domicile(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.domicile)
+    pub fn domicile(&self) -> &List<Marked<OrganizationLink>> {
+        &self.domicile
     }
 
-    pub fn master(&self) -> Option<Stored<Organization>> {
-        self.map_opt(|item| item.master.as_ref()).map(|x| x.follow())
+    pub fn master(&self) -> Option<OrganizationLink> {
+        self.master.map(Marked::into_value)
     }
 
     pub fn name(&self) -> Option<&LocalText> {
-        self.access().name.as_ref()
+        self.name.as_ref()
     }
 
-    pub fn owner(
-        &self
-    ) -> Option<Stored<'a, List<Marked<OrganizationLink>>>> {
-        self.map_opt(|item| item.owner.as_ref())
+    pub fn owner(&self) -> Option<&List<Marked<OrganizationLink>>> {
+        self.owner.as_ref()
     }
 
-    pub fn property(&self) -> Option<Stored<'a, Property>> {
-        self.map_opt(|item| item.property.as_ref())
+    pub fn property(&self) -> Option<&Property> {
+        self.property.as_ref()
     }
 
     pub fn short_name(&self) -> Option<&LocalText> {
-        self.access().short_name.as_ref()
+        self.short_name.as_ref()
     }
 
     pub fn status(&self) -> Option<Status> {
-        self.access().status
+        self.status
     }
 
-    pub fn successor(&self) -> Option<Stored<Organization>> {
-        self.map_opt(|item| item.successor.as_ref()).map(|x| x.follow())
+    pub fn successor(&self) -> Option<OrganizationLink> {
+        self.successor.map(Marked::into_value)
     }
 }
 
-impl FromYaml<LoadStore> for Event {
+impl FromYaml<LibraryBuilder> for Event {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -220,34 +219,28 @@ pub struct Property {
     owner: List<Marked<OrganizationLink>>,
 }
 
-impl<'a> Stored<'a, Property> {
+impl Property {
     pub fn role(&self) -> PropertyRole {
-        self.access().role.into_value()
+        self.role.into_value()
     }
 
-    pub fn constructor(
-        &self
-    ) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.constructor)
+    pub fn constructor(&self) -> &List<Marked<OrganizationLink>> {
+        &self.constructor
     }
 
-    pub fn operator(
-        &self
-    ) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.operator)
+    pub fn operator(&self) -> &List<Marked<OrganizationLink>> {
+        &self.operator
     }
 
-    pub fn owner(
-        &self
-    ) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.owner)
+    pub fn owner(&self) -> &List<Marked<OrganizationLink>> {
+        &self.owner
     }
 }
 
-impl FromYaml<LoadStore> for Property {
+impl FromYaml<LibraryBuilder> for Property {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
