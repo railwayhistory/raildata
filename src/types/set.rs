@@ -11,13 +11,13 @@ use super::marked::Location;
 
 //------------ Set -----------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Set<T: Hash + Eq> {
     inner: Inner<T, HashSet<T>>,
     location: Location
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 enum Inner<O, M> {
     Empty,
     One(O),
@@ -64,6 +64,14 @@ impl<T: Hash + Eq> Set<T> {
         }
     }
 
+    pub fn merge(&mut self, other: &Self)
+    where T: Clone {
+        // XXX There maybe optimizations here ...
+        for item in other.iter() {
+            self.insert(item.clone());
+        }
+    }
+
     pub fn contains(&self, value: &T) -> bool {
         match self.inner {
             Inner::Empty => false,
@@ -102,7 +110,7 @@ impl<T: Hash + Eq> Default for Set<T> {
 impl<C, T: FromYaml<C> + Hash + Eq> FromYaml<C> for Set<T> {
     fn from_yaml(
         value: Value,
-        context: &mut C,
+        context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         match value.try_into_sequence() {

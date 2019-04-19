@@ -2,8 +2,8 @@
 
 use std::{cmp, fmt, ops, str};
 use std::str::FromStr;
-use ::load::yaml::{FromYaml, Value};
-use ::load::report::{Failed, PathReporter};
+use crate::load::yaml::{FromYaml, Value};
+use crate::load::report::{Failed, PathReporter};
 use super::list::List;
 use super::marked::Marked;
 
@@ -38,7 +38,7 @@ fn stand_in_dates(key: &str) -> Option<Date> {
 //------------ Precision -----------------------------------------------------
 
 /// The precision of a date.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Precision {
     /// Exactly the given date.
     ///
@@ -83,7 +83,7 @@ impl PartialOrd for Precision {
 //------------ Date ----------------------------------------------------------
 
 /// A date.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Date {
     year: i16,
     month: Option<u8>,
@@ -150,7 +150,7 @@ impl Date {
 impl<C> FromYaml<C> for Marked<Date> {
     fn from_yaml(
         value: Value,
-        _: &mut C,
+        _: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let value = match value.try_into_integer() {
@@ -313,7 +313,7 @@ impl str::FromStr for Date {
 
 //------------ EventDate -----------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct EventDate(List<Marked<Date>>);
 
 impl ops::Deref for EventDate {
@@ -327,7 +327,7 @@ impl ops::Deref for EventDate {
 impl<C> FromYaml<C> for EventDate {
     fn from_yaml(
         value: Value,
-        context: &mut C,
+        context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         match value.try_into_null() {

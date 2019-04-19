@@ -1,45 +1,31 @@
 
-use ::load::report::{Failed, Origin, PathReporter, StageReporter};
-use ::load::yaml::{FromYaml, Mapping, Value};
-use ::store::{LoadStore, Stored, UpdateStore, SourceLink, StructureLink};
-use ::types::{EventDate, Key, LanguageText, List, LocalText, Marked};
+use crate::library::{LibraryBuilder, LibraryMut};
+use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
+use crate::load::yaml::{FromYaml, Mapping, Value};
+use crate::types::{EventDate, Key, LanguageText, List, LocalText, Marked};
+use super::{SourceLink, StructureLink};
 use super::common::{Common, Progress};
-
 
 //------------ Structure -----------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Structure {
-    common: Common,
-    subtype: Marked<Subtype>,
-    events: EventList,
+    pub common: Common,
+    pub subtype: Marked<Subtype>,
+    pub events: EventList,
 }
 
 impl Structure {
-    pub fn common(&self) -> &Common {
-        &self.common
-    }
-
     pub fn key(&self) -> &Key {
-        self.common().key()
+        &self.common.key
     }
 
     pub fn progress(&self) -> Progress {
-        self.common().progress()
+        self.common.progress.into_value()
     }
 
     pub fn origin(&self) -> &Origin {
-        &self.common().origin()
-    }
-
-    pub fn subtype(&self) -> Subtype {
-        self.subtype.into_value()
-    }
-}
-
-impl<'a> Stored<'a, Structure> {
-    pub fn events(&self) -> Stored<'a, EventList> {
-        self.map(|item| &item.events)
+        &self.common.origin
     }
 }
 
@@ -47,7 +33,7 @@ impl Structure {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -64,13 +50,15 @@ impl Structure {
     pub fn crosslink(
         &self,
         _link: StructureLink,
-        _store: &mut UpdateStore,
+        _library: &LibraryMut,
         _report: &mut StageReporter
     ) {
     }
 
+    /*
     pub fn verify(&self, _report: &mut StageReporter) {
     }
+    */
 }
 
 
@@ -91,48 +79,22 @@ pub type EventList = List<Event>;
 
 //------------ Event ---------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Event {
     // Meta attributes
-    date: EventDate,
-    document: List<Marked<SourceLink>>,
-    source: List<Marked<SourceLink>>,
-    note: Option<LanguageText>,
+    pub date: EventDate,
+    pub document: List<Marked<SourceLink>>,
+    pub source: List<Marked<SourceLink>>,
+    pub note: Option<LanguageText>,
 
-    length: Option<Marked<f64>>,
-    name: Option<LocalText>,
+    pub length: Option<Marked<f64>>,
+    pub name: Option<LocalText>,
 }
 
-impl<'a> Stored<'a, Event> {
-    pub fn date(&self) -> &EventDate {
-        &self.access().date
-    }
-
-    pub fn document(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.document)
-    }
-
-    pub fn source(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.source)
-    }
-
-    pub fn note(&self) -> Option<&LanguageText> {
-        self.access().note.as_ref()
-    }
-
-    pub fn length(&self) -> Option<f64> {
-        self.access().length.map(Marked::into_value)
-    }
-
-    pub fn name(&self) -> Option<&LocalText> {
-        self.access().name.as_ref()
-    }
-}
-
-impl FromYaml<LoadStore> for Event {
+impl FromYaml<LibraryBuilder> for Event {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;

@@ -1,21 +1,20 @@
 //! A list with an optimization for holding a single item.
 
 use std::{fmt, mem, slice};
-use ::load::report::{Failed, PathReporter};
-use ::load::yaml::{FromYaml, Value};
-use ::store::{ForStored, Stored};
+use crate::load::report::{Failed, PathReporter};
+use crate::load::yaml::{FromYaml, Value};
 use super::marked::{IntoMarked, Location};
 
 
 //------------ List ----------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct List<T> {
     inner: Inner<T, Vec<T>>,
     location: Location,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 enum Inner<O, M> {
     Empty,
     One(O),
@@ -25,6 +24,14 @@ enum Inner<O, M> {
 impl<T> List<T> {
     pub fn new() -> Self {
         List { inner: Inner::Empty, location: Location::default() }
+    }
+
+    pub fn as_slice(&self) -> &[T] {
+        match self.inner {
+            Inner::Empty => &[],
+            Inner::One(ref inner) => slice::from_ref(inner),
+            Inner::Many(ref inner) => inner.as_ref(),
+        }
     }
 
     pub fn location(&self) -> Location {
@@ -69,12 +76,6 @@ impl<T> List<T> {
     }
 }
 
-impl<'a, T> Stored<'a, List<T>> {
-    pub fn iter(self) -> ForStored<'a, Iter<'a, T>> {
-        self.wrap(|list| list.iter())
-    }
-}
-
 impl<T> Default for List<T> {
     fn default() -> Self {
         List { inner: Inner::Empty, location: Location::default() }
@@ -93,7 +94,7 @@ impl<T> From<Option<List<T>>> for List<T> {
 impl<C, T: FromYaml<C>> FromYaml<C> for List<T> {
     fn from_yaml(
         value: Value,
-        context: &mut C,
+        context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let location = value.location();
@@ -139,15 +140,6 @@ impl<'a, T> IntoIterator for &'a List<T> {
     }
 }
 
-impl<'a, T> IntoIterator for Stored<'a, List<T>> {
-    type Item = Stored<'a, T>;
-    type IntoIter = ForStored<'a, Iter<'a, T>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
 impl<'a, T> IntoIterator for &'a mut List<T> {
     type Item = &'a mut T;
     type IntoIter = IterMut<'a, T>;
@@ -181,17 +173,6 @@ impl<'a, T: 'a> Iterator for Iter<'a, T> {
             Inner::Empty => None,
             Inner::One(ref mut item) => item.take(),
             Inner::Many(ref mut iter) => iter.next(),
-        }
-    }
-}
-
-impl<'a, T: 'a> Iterator for ForStored<'a, Iter<'a, T>> {
-    type Item = Stored<'a, T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.as_mut().next() {
-            Some(res) => Some(self.as_stored(res)),
-            None => None
         }
     }
 }

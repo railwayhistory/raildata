@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use yaml_rust::scanner::{Marker, ScanError, TokenType, TScalarStyle};
 use yaml_rust::parser::{Event, MarkedEventReceiver, Parser};
-use ::types::{IntoMarked, Location, Marked};
+use crate::types::{IntoMarked, Location, Marked};
 use super::report::{Failed, Message, PathReporter, ResultExt};
 
 
@@ -377,7 +377,7 @@ impl Mapping {
     pub fn take<C, T: FromYaml<C>>(
         &mut self,
         key: &str,
-        context: &mut C,
+        context: &C,
         report: &mut PathReporter
     ) -> Result<T, Failed> {
         if let Some(value) = self.items.remove(key) {
@@ -392,7 +392,7 @@ impl Mapping {
     pub fn take_default<C, T: FromYaml<C> + Default>(
         &mut self,
         key: &str,
-        context: &mut C,
+        context: &C,
         report: &mut PathReporter
     ) -> Result<T, Failed> {
         if let Some(value) = self.items.remove(key) {
@@ -406,7 +406,7 @@ impl Mapping {
     pub fn take_opt<C, T: FromYaml<C>>(
         &mut self,
         key: &str,
-        context: &mut C,
+        context: &C,
         report: &mut PathReporter
     ) -> Result<Option<T>, Failed> {
         if let Some(value) = self.items.remove(key) {
@@ -637,7 +637,7 @@ impl Scalar {
 pub trait FromYaml<C>: Sized {
     fn from_yaml(
         value: Value,
-        context: &mut C,
+        context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed>;
 }
@@ -645,7 +645,7 @@ pub trait FromYaml<C>: Sized {
 impl<C, T: FromYaml<C>> FromYaml<C> for Option<T> {
     fn from_yaml(
         value: Value,
-        context: &mut C,
+        context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         if value.is_null() {
@@ -660,7 +660,7 @@ impl<C, T: FromYaml<C>> FromYaml<C> for Option<T> {
 impl<C> FromYaml<C> for Marked<bool> {
     fn from_yaml(
         value: Value,
-        _context: &mut C,
+        _context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         value.into_boolean(report)
@@ -670,7 +670,7 @@ impl<C> FromYaml<C> for Marked<bool> {
 impl<C> FromYaml<C> for bool {
     fn from_yaml(
         value: Value,
-        _context: &mut C,
+        _context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         value.into_boolean(report).map(Marked::into_value)
@@ -680,7 +680,7 @@ impl<C> FromYaml<C> for bool {
 impl<C> FromYaml<C> for Marked<String> {
     fn from_yaml(
         value: Value,
-        _context: &mut C,
+        _context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         value.into_string(report)
@@ -690,7 +690,7 @@ impl<C> FromYaml<C> for Marked<String> {
 impl<C> FromYaml<C> for String {
     fn from_yaml(
         value: Value,
-        _context: &mut C,
+        _context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         value.into_string(report).map(Marked::into_value)
@@ -700,7 +700,7 @@ impl<C> FromYaml<C> for String {
 impl<C> FromYaml<C> for Marked<u8> {
     fn from_yaml(
         value: Value,
-        _: &mut C,
+        _: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         value.into_integer(report)?.try_map(|int| {
@@ -717,7 +717,7 @@ impl<C> FromYaml<C> for Marked<u8> {
 impl<C> FromYaml<C> for u8 {
     fn from_yaml(
         value: Value,
-        context: &mut C,
+        context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         Marked::from_yaml(value, context, report).map(Marked::into_value)
@@ -727,7 +727,7 @@ impl<C> FromYaml<C> for u8 {
 impl<C> FromYaml<C> for Marked<f64> {
     fn from_yaml(
         value: Value,
-        _: &mut C,
+        _: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         value.into_float(report)
@@ -737,7 +737,7 @@ impl<C> FromYaml<C> for Marked<f64> {
 impl<C> FromYaml<C> for f64 {
     fn from_yaml(
         value: Value,
-        _: &mut C,
+        _: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         value.into_float(report).map(Marked::into_value)
@@ -747,7 +747,7 @@ impl<C> FromYaml<C> for f64 {
 impl<C, T: FromYaml<C>> FromYaml<C> for Vec<T> {
     fn from_yaml(
         value: Value,
-        context: &mut C,
+        context: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let location = value.location();
@@ -787,32 +787,32 @@ impl<C, T: FromYaml<C>> FromYaml<C> for Vec<T> {
 //------------ ValueError ----------------------------------------------------
 
 /// A error happened when creating a value from its YAML representation.
-#[derive(Clone, Debug, Fail)]
+#[derive(Clone, Debug, Display)]
 pub enum ValueError {
-    #[fail(display="mapping key cannot be a {}", _0)]
+    #[display(fmt="mapping key cannot be a {}", _0)]
     InvalidMappingKey(Type),
 
-    #[fail(display="invalid boolean")]
+    #[display(fmt="invalid boolean")]
     InvalidBool,
 
-    #[fail(display="invalid integer")]
+    #[display(fmt="invalid integer")]
     InvalidInt,
 
-    #[fail(display="invalid float")]
+    #[display(fmt="invalid float")]
     InvalidFloat,
 
-    #[fail(display="aliases are not allowed")]
+    #[display(fmt="aliases are not allowed")]
     Alias,
 
-    #[fail(display="unknown tag !{}{}", _0, _1)]
+    #[display(fmt="unknown tag !{}{}", _0, _1)]
     UnknownTag(String, String),
 }
 
 
 //------------ TypeMismatch --------------------------------------------------
 
-#[derive(Clone, Debug, Fail)]
-#[fail(display="expected {}, got {}", _0, _1)]
+#[derive(Clone, Debug, Display)]
+#[display(fmt="expected {}, got {}", expected, received)]
 pub struct TypeMismatch {
     expected: Type,
     received: Type
@@ -888,15 +888,15 @@ impl<'a> From<&'a Scalar> for Type {
 
 //------------ MissingKey ----------------------------------------------------
 
-#[derive(Clone, Debug, Fail)]
-#[fail(display="missing key {}", _0)]
+#[derive(Clone, Debug, Display)]
+#[display(fmt="missing key {}", _0)]
 pub struct MissingKey(String);
 
 
 //------------ UnexpectedKey -------------------------------------------------
 
-#[derive(Clone, Debug, Fail)]
-#[fail(display="unexpected key {}", _0)]
+#[derive(Clone, Debug, Display)]
+#[display(fmt="unexpected key {}", _0)]
 pub struct UnexpectedKey(String);
 
 
@@ -925,7 +925,7 @@ impl fmt::Display for RangeError {
 
 //------------ EmptySequence -------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="empty sequence")]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="empty sequence")]
 pub struct EmptySequence;
 

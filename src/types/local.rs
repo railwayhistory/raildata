@@ -9,7 +9,10 @@ use super::marked::Marked;
 
 //------------ CountryCode ---------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
+    Serialize
+)]
 pub struct CountryCode([u8; 2]);
 
 impl CountryCode {
@@ -27,7 +30,7 @@ impl ops::Deref for CountryCode {
 impl<C> FromYaml<C> for Marked<CountryCode> {
     fn from_yaml(
         value: Value,
-        _: &mut C,
+        _: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         value.into_string(report)?
@@ -53,7 +56,10 @@ impl FromStr for CountryCode {
 
 //------------ LanguageCode --------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
+    Serialize
+)]
 pub struct LanguageCode([u8; 3]);
 
 impl ops::Deref for LanguageCode {
@@ -67,7 +73,7 @@ impl ops::Deref for LanguageCode {
 impl<C> FromYaml<C> for Marked<LanguageCode> {
     fn from_yaml(
         value: Value,
-        _: &mut C,
+        _: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         value.into_string(report)?
@@ -98,7 +104,10 @@ impl FromStr for LanguageCode {
 //
 //  Internal coding: if the last byte is 0u8, we have a country code,
 //  otherwise a language code.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
+    Serialize
+)]
 pub struct LocalCode([u8; 3]);
 
 impl ops::Deref for LocalCode {
@@ -129,7 +138,7 @@ impl From<LanguageCode> for LocalCode {
 impl<C> FromYaml<C> for Marked<LocalCode> {
     fn from_yaml(
         value: Value,
-        _: &mut C,
+        _: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         value.into_string(report)?
@@ -161,10 +170,10 @@ impl FromStr for LocalCode {
 
 //------------ CodedText and friends -----------------------------------------
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CodedText<C: Ord>(CTInner<C>);
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 enum CTInner<C: Ord> {
     Plain(Marked<String>),
     Map(Vec<(Marked<C>, Marked<String>)>),
@@ -178,7 +187,7 @@ impl<Ctx, C: Ord + FromStr> FromYaml<Ctx> for CodedText<C>
 where <C as FromStr>::Err: Message {
     fn from_yaml(
         value: Value,
-        _: &mut Ctx,
+        _: &Ctx,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         match value.try_into_mapping() {
@@ -222,8 +231,8 @@ pub type LanguageText = CodedText<LanguageCode>;
 
 //------------ CountryCodeError ----------------------------------------------
 
-#[derive(Clone, Debug, Fail)]
-#[fail(display="invalid country code '{}'", _0)]
+#[derive(Clone, Debug, Display)]
+#[display(fmt="invalid country code '{}'", _0)]
 pub struct CountryCodeError(String);
 
 impl From<String> for CountryCodeError {
@@ -235,8 +244,8 @@ impl From<String> for CountryCodeError {
 
 //------------ LanguageCodeError ---------------------------------------------
 
-#[derive(Clone, Debug, Fail)]
-#[fail(display="invalid language code '{}'", _0)]
+#[derive(Clone, Debug, Display)]
+#[display(fmt="invalid language code '{}'", _0)]
 pub struct LanguageCodeError(String);
 
 impl From<String> for LanguageCodeError {
@@ -248,8 +257,8 @@ impl From<String> for LanguageCodeError {
 
 //------------ LocalCodeError ------------------------------------------------
 
-#[derive(Clone, Debug, Fail)]
-#[fail(display="invalid country or language code '{}'", _0)]
+#[derive(Clone, Debug, Display)]
+#[display(fmt="invalid country or language code '{}'", _0)]
 pub struct LocalCodeError(String);
 
 impl From<String> for LocalCodeError {

@@ -5,10 +5,11 @@ use std::fs::File;
 use ignore::{WalkBuilder, WalkState};
 use ignore::types::TypesBuilder;
 use osmxml::read::read_xml;
-use ::document::Path;
-use ::document::common::DocumentType;
-use ::store::{Document, DocumentLink, Store, LoadStore, UpdateStore};
-use ::types::{IntoMarked, Location};
+use rayon::iter::ParallelIterator;
+use crate::document::Path;
+use crate::document::common::DocumentType;
+use crate::library::{LibraryBuilder, LibraryMut, Library};
+use crate::types::{IntoMarked, Location};
 use super::read::Utf8Chars;
 use super::report::{self, PathReporter, Report, Reporter, Stage};
 use super::yaml::Loader;
@@ -16,16 +17,16 @@ use super::yaml::Loader;
 
 //------------ load_tree -----------------------------------------------------
 
-pub fn load_tree(path: &path::Path) -> Result<Store, Report> {
+pub fn load_tree(path: &path::Path) -> Result<Library, Report> {
     let report = Reporter::new();
 
     // Phase 1: Construct all documents and check that they are all present
     //          and accounted for.
     let store = {
-        let builder = LoadStore::new();
+        let builder = LibraryBuilder::new();
         load_facts(path, builder.clone(), report.clone());
         load_paths(path, builder.clone(), report.clone());
-        builder.into_update_store(&mut report.clone().stage(Stage::Translate))
+        builder.into_library_mut(&mut report.clone().stage(Stage::Translate))
     };
     let mut store = match store {
         Ok(store) => store,
@@ -38,7 +39,7 @@ pub fn load_tree(path: &path::Path) -> Result<Store, Report> {
         return Err(report.unwrap())
     }
 
-    Ok(store.into_store())
+    Ok(store.into_library())
 }
 
 
@@ -46,7 +47,7 @@ pub fn load_tree(path: &path::Path) -> Result<Store, Report> {
 
 fn load_facts(
     base: &path::Path,
-    docs: LoadStore,
+    docs: LibraryBuilder,
     report: Reporter
 ) {
     let walk = WalkBuilder::new(base.join("facts"))
@@ -57,7 +58,7 @@ fn load_facts(
         )
         .build_parallel();
     walk.run(|| {
-        let mut docs = docs.clone();
+        let docs = docs.clone();
         let report = report.clone();
         Box::new(move |path| {
             if let Ok(path) = path {
@@ -97,9 +98,9 @@ fn load_facts(
 
 //------------ load_paths ----------------------------------------------------
 
-fn load_paths(
+pub fn load_paths(
     base: &path::Path,
-    docs: LoadStore,
+    docs: LibraryBuilder,
     report: Reporter
 ) {
     let mut types = TypesBuilder::new();
@@ -108,7 +109,7 @@ fn load_paths(
                            .types(types.select("osm").build().unwrap())
                            .build_parallel();
     walk.run(|| {
-        let mut docs = docs.clone();
+        let docs = docs.clone();
         let report = report.clone();
         Box::new(move |path| {
             if let Ok(path) = path {
@@ -123,7 +124,7 @@ fn load_paths(
                         let mut report = report.clone()
                             .stage(Stage::Translate)
                             .with_path(path);
-                        load_osm_file(&mut file, &mut docs, &mut report);
+                        load_osm_file(&mut file, &docs, &mut report);
                     }
                     Err(err) => {
                         report.clone().stage(Stage::Parse)
@@ -139,9 +140,9 @@ fn load_paths(
 
 //------------ load_osm_file -------------------------------------------------
 
-pub fn load_osm_file<R: io::Read>(
+fn load_osm_file<R: io::Read>(
     read: &mut R,
-    docs: &mut LoadStore,
+    docs: &LibraryBuilder,
     report: &mut PathReporter
 ) {
     let mut osm = match read_xml(read) {
@@ -160,12 +161,12 @@ pub fn load_osm_file<R: io::Read>(
         match Path::from_osm(relation, &osm, docs, report) {
             Ok(path) => {
                 let _ = docs.insert(
-                    path.key().clone(), Document::Path(path), report
+                    path.key().clone(), path.into(), report
                 );
             }
             Err(Some(key)) => {
                 let _ = docs.insert_broken(
-                    key, Location::NONE, Some(DocumentType::Path), report
+                    key, Some(DocumentType::Path), Location::NONE, report
                 );
             }
             Err(None) => { }
@@ -177,14 +178,12 @@ pub fn load_osm_file<R: io::Read>(
 //------------ crosslink -----------------------------------------------------
 
 fn crosslink(
-    docs: &mut UpdateStore,
+    library: &LibraryMut,
     report: Reporter
 ) {
-    let mut report = report.stage(Stage::Crosslink);
-    for pos in 0..docs.len() {
-        let mut doc = docs.take_document(pos);
-        doc.crosslink(DocumentLink::new(pos), docs, &mut report);
-        docs.return_document(pos, doc);
-    }
+    let report = report.stage(Stage::Crosslink);
+    library.par_iter().for_each(move |link| {
+        library.resolve_mut(link).crosslink(link, library, &mut report.clone())
+    })
 }
 

@@ -3,7 +3,8 @@
 use std::{fmt, ops, path};
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
-use ::types::{IntoMarked, Location, Marked};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use crate::types::{IntoMarked, Location, Marked};
 
 
 //------------ Severity ------------------------------------------------------
@@ -47,7 +48,9 @@ pub enum Stage {
 //------------ Origin --------------------------------------------------------
 
 /// The origin location of a notice.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize
+)]
 pub struct Origin {
     path: Path,
     location: Location,
@@ -64,6 +67,13 @@ impl Origin {
 
     pub fn location(&self) -> Location {
         self.location
+    }
+
+    pub fn at(&self, location: Location) -> Origin {
+        Origin {
+            path: self.path.clone(),
+            location
+        }
     }
 }
 
@@ -131,6 +141,21 @@ impl ops::Deref for Path {
 impl fmt::Display for Path {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(&self.0.display(), f)
+    }
+}
+
+impl Serialize for Path {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Path {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'de> {
+        path::PathBuf::deserialize(deserializer)
+            .map(|path| Path(Arc::new(path)))
     }
 }
 
@@ -203,21 +228,32 @@ impl Display for Notice {
 /// A report is a collection of notices.
 pub struct Report {
     notices: Vec<Notice>,
+    stage_count: [usize; 4],
 }
 
 impl Report {
     pub fn new() -> Self {
         Report {
-            notices: Vec::new()
+            notices: Vec::new(),
+            stage_count: [0; 4],
         }
     }
 
     pub fn notice(&mut self, notice: Notice) {
+        self.stage_count[notice.stage as usize] += 1;
         self.notices.push(notice)
     }
 
     pub fn sort(&mut self) {
         self.notices.sort_by(|l, r| l.origin.cmp(&r.origin))
+    }
+
+    pub fn has_stage(&self, stage: Stage) -> bool {
+        self.stage_count[stage as usize] > 0
+    }
+
+    pub fn stage_count(&self, stage: Stage) -> usize {
+        self.stage_count[stage as usize]
     }
 }
 
@@ -232,7 +268,7 @@ impl ops::Deref for Report {
 
 //------------ Reporter ------------------------------------------------------
 
-/// A type allowing to access to a report.
+/// A type allowing access to a report.
 ///
 /// This type doesn’t allow adding notices to the report just yet. You need
 /// to convert it into a `StageReporter` first.

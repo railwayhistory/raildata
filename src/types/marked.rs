@@ -8,7 +8,7 @@ use yaml_rust::scanner::Marker;
 //------------ Marked --------------------------------------------------------
 
 /// A value that optionally is marked by its source location.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Deserialize, Serialize)]
 pub struct Marked<T> {
     value: T,
     location: Location,
@@ -199,7 +199,9 @@ impl<T> IntoMarked for T { }
 
 //------------ Location ------------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize
+)]
 pub struct Location(u32);
 
 impl Location {

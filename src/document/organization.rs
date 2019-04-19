@@ -1,45 +1,39 @@
 
-use ::load::yaml::{FromYaml, Mapping, Value};
-use ::load::report::{Failed, Origin, PathReporter, StageReporter};
-use ::types::{EventDate, Key, LanguageText, LocalText, List, Marked};
-use ::store::{LoadStore, Stored, UpdateStore, OrganizationLink, SourceLink};
+use crate::library::{LibraryBuilder, LibraryMut};
+use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
+use crate::load::yaml::{FromYaml, Mapping, Value};
+use crate::types::{EventDate, Key, LanguageText, LocalText, List, Marked, Set};
 use super::common::{Basis, Common, Progress};
+use super::{OrganizationLink, SourceLink};
 
 
 //------------ Organization --------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Organization {
-    common: Common,
-    subtype: Marked<Subtype>,
-    events: EventList,
+    // Attributes
+    pub common: Common,
+    pub subtype: Marked<Subtype>,
+    pub events: EventList,
+
+    // Crosslinks
+    pub source_author: Set<SourceLink>,
+    pub source_editor: Set<SourceLink>,
+    pub source_organization: Set<SourceLink>,
+    pub source_publisher: Set<SourceLink>,
 }
 
 impl Organization {
-    pub fn common(&self) -> &Common {
-        &self.common
-    }
-
     pub fn key(&self) -> &Key {
-        self.common().key()
+        &self.common.key
     }
 
     pub fn progress(&self) -> Progress {
-        self.common().progress()
+        self.common.progress.into_value()
     }
 
     pub fn origin(&self) -> &Origin {
-        &self.common().origin()
-    }
-
-    pub fn subtype(&self) -> Subtype {
-        self.subtype.into_value()
-    }
-}
-
-impl<'a> Stored<'a, Organization> {
-    pub fn events(&self) -> Stored<'a, EventList> {
-        self.map(|item| &item.events)
+        &self.common.origin
     }
 }
 
@@ -47,7 +41,7 @@ impl Organization {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -58,19 +52,25 @@ impl Organization {
             common: common?,
             subtype: subtype?,
             events: events?,
+            source_author: Set::new(),
+            source_editor: Set::new(),
+            source_organization: Set::new(),
+            source_publisher: Set::new(),
         })
     }
 
     pub fn crosslink(
-        &mut self,
+        &self,
         _link: OrganizationLink,
-        _store: &mut UpdateStore,
+        _library: &LibraryMut,
         _report: &mut StageReporter
     ) {
     }
 
+    /*
     pub fn verify(&self, _report: &mut StageReporter) {
     }
+    */
 }
 
 
@@ -94,86 +94,30 @@ pub type EventList = List<Event>;
 
 //------------ Event ---------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Event {
     // Meta attributes
-    date: EventDate,
-    document: List<Marked<SourceLink>>,
-    source: List<Marked<SourceLink>>,
-    basis: List<Basis>,
-    note: Option<LanguageText>,
+    pub date: EventDate,
+    pub document: List<Marked<SourceLink>>,
+    pub source: List<Marked<SourceLink>>,
+    pub basis: List<Basis>,
+    pub note: Option<LanguageText>,
 
     // Organization property attributes
-    domicile: List<Marked<OrganizationLink>>,
-    master: Option<Marked<OrganizationLink>>,
-    name: Option<LocalText>,
-    owner: Option<List<Marked<OrganizationLink>>>,
-    property: Option<Property>,
-    short_name: Option<LocalText>,
-    status: Option<Status>,
-    successor: Option<Marked<OrganizationLink>>,
+    pub domicile: List<Marked<OrganizationLink>>,
+    pub master: Option<Marked<OrganizationLink>>,
+    pub name: Option<LocalText>,
+    pub owner: Option<List<Marked<OrganizationLink>>>,
+    pub property: Option<Property>,
+    pub short_name: Option<LocalText>,
+    pub status: Option<Status>,
+    pub successor: Option<Marked<OrganizationLink>>,
 }
 
-impl<'a> Stored<'a, Event> {
-    pub fn date(&self) -> &EventDate {
-        &self.access().date
-    }
-
-    pub fn document(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.document)
-    }
-
-    pub fn source(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.source)
-    }
-
-    pub fn basis(&self) -> Stored<'a, List<Basis>> {
-        self.map(|item| &item.basis)
-    }
-
-    pub fn note(&self) -> Option<&LanguageText> {
-        self.access().note.as_ref()
-    }
-
-    pub fn domicile(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.domicile)
-    }
-
-    pub fn master(&self) -> Option<&Organization> {
-        self.map_opt(|item| item.master.as_ref()).map(|x| x.follow())
-    }
-
-    pub fn name(&self) -> Option<&LocalText> {
-        self.access().name.as_ref()
-    }
-
-    pub fn owner(
-        &self
-    ) -> Option<Stored<'a, List<Marked<OrganizationLink>>>> {
-        self.map_opt(|item| item.owner.as_ref())
-    }
-
-    pub fn property(&self) -> Option<Stored<'a, Property>> {
-        self.map_opt(|item| item.property.as_ref())
-    }
-
-    pub fn short_name(&self) -> Option<&LocalText> {
-        self.access().short_name.as_ref()
-    }
-
-    pub fn status(&self) -> Option<Status> {
-        self.access().status
-    }
-
-    pub fn successor(&self) -> Option<&Organization> {
-        self.map_opt(|item| item.successor.as_ref()).map(|x| x.follow())
-    }
-}
-
-impl FromYaml<LoadStore> for Event {
+impl FromYaml<LibraryBuilder> for Event {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -212,42 +156,18 @@ impl FromYaml<LoadStore> for Event {
 
 //------------ Property ------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Property {
-    role: Marked<PropertyRole>,
-    constructor: List<Marked<OrganizationLink>>,
-    operator: List<Marked<OrganizationLink>>,
-    owner: List<Marked<OrganizationLink>>,
+    pub role: Marked<PropertyRole>,
+    pub constructor: List<Marked<OrganizationLink>>,
+    pub operator: List<Marked<OrganizationLink>>,
+    pub owner: List<Marked<OrganizationLink>>,
 }
 
-impl<'a> Stored<'a, Property> {
-    pub fn role(&self) -> PropertyRole {
-        self.access().role.into_value()
-    }
-
-    pub fn constructor(
-        &self
-    ) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.constructor)
-    }
-
-    pub fn operator(
-        &self
-    ) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.operator)
-    }
-
-    pub fn owner(
-        &self
-    ) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.owner)
-    }
-}
-
-impl FromYaml<LoadStore> for Property {
+impl FromYaml<LibraryBuilder> for Property {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;

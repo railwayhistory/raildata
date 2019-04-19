@@ -1,77 +1,49 @@
 
 use std::str::FromStr;
-use ::load::report::{Failed, Origin, PathReporter, StageReporter};
-use ::load::yaml::{FromYaml, Mapping, Value};
-use ::store::{
-    LoadStore, Stored, UpdateStore,
-    LineLink, OrganizationLink, PathLink, PointLink, SourceLink
-};
-use ::types::{
+use crate::library::{LibraryBuilder, LibraryMut};
+use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
+use crate::load::yaml::{FromYaml, Mapping, Value};
+use crate::types::{
     Date, EventDate, IntoMarked, Key, LanguageText, List, LocalText, Location,
     Marked, Set
 };
-use super::Point;
+use super::{LineLink, OrganizationLink, PathLink, PointLink, SourceLink};
 use super::common::{Alternative, Basis, Common, Contract, Progress};
 
-mod verify;
-
+//mod verify;
 
 //------------ Line ----------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Line {
-    common: Common,
-    label: Set<Label>,
-    note: Option<LanguageText>,
-    events: EventList,
-    points: Points,
+    pub common: Common,
+    pub label: Set<Label>,
+    pub note: Option<LanguageText>,
+    pub events: EventList,
+    pub points: Points,
 }
 
 impl Line {
-    pub fn common(&self) -> &Common {
-        &self.common
-    }
-
     pub fn key(&self) -> &Key {
-        self.common().key()
-    }
-
-    pub fn origin(&self) -> &Origin {
-        &self.common().origin()
-    }
-}
-
-impl<'a> Stored<'a, Line> {
-    pub fn common(&self) -> &Common {
-        &self.access().common
-    }
-
-    pub fn key(&self) -> &Key {
-        self.common().key()
+        &self.common.key
     }
 
     pub fn progress(&self) -> Progress {
-        self.common().progress()
+        self.common.progress.into_value()
     }
 
     pub fn origin(&self) -> &Origin {
-        &self.common().origin()
+        &self.common.origin
     }
 
-    pub fn label(&self) -> &Set<Label> {
-        &self.access().label
-    }
-
-    pub fn note(&self) -> Option<&LanguageText> {
-        self.access().note.as_ref()
-    }
-
-    pub fn events(&self) -> Stored<'a, EventList> {
-        self.map(|item| &item.events)
-    }
-
-    pub fn points(&self) -> Stored<'a, Points> {
-        self.map(|item| &item.points)
+    pub fn code(&self) -> Result<(&str, &str), &str> {
+        let code = self.key().as_str();
+        if code.starts_with("line.") && code.get(7..8) == Some(".") {
+            Ok((&code[5..7], &code[8..]))
+        }
+        else {
+            Err(code)
+        }
     }
 }
 
@@ -79,7 +51,7 @@ impl Line {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -98,19 +70,21 @@ impl Line {
     }
 
     pub fn crosslink(
-        &mut self,
+        &self,
         link: LineLink,
-        store: &mut UpdateStore,
+        library: &LibraryMut,
         _report: &mut StageReporter
     ) {
         for point in self.points.iter() {
-            point.update(store, |point| point.add_line(link.clone()))
+            point.update(library, move |point| point.add_line(link))
         }
     }
 
+/*
     pub fn verify(&self, report: &mut StageReporter) {
         verify::verify(self, report)
     }
+*/
 }
 
 
@@ -128,10 +102,10 @@ data_enum! {
 
 //------------ Points --------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Points {
-    points: Vec<Marked<PointLink>>,
-    indexes: Vec<(PointLink, usize)>,
+    pub points: Vec<Marked<PointLink>>,
+    pub indexes: Vec<(PointLink, usize)>,
 }
 
 impl Points {
@@ -144,10 +118,10 @@ impl Points {
     }
 }
 
-impl FromYaml<LoadStore> for Points {
+impl FromYaml<LibraryBuilder> for Points {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let points: Vec<Marked<PointLink>> = Vec::from_yaml(
@@ -169,171 +143,48 @@ pub type EventList = List<Event>;
 
 //------------ Event ---------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Event {
-    date: EventDate,
-    sections: List<Section>,
-    document: List<Marked<SourceLink>>,
-    source: List<Marked<SourceLink>>,
-    alternative: List<Alternative>,
-    basis: List<Basis>,
-    note: Option<LanguageText>,
+    pub date: EventDate,
+    pub sections: List<Section>,
+    pub document: List<Marked<SourceLink>>,
+    pub source: List<Marked<SourceLink>>,
+    pub alternative: List<Alternative>,
+    pub basis: List<Basis>,
+    pub note: Option<LanguageText>,
 
-    concession: Option<Concession>,
-    expropriation: Option<Concession>,
-    contract: Option<Contract>,
-    treaty: Option<Contract>,
+    pub concession: Option<Concession>,
+    pub expropriation: Option<Concession>,
+    pub contract: Option<Contract>,
+    pub treaty: Option<Contract>,
 
-    category: Option<Set<Category>>,
-    constructor: Option<List<Marked<OrganizationLink>>>,
-    course: Option<List<CourseSegment>>,
-    electrified: Option<Option<Set<Electrified>>>,
-    freight: Option<Freight>,
-    gauge: Option<Set<Gauge>>,
-    local_name: Option<LocalText>, // XXX Drop
-    name: Option<LocalText>,
-    operator: Option<List<Marked<OrganizationLink>>>,
-    owner: Option<List<Marked<OrganizationLink>>>,
-    passenger: Option<Passenger>,
-    rails: Option<Marked<u8>>,
-    region: Option<List<Marked<OrganizationLink>>>,
-    reused: Option<List<Marked<LineLink>>>,
-    status: Option<Status>,
-    tracks: Option<Marked<u8>>,
+    pub category: Option<Set<Category>>,
+    pub constructor: Option<List<Marked<OrganizationLink>>>,
+    pub course: Option<List<CourseSegment>>,
+    pub electrified: Option<Option<Set<Electrified>>>,
+    pub freight: Option<Freight>,
+    pub gauge: Option<Set<Gauge>>,
+    pub local_name: Option<LocalText>, // XXX Drop
+    pub name: Option<LocalText>,
+    pub operator: Option<List<Marked<OrganizationLink>>>,
+    pub owner: Option<List<Marked<OrganizationLink>>>,
+    pub passenger: Option<Passenger>,
+    pub rails: Option<Marked<u8>>,
+    pub region: Option<List<Marked<OrganizationLink>>>,
+    pub reused: Option<List<Marked<LineLink>>>,
+    pub status: Option<Status>,
+    pub tracks: Option<Marked<u8>>,
 
-    de_vzg: Option<DeVzg>,
+    pub de_vzg: Option<DeVzg>,
 }
 
-impl<'a> Stored<'a, Event> {
-    pub fn date(&self) -> &EventDate {
-        &self.access().date
-    }
-
-    pub fn sections(&self) -> Stored<'a, List<Section>> {
-        self.map(|item| &item.sections)
-    }
-
-    pub fn document(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.document)
-    }
-
-    pub fn source(&self) -> Stored<'a, List<Marked<SourceLink>>> {
-        self.map(|item| &item.source)
-    }
-
-    pub fn alternative(&self) -> Stored<'a, List<Alternative>> {
-        self.map(|item| &item.alternative)
-    }
-
-    pub fn basis(&self) -> Stored<'a, List<Basis>> {
-        self.map(|item| &item.basis)
-    }
-
-    pub fn note(&self) -> Option<&LanguageText> {
-        self.access().note.as_ref()
-    }
-
-    pub fn concession(&self) -> Option<Stored<'a, Concession>> {
-        self.map_opt(|item| item.concession.as_ref())
-    }
-
-    pub fn expropriation(&self) -> Option<Stored<'a, Concession>> {
-        self.map_opt(|item| item.expropriation.as_ref())
-    }
-
-    pub fn contract(&self) -> Option<Stored<'a, Contract>> {
-        self.map_opt(|item| item.contract.as_ref())
-    }
-
-    pub fn treaty(&self) -> Option<Stored<'a, Contract>> {
-        self.map_opt(|item| item.treaty.as_ref())
-    }
-
-    pub fn category(&self) -> Option<&Set<Category>> {
-        self.access().category.as_ref()
-    }
-
-    pub fn constructor(
-        &self
-    ) -> Option<Stored<'a, List<Marked<OrganizationLink>>>> {
-        self.map_opt(|item| item.constructor.as_ref())
-    }
-
-    pub fn course(&self) -> Option<Stored<'a, List<CourseSegment>>> {
-        self.map_opt(|item| item.course.as_ref())
-    }
-
-    pub fn electrified(&self) -> Option<Option<&Set<Electrified>>> {
-        match self.access().electrified {
-            Some(Some(ref some)) => Some(Some(some)),
-            Some(None) => Some(None),
-            None => None
-        }
-    }
-
-    pub fn freight(&self) -> Option<Freight> {
-        self.access().freight
-    }
-
-    pub fn gauge(&self) -> Option<&Set<Gauge>> {
-        self.access().gauge.as_ref()
-    }
-
-    pub fn local_name(&self) -> Option<&LocalText> {
-        self.access().local_name.as_ref()
-    }
-
-    pub fn name(&self) -> Option<&LocalText> {
-        self.access().name.as_ref()
-    }
-
-    pub fn operator(
-        &self
-    ) -> Option<Stored<'a, List<Marked<OrganizationLink>>>> {
-        self.map_opt(|item| item.operator.as_ref())
-    }
-
-    pub fn owner(
-        &self
-    ) -> Option<Stored<'a, List<Marked<OrganizationLink>>>> {
-        self.map_opt(|item| item.owner.as_ref())
-    }
-
-    pub fn passenger(&self) -> Option<Passenger> {
-        self.access().passenger
-    }
-
-    pub fn rails(&self) -> Option<u8> {
-        self.access().rails.map(Marked::into_value)
-    }
-
-    pub fn region(
-        &self
-    ) -> Option<Stored<'a, List<Marked<OrganizationLink>>>> {
-        self.map_opt(|item| item.region.as_ref())
-    }
-
-    pub fn reused(&self) -> Option<Stored<'a, List<Marked<LineLink>>>> {
-        self.map_opt(|item| item.reused.as_ref())
-    }
-
-    pub fn status(&self) -> Option<Status> {
-        self.access().status
-    }
-
-    pub fn tracks(&self) -> Option<u8> {
-        self.access().tracks.map(Marked::into_value)
-    }
-
-    pub fn de_vzg(&self) -> Option<&DeVzg> {
-        self.access().de_vzg.as_ref()
-    }
+impl Event {
 }
 
-impl FromYaml<LoadStore> for Event {
+impl FromYaml<LibraryBuilder> for Event {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -433,27 +284,16 @@ impl FromYaml<LoadStore> for Event {
 
 //------------ Section -------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Section {
-    start: Option<Marked<PointLink>>,
-    end: Option<Marked<PointLink>>,
+    pub start: Option<Marked<PointLink>>,
+    pub end: Option<Marked<PointLink>>,
 }
 
-impl<'a> Stored<'a, Section> {
-    pub fn start(&self) -> Option<&Point> {
-        self.map_opt(|item| item.start.as_ref()).map(|x| x.follow())
-    }
-
-    pub fn end(&self) -> Option<&Point> {
-        self.map_opt(|item| item.end.as_ref()).map(|x| x.follow())
-    }
-}
-
-
-impl FromYaml<LoadStore> for Section {
+impl FromYaml<LibraryBuilder> for Section {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -484,31 +324,18 @@ data_enum! {
 
 //------------ Concession ----------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Concession {
-    by: List<Marked<OrganizationLink>>,
-    to: List<Marked<OrganizationLink>>,
-    until: Option<Marked<Date>>,
+    pub by: List<Marked<OrganizationLink>>,
+    pub to: List<Marked<OrganizationLink>>,
+    pub until: Option<Marked<Date>>,
 }
 
-impl<'a> Stored<'a, Concession> {
-    pub fn by(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.by)
-    }
 
-    pub fn to(&self) -> Stored<'a, List<Marked<OrganizationLink>>> {
-        self.map(|item| &item.to)
-    }
-
-    pub fn until(&self) -> Option<&Marked<Date>> {
-        self.access().until.as_ref()
-    }
-}
-
-impl FromYaml<LoadStore> for Concession {
+impl FromYaml<LibraryBuilder> for Concession {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -523,31 +350,17 @@ impl FromYaml<LoadStore> for Concession {
 
 //------------ CourseSegment -------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct CourseSegment {
-    path: Marked<PathLink>,
-    start: Marked<String>,
-    end: Marked<String>,
+    pub path: Marked<PathLink>,
+    pub start: Marked<String>,
+    pub end: Marked<String>,
 }
 
-impl<'a> Stored<'a, CourseSegment> {
-    pub fn path(&self) -> Stored<'a, Marked<PathLink>> {
-        self.map(|item| &item.path)
-    }
-
-    pub fn start(&self) -> &str {
-        self.access().start.as_value().as_ref()
-    }
-    
-    pub fn end(&self) -> &str {
-        self.access().end.as_value().as_ref()
-    }
-}
-
-impl FromYaml<LoadStore> for CourseSegment {
+impl FromYaml<LibraryBuilder> for CourseSegment {
     fn from_yaml(
         value: Value,
-        context: &mut LoadStore,
+        context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let (value, location) = value.into_string(report)?.unwrap();
@@ -566,7 +379,7 @@ impl FromYaml<LoadStore> for CourseSegment {
                 return Err(Failed)
             }
         };
-        let path = PathLink::forge(key, context, report)?;
+        let path = PathLink::build(key, context, report);
         let start = match value.next() {
             Some(path) => path,
             None => {
@@ -610,8 +423,11 @@ data_enum! {
 
 //------------ Gauge ---------------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct Gauge(Marked<u16>);
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
+    Serialize
+)]
+pub struct Gauge(pub Marked<u16>);
 
 impl Gauge {
     pub fn gauge(&self) -> u16 {
@@ -632,7 +448,7 @@ impl Default for Gauge {
 impl<C> FromYaml<C> for Gauge {
     fn from_yaml(
         value: Value,
-        _: &mut C,
+        _: &C,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let (value, location) = value.into_string(report)?.unwrap();
@@ -689,19 +505,19 @@ pub type DeVzg = Marked<String>;
 
 //============ Errors ========================================================
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="start attribute not allowed when sections is present")]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="start attribute not allowed when sections is present")]
 pub struct StartWithSections;
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="end attribute not allowed when sections is present")]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="end attribute not allowed when sections is present")]
 pub struct EndWithSections;
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="invalid gauge (must be an integer followed by 'mm'")]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="invalid gauge (must be an integer followed by 'mm'")]
 pub struct InvalidGauge;
 
-#[derive(Clone, Copy, Debug, Fail)]
-#[fail(display="invalid course segment")]
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="invalid course segment")]
 pub struct InvalidCourseSegment;
 
