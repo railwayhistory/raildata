@@ -9,7 +9,7 @@ use super::{OrganizationLink, SourceLink};
 
 //------------ Common --------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Common {
     //--- Attributes
     pub key: Marked<Key>,
@@ -81,7 +81,7 @@ data_enum! {
 
 //------------ Alternative ---------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Alternative {
     pub date: EventDate,
     pub document: List<Marked<SourceLink>>,
@@ -111,7 +111,7 @@ impl FromYaml<LibraryBuilder> for Alternative {
 
 //------------ Basis ---------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Basis {
     pub date: Option<EventDate>,
     pub document: List<Marked<SourceLink>>,
@@ -149,7 +149,7 @@ impl FromYaml<LibraryBuilder> for Basis {
 
 //------------ Contract ------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Contract {
     pub parties: List<Marked<OrganizationLink>>,
 }

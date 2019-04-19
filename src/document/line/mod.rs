@@ -14,7 +14,7 @@ use super::common::{Alternative, Basis, Common, Contract, Progress};
 
 //------------ Line ----------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Line {
     pub common: Common,
     pub label: Set<Label>,
@@ -102,7 +102,7 @@ data_enum! {
 
 //------------ Points --------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Points {
     pub points: Vec<Marked<PointLink>>,
     pub indexes: Vec<(PointLink, usize)>,
@@ -143,7 +143,7 @@ pub type EventList = List<Event>;
 
 //------------ Event ---------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Event {
     pub date: EventDate,
     pub sections: List<Section>,
@@ -284,7 +284,7 @@ impl FromYaml<LibraryBuilder> for Event {
 
 //------------ Section -------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Section {
     pub start: Option<Marked<PointLink>>,
     pub end: Option<Marked<PointLink>>,
@@ -324,7 +324,7 @@ data_enum! {
 
 //------------ Concession ----------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Concession {
     pub by: List<Marked<OrganizationLink>>,
     pub to: List<Marked<OrganizationLink>>,
@@ -350,7 +350,7 @@ impl FromYaml<LibraryBuilder> for Concession {
 
 //------------ CourseSegment -------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct CourseSegment {
     pub path: Marked<PathLink>,
     pub start: Marked<String>,
@@ -423,7 +423,10 @@ data_enum! {
 
 //------------ Gauge ---------------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
+    Serialize
+)]
 pub struct Gauge(pub Marked<u16>);
 
 impl Gauge {

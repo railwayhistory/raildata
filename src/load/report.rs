@@ -3,6 +3,7 @@
 use std::{fmt, ops, path};
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::types::{IntoMarked, Location, Marked};
 
 
@@ -47,7 +48,9 @@ pub enum Stage {
 //------------ Origin --------------------------------------------------------
 
 /// The origin location of a notice.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize
+)]
 pub struct Origin {
     path: Path,
     location: Location,
@@ -138,6 +141,21 @@ impl ops::Deref for Path {
 impl fmt::Display for Path {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(&self.0.display(), f)
+    }
+}
+
+impl Serialize for Path {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Path {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'de> {
+        path::PathBuf::deserialize(deserializer)
+            .map(|path| Path(Arc::new(path)))
     }
 }
 

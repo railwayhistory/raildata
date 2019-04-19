@@ -8,13 +8,13 @@ use super::marked::{IntoMarked, Location};
 
 //------------ List ----------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct List<T> {
     inner: Inner<T, Vec<T>>,
     location: Location,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 enum Inner<O, M> {
     Empty,
     One(O),

@@ -12,7 +12,7 @@ use super::common::{Common, Progress};
 
 //------------ Path ----------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Path {
     pub common: Common,
 
@@ -287,7 +287,7 @@ impl Path {
 
 //------------ Node ----------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Node {
     pub lon: f64,
     pub lat: f64,

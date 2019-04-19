@@ -8,7 +8,7 @@ use super::common::{Common, Progress};
 
 //------------ Structure -----------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Structure {
     pub common: Common,
     pub subtype: Marked<Subtype>,
@@ -79,7 +79,7 @@ pub type EventList = List<Event>;
 
 //------------ Event ---------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Event {
     // Meta attributes
     pub date: EventDate,

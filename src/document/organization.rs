@@ -9,7 +9,7 @@ use super::{OrganizationLink, SourceLink};
 
 //------------ Organization --------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Organization {
     // Attributes
     pub common: Common,
@@ -94,7 +94,7 @@ pub type EventList = List<Event>;
 
 //------------ Event ---------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Event {
     // Meta attributes
     pub date: EventDate,
@@ -156,7 +156,7 @@ impl FromYaml<LibraryBuilder> for Event {
 
 //------------ Property ------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Property {
     pub role: Marked<PropertyRole>,
     pub constructor: List<Marked<OrganizationLink>>,

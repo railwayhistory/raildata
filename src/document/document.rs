@@ -11,7 +11,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
 
     //------------ Document --------------------------------------------------
 
-    #[derive(Clone, Debug, From)]
+    #[derive(Clone, Debug, Deserialize, From, Serialize)]
     pub enum Document {
         $(
             $vtype($vtype),
@@ -94,7 +94,10 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
     //------------ Links -----------------------------------------------------
 
     $(
-        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        #[derive(
+            Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq,
+            PartialOrd, Serialize
+        )]
         pub struct $vlink(Link<Document>);
 
         impl $vlink {
@@ -154,7 +157,10 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
 
     //-------- DocumentLink --------------------------------------------------
 
-    #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[derive(
+        Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
+        Serialize
+    )]
     pub struct DocumentLink(Link<Document>);
 
     impl DocumentLink {

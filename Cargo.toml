@@ -8,11 +8,13 @@ name = "raildata"
 doc = false
 
 [dependencies]
+bincode		= "1.1.3"
 crossbeam       = "0.2.12"
 derive_more     = "0.14.0"
 osmxml          = { git = "https://github.com/partim/osmxml.git" }
 url             = "1.2"
 ignore          = "0.2"
 rayon           = "1.0.1"
+serde 		= { version = "1.0", features = ["derive"] }
 yaml-rust       = { git = "https://github.com/partim/yaml-rust.git", branch="pub-marker" }
 

@@ -10,7 +10,7 @@ use super::common::{Common, Progress};
 
 //------------ Source --------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Source {
     pub common: Common,
     pub subtype: Subtype,
@@ -229,7 +229,7 @@ data_enum! {
 //
 // XXX Temporary type. Replace with a type encoding the actual specification.
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Pages(Marked<String>);
 
 impl<C> FromYaml<C> for Pages {
@@ -258,7 +258,7 @@ impl ops::Deref for Pages {
 
 //------------ Isbn ----------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Isbn(Marked<String>);
 
 impl<C> FromYaml<C> for Isbn {

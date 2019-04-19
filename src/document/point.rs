@@ -10,7 +10,7 @@ use super::common::{Common, Progress};
 
 //------------ Point ---------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Point {
     // Attributes
     pub common: Common,
@@ -157,7 +157,7 @@ pub type EventList = List<Event>;
 
 //------------ Event ---------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Event {
     pub date: EventDate,
     pub document: List<Marked<SourceLink>>,
@@ -321,7 +321,7 @@ data_enum! {
 
 //------------ Location ------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Location(pub List<(Marked<LineLink>, Option<Marked<String>>)>);
 
 impl FromYaml<LibraryBuilder> for Location {
@@ -393,7 +393,7 @@ data_enum! {
 
 //------------ Site ----------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Site(pub List<(Marked<PathLink>, Marked<String>)>);
 
 impl FromYaml<LibraryBuilder> for Site {

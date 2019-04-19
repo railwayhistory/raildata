@@ -1,4 +1,29 @@
 //! A document store.
+//!
+//! This is a generic store for documents that are created in (at least) three
+//! steps: First, all documents are collected from wherever they come from and
+//! placed into a `StoreBuilder`. Connections between documents are
+//! represented through `Link`s (which are really just glorified indexes into
+//! the store). In a second phase, the collected documents can be modified
+//! via a `StoreMut`. Finally, when the dust has settled, the store becomes
+//! imutable as a `Store`.
+//!
+//! All of this is here so that we can have concurrent processing in all three
+//! stages. In the first stage, you can only trade in documents for links,
+//! possibly creating a placeholder link that can later be updated with a
+//! real document. Stored documents themselves cannot be accessed during this
+//! stage.
+//!
+//! In stage two, mutable access to all documents is possible which is why
+//! they are all stuck behind a mutex. Because this still isn’t quite enough
+//! to avoid deadlocks, there also is a mechanism to defer changes if they
+//! can’t be done right now via boxed closures.
+//!
+//! Because stage three is entirely imutable, concurrent access is not a
+//! problem.
+//!
+//! This module contains a generic version. It is used by the *library*
+//! module for our very specific case.
 
 use std::{cmp, fmt, hash, mem, ops};
 use std::sync::{Mutex, MutexGuard, TryLockError};
@@ -10,7 +35,7 @@ use rayon::prelude::*;
 //------------ Store ---------------------------------------------------------
 
 /// An imutable place to store imutable items.
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Store<S> {
     items: Vec<S>,
 }
@@ -226,7 +251,7 @@ impl<T> Default for StoreBuilder<T> {
 //------------ Link ----------------------------------------------------------
 
 /// A link to an item in a store.
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Link<T> {
     index: usize,
     marker: PhantomData<T>,

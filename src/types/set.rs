@@ -11,13 +11,13 @@ use super::marked::Location;
 
 //------------ Set -----------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Set<T: Hash + Eq> {
     inner: Inner<T, HashSet<T>>,
     location: Location
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 enum Inner<O, M> {
     Empty,
     One(O),

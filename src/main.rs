@@ -1,6 +1,7 @@
 extern crate raildata;
 
 use std::env;
+use std::fs::File;
 use std::path::Path;
 use std::time::Instant;
 use raildata::load::load_tree;
@@ -63,4 +64,19 @@ fn main() {
     println!("   {} points", points);
     println!("   {} sources", sources);
     println!("   {} structures", structures);
+
+    if let Some(path) = env::args().nth(2) {
+        println!("Writing output to {}", path);
+        let file = match File::create(&path) {
+            Ok(file) => file,
+            Err(err) => {
+                println!("Cannot open output file {}: {}", path, err);
+                std::process::exit(1);
+            }
+        };
+        if let Err(err) = library.write(file) {
+            println!("Failed to write output to file {}: {}", path, err);
+            std::process::exit(1);
+        }
+    }
 }

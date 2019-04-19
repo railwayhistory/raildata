@@ -1,5 +1,5 @@
 
-use std::borrow;
+use std::{borrow, io};
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Bound;
 use std::sync::{Arc, Mutex};
@@ -291,6 +291,7 @@ impl LibraryMut {
 /// It cannot be changed at all. Libraries are forever.
 pub struct Library(Arc<Data>);
 
+#[derive(Serialize, Deserialize)]
 struct Data {
     store: Store<Document>,
     keys: BTreeMap<Key, DocumentLink>,
@@ -320,6 +321,19 @@ impl Library {
     where T: Ord + ?Sized, Key: borrow::Borrow<T> {
         self.0.keys.range((Bound::Included(start), Bound::Unbounded))
             .map(move |link| self.resolve(*link.1))
+    }
+
+    pub fn write<W: io::Write>(
+        &self, writer: W
+    ) -> Result<(), bincode::Error> {
+        bincode::serialize_into(writer, self.0.as_ref())
+    }
+
+    pub fn read<R: io::Read>(
+        &self, reader: R
+    ) -> Result<Self, bincode::Error> {
+        bincode::deserialize_from(reader)
+            .map(|data| Library(Arc::new(data)))
     }
 }
 

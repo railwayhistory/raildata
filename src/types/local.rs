@@ -9,7 +9,10 @@ use super::marked::Marked;
 
 //------------ CountryCode ---------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
+    Serialize
+)]
 pub struct CountryCode([u8; 2]);
 
 impl CountryCode {
@@ -53,7 +56,10 @@ impl FromStr for CountryCode {
 
 //------------ LanguageCode --------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
+    Serialize
+)]
 pub struct LanguageCode([u8; 3]);
 
 impl ops::Deref for LanguageCode {
@@ -98,7 +104,10 @@ impl FromStr for LanguageCode {
 //
 //  Internal coding: if the last byte is 0u8, we have a country code,
 //  otherwise a language code.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
+    Serialize
+)]
 pub struct LocalCode([u8; 3]);
 
 impl ops::Deref for LocalCode {
@@ -161,10 +170,10 @@ impl FromStr for LocalCode {
 
 //------------ CodedText and friends -----------------------------------------
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CodedText<C: Ord>(CTInner<C>);
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 enum CTInner<C: Ord> {
     Plain(Marked<String>),
     Map(Vec<(Marked<C>, Marked<String>)>),

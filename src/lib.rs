@@ -3,6 +3,7 @@ extern crate crossbeam;
 extern crate ignore;
 extern crate osmxml;
 extern crate rayon;
+#[macro_use] extern crate serde;
 extern crate yaml_rust;
 extern crate url;
 
