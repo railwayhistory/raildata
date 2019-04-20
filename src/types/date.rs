@@ -316,6 +316,20 @@ impl str::FromStr for Date {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct EventDate(List<Marked<Date>>);
 
+impl EventDate {
+    /// Returns the sort order of two event dates.
+    ///
+    /// This is not the same as the ordering of those dates.
+    pub fn sort_cmp(&self, other: &Self) -> cmp::Ordering {
+        match (self.0.first(), other.0.first()) {
+            (None, None) => cmp::Ordering::Equal,
+            (None, Some(_)) => cmp::Ordering::Less,
+            (Some(_), None) => cmp::Ordering::Greater,
+            (Some(left), Some(right)) => left.cmp(right)
+        }
+    }
+}
+
 impl ops::Deref for EventDate {
     type Target = List<Marked<Date>>;
 
@@ -342,6 +356,14 @@ impl<C> FromYaml<C> for EventDate {
         }
     }
 }
+
+impl PartialEq for EventDate {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.as_slice() == other.0.as_slice()
+    }
+}
+
+impl Eq for EventDate { }
 
 
 //------------ DateError -----------------------------------------------------

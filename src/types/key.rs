@@ -1,5 +1,6 @@
 
-use std::{borrow, fmt, ops, str};
+use std::{borrow, cmp, fmt, ops, str};
+use std::str::FromStr;
 use ::load::report::{Failed, PathReporter};
 use ::load::yaml::{FromYaml, Value};
 use super::marked::Marked;
@@ -7,9 +8,7 @@ use super::marked::Marked;
 
 //------------ Key -----------------------------------------------------------
 
-#[derive(
-    Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize
-)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Key(String);
 
 impl Key {
@@ -28,6 +27,9 @@ impl Marked<Key> {
         Ok(s.map(Key))
     }
 }
+
+
+//--- Deref, AsRef, and Borrow
 
 impl ops::Deref for Key {
     type Target = str;
@@ -49,6 +51,9 @@ impl borrow::Borrow<str> for Key {
     }
 }
 
+
+//--- FromStr and FromYaml
+
 impl str::FromStr for Key {
     type Err = InvalidKey;
 
@@ -67,6 +72,42 @@ impl<C> FromYaml<C> for Marked<Key> {
     }
 }
 
+
+//--- PartialOrd and Ord
+
+impl PartialOrd for Key {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Key {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        let mut left = self.0.split('.');
+        let mut right = other.0.split('.');
+
+        loop {
+            match (left.next(), right.next()) {
+                (None, None) => return cmp::Ordering::Equal,
+                (None, Some(_)) => return cmp::Ordering::Less,
+                (Some(_), None) => return cmp::Ordering::Greater,
+                (Some(left), Some(right)) => {
+                    let cmp = match (usize::from_str(left),
+                                     usize::from_str(right)) {
+                        (Ok(left), Ok(right)) => left.cmp(&right),
+                        _ => left.cmp(right)
+                    };
+                    if cmp != cmp::Ordering::Equal {
+                        return cmp
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+//--- Display
 
 impl fmt::Display for Key {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

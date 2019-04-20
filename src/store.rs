@@ -54,6 +54,10 @@ impl<S> Store<S> {
     pub fn resolve(&self, link: Link<S>) -> &S {
         &self.items[link.index]
     }
+
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
 }
 
 impl<S> From<StoreMut<S>> for Store<S> {

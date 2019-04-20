@@ -18,7 +18,7 @@ pub struct Point {
     pub junction: Option<Marked<bool>>,
     pub subtype: Marked<Subtype>,
 
-    // Crosslinked data.
+    // Crosslinked and derived data.
     pub lines: List<LineLink>,
     pub connections: Set<PointLink>,
 }
@@ -45,13 +45,37 @@ impl Point {
     /// this attribute is missing, it becomes a junction if it is listed in
     /// the `points` attribute of more than one line or if it is connected to
     /// some other point via its or the other point’s `connection` attribute.
-    pub fn junction(&self) -> bool {
+    pub fn is_junction(&self) -> bool {
         match self.junction {
             Some(value) => value.into_value(),
             None => {
                 !self.connections.is_empty() || self.lines.len() > 1
             }
         } 
+    }
+
+    /// Returns whether the point can’t be a junction.
+    ///
+    /// This happens if it has the `junction` attribute set to false.
+    pub fn is_never_junction(&self) -> bool {
+        !self.junction.map(Marked::into_value).unwrap_or(true)
+    }
+
+    /// Returns the current name.
+    ///
+    /// This is just a temporary placeholder that doesn’t regard languages and
+    /// jurisdictions. It just picks the first name from the newest available
+    /// attribute.
+    pub fn name(&self) -> &str {
+        for event in self.events.iter().rev() {
+            if let Some(ref name) = event.name {
+                return name.first()
+            }
+            if let Some(ref name) = event.designation {
+                return name.first()
+            }
+        }
+        self.key().as_str()
     }
 }
 
@@ -70,9 +94,11 @@ impl Point {
         let junction = doc.take_opt("junction", context, report);
         let subtype = doc.take_default("subtype", context, report);
         doc.exhausted(report)?;
+        let mut events: EventList = events?;
+        events.sort_by(|left, right| left.date.sort_cmp(&right.date));
         Ok(Point {
             common: common?,
-            events: events?,
+            events,
             junction: junction?,
             subtype: subtype?,
             lines: List::new(),

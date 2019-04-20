@@ -289,6 +289,7 @@ impl LibraryMut {
 /// The real library.
 ///
 /// It cannot be changed at all. Libraries are forever.
+#[derive(Clone)]
 pub struct Library(Arc<Data>);
 
 #[derive(Serialize, Deserialize)]
@@ -298,8 +299,8 @@ struct Data {
 }
 
 impl Library {
-    pub fn store(&self) -> &Store<Document> {
-        &self.0.store
+    pub fn len(&self) -> usize {
+        self.0.store.len()
     }
 
     pub fn get(&self, key: &Key) -> Option<DocumentLink> {
@@ -323,6 +324,10 @@ impl Library {
             .map(move |link| self.resolve(*link.1))
     }
 
+    pub fn store(&self) -> &Store<Document> {
+        &self.0.store
+    }
+
     pub fn write<W: io::Write>(
         &self, writer: W
     ) -> Result<(), bincode::Error> {
@@ -330,7 +335,7 @@ impl Library {
     }
 
     pub fn read<R: io::Read>(
-        &self, reader: R
+        reader: R
     ) -> Result<Self, bincode::Error> {
         bincode::deserialize_from(reader)
             .map(|data| Library(Arc::new(data)))
@@ -341,7 +346,7 @@ impl Library {
 //============ Errors ========================================================
 
 #[derive(Clone, Debug, Display)]
-#[display(fmt="document already exists, first defied at {}", _0)]
+#[display(fmt="document already exists, first defined at {}", _0)]
 pub struct DuplicateDocument(Origin);
 
 #[derive(Clone, Debug, Display)]

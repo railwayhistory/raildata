@@ -1,13 +1,14 @@
 
+use std::ops;
 use std::str::FromStr;
-use crate::library::{LibraryBuilder, LibraryMut};
+use crate::library::{LibraryBuilder, LibraryMut, Library};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{
     Date, EventDate, IntoMarked, Key, LanguageText, List, LocalText, Location,
     Marked, Set
 };
-use super::{LineLink, OrganizationLink, PathLink, PointLink, SourceLink};
+use super::{LineLink, OrganizationLink, PathLink, Point, PointLink, SourceLink};
 use super::common::{Alternative, Basis, Common, Contract, Progress};
 
 //mod verify;
@@ -44,6 +45,50 @@ impl Line {
         else {
             Err(code)
         }
+    }
+
+    fn last_junction_index(&self, library: &Library) -> usize {
+        self.points.iter().enumerate().rev().map(|(idx, point)| {
+            (idx, point.follow(library))
+        }).find_map(|(idx, point)| {
+            if !point.is_never_junction() {
+                Some(idx)
+            }
+            else {
+                None
+            }
+        }).unwrap_or_else(|| self.points.len() - 1)
+    }
+
+    pub fn junctions<'a>(
+        &'a self, library: &'a Library
+    ) -> impl Iterator<Item=&'a Point> + 'a {
+        let mut first = true;
+        let last = self.last_junction_index(library);
+        self.points.iter().enumerate().filter_map(move |(idx, point)| {
+            let point = point.follow(library);
+            if first {
+                if !point.is_never_junction() {
+                    first = false;
+                    Some(point)
+                }
+                else {
+                    None
+                }
+            }
+            else if idx == last {
+                Some(point)
+            }
+            else if idx > last {
+                None
+            }
+            else if point.is_junction() {
+                Some(point)
+            }
+            else {
+                None
+            }
+        })
     }
 }
 
@@ -112,9 +157,13 @@ impl Points {
     pub fn get_index(&self, link: &PointLink) -> Option<usize> {
         self.indexes.binary_search_by(|x| link.cmp(&x.0)).ok()
     }
+}
 
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item=PointLink> + 'a {
-        self.points.iter().map(|link| link.as_value().clone())
+impl ops::Deref for Points {
+    type Target = [Marked<PointLink>];
+
+    fn deref(&self) -> &Self::Target {
+        self.points.as_ref()
     }
 }
 

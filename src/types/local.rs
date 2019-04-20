@@ -180,7 +180,14 @@ enum CTInner<C: Ord> {
 }
 
 impl<C: Ord> CodedText<C> {
-    // XXX TODO Read access ...
+    pub fn first(&self) -> &str {
+        match self.0 {
+            CTInner::Plain(ref inner) => inner.as_str(),
+            CTInner::Map(ref inner) => {
+                inner.first().unwrap().1.as_str()
+            }
+        }
+    }
 }
 
 impl<Ctx, C: Ord + FromStr> FromYaml<Ctx> for CodedText<C>

@@ -1,6 +1,6 @@
 //! A list with an optimization for holding a single item.
 
-use std::{fmt, mem, slice};
+use std::{cmp, fmt, mem, slice};
 use crate::load::report::{Failed, PathReporter};
 use crate::load::yaml::{FromYaml, Value};
 use super::marked::{IntoMarked, Location};
@@ -51,6 +51,13 @@ impl<T> List<T> {
         }
     }
 
+    pub fn sort_by<F>(&mut self, op: F)
+    where F: FnMut(&T, &T) -> cmp::Ordering {
+        if let Inner::Many(ref mut inner) = self.inner {
+            inner.sort_by(op)
+        }
+    }
+
     pub fn iter(&self) -> Iter<T> {
         Iter::new(self)
     }
@@ -72,6 +79,14 @@ impl<T> List<T> {
             Inner::Empty => true,
             Inner::One(_) => false,
             Inner::Many(ref vec) => vec.is_empty(),
+        }
+    }
+
+    pub fn first(&self) -> Option<&T> {
+        match self.inner {
+            Inner::Empty => None,
+            Inner::One(ref item) => Some(item),
+            Inner::Many(ref vec) => vec.first(),
         }
     }
 }
@@ -173,6 +188,16 @@ impl<'a, T: 'a> Iterator for Iter<'a, T> {
             Inner::Empty => None,
             Inner::One(ref mut item) => item.take(),
             Inner::Many(ref mut iter) => iter.next(),
+        }
+    }
+}
+
+impl<'a, T: 'a> DoubleEndedIterator for Iter<'a, T> {
+    fn next_back(&mut self) -> Option<&'a T> {
+        match self.0 {
+            Inner::Empty => None,
+            Inner::One(ref mut item) => item.take(),
+            Inner::Many(ref mut iter) => iter.next_back(),
         }
     }
 }
