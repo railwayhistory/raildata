@@ -236,10 +236,15 @@ impl LibraryBuilder {
                 keys.insert(key, info.link);
             }
         }
-        Ok(LibraryMut(Arc::new(MutData {
-            store: store.into(),
-            keys
-        })))
+        if failed {
+            Err(Failed)
+        }
+        else {
+            Ok(LibraryMut(Arc::new(MutData {
+                store: store.into(),
+                keys
+            })))
+        }
     }
 }
 
