@@ -200,10 +200,14 @@ pub struct Event {
     pub category: Option<Set<Category>>,
     pub connection: Option<List<Marked<PointLink>>>,
     pub designation: Option<LocalText>,
+    pub express: Option<ServiceRate>,
+    pub goods: Option<ServiceRate>,
     pub location: Option<Location>,
+    pub luggage: Option<ServiceRate>,
     pub master: Option<Option<List<Marked<PointLink>>>>,
     pub merged: Option<Marked<PointLink>>,
     pub name: Option<LocalText>,
+    pub passenger: Option<ServiceRate>,
     pub plc: Option<Plc>,
     pub public_name: Option<List<LocalText>>,
     pub site: Option<Site>,
@@ -244,10 +248,14 @@ impl FromYaml<LibraryBuilder> for Event {
         let category = value.take_opt("category", context, report);
         let connection = value.take_opt("connection", context, report);
         let designation = value.take_opt("designation", context, report);
+        let express = value.take_opt("express", context, report);
+        let goods = value.take_opt("goods", context, report);
         let location = value.take_opt("location", context, report);
+        let luggage = value.take_opt("luggage", context, report);
         let master = value.take_opt("master", context, report);
         let merged = value.take_opt("merged", context, report);
         let name = value.take_opt("name", context, report);
+        let passenger = value.take_opt("passenger", context, report);
         let plc = value.take_opt("PLC", context, report);
         let public_name = value.take_opt("public_name", context, report);
         let site = value.take_opt("site", context, report);
@@ -280,10 +288,14 @@ impl FromYaml<LibraryBuilder> for Event {
             category: category?,
             connection: connection?,
             designation: designation?,
+            express: express?,
+            goods: goods?,
             location: location?,
+            luggage: luggage?,
             master: master?,
             merged: merged?,
             name: name?,
+            passenger: passenger?,
             plc: plc?,
             public_name: public_name?,
             site: site?,
@@ -407,6 +419,17 @@ data_enum! {
         { None: "none" }
         { Passenger: "passenger" }
         { Freight: "freight" }
+    }
+}
+
+
+//------------ ServiceRate ---------------------------------------------------
+
+data_enum! {
+    pub enum ServiceRate {
+        { None: "none" }
+        { Limited: "limited" }
+        { Full: "full" }
     }
 }
 

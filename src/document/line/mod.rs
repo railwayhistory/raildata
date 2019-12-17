@@ -211,7 +211,7 @@ pub struct Event {
     pub constructor: Option<List<Marked<OrganizationLink>>>,
     pub course: Option<List<CourseSegment>>,
     pub electrified: Option<Option<Set<Electrified>>>,
-    pub freight: Option<Freight>,
+    pub freight: Option<Freight>,       // XXX Rename to "goods"
     pub gauge: Option<Set<Gauge>>,
     pub local_name: Option<LocalText>, // XXX Drop
     pub name: Option<LocalText>,
