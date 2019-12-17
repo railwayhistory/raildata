@@ -181,7 +181,7 @@ pub struct Notice {
     origin: Option<Origin>,
 
     /// The message of the report.
-    message: Box<Message>,
+    message: Box<dyn Message>,
 }
 
 impl Notice {
@@ -206,7 +206,7 @@ impl Notice {
         self.origin.as_ref()
     }
 
-    pub fn message(&self) -> &Box<Message> {
+    pub fn message(&self) -> &Box<dyn Message> {
         &self.message
     }
 }

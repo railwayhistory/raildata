@@ -216,8 +216,6 @@ where <C as FromStr>::Err: Message {
                     Err(Failed)
                 }
                 else {
-                    use ::std::cmp::Ord;
-
                     res.sort_by(|left, right| left.0.cmp(&right.0));
                     Ok(CodedText(CTInner::Map(res)))
                 }

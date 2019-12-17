@@ -43,7 +43,7 @@ impl<C: Constructor> Loader<C> {
     pub fn load<I>(&mut self, source: I) -> Result<(), ScanError>
                 where I: IntoIterator<Item=char> {
         let mut parser = Parser::new(source.into_iter());
-        try!(parser.load(self, true));
+        parser.load(self, true)?;
         Ok(())
     }
 

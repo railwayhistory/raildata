@@ -15,6 +15,7 @@ pub struct Point {
     // Attributes
     pub common: Common,
     pub events: List<Event>,
+    pub records: List<Event>,
     pub junction: Option<Marked<bool>>,
     pub subtype: Marked<Subtype>,
 
@@ -90,15 +91,21 @@ impl Point {
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
-        let events = doc.take("events", context, report);
+        let events = doc.take_opt("events", context, report);
+        let records = doc.take_opt("records", context, report);
         let junction = doc.take_opt("junction", context, report);
         let subtype = doc.take_default("subtype", context, report);
         doc.exhausted(report)?;
-        let mut events: EventList = events?;
+
+        let mut events: EventList = events?.unwrap_or_default();
         events.sort_by(|left, right| left.date.sort_cmp(&right.date));
+        let mut records: EventList = records?.unwrap_or_default();
+        records.sort_by(|left, right| left.date.sort_cmp(&right.date));
+
         Ok(Point {
             common: common?,
             events,
+            records,
             junction: junction?,
             subtype: subtype?,
             lines: List::new(),
