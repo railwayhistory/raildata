@@ -219,15 +219,16 @@ impl LibraryBuilder {
             }
 
             // All links that have a differing doctype are bad.
-            let target = info.doctype.unwrap();
-            for (expected, origin) in info.linked_from {
-                if let Some(expected) = expected {
-                    if expected != target {
-                        report.error_at(
-                            origin,
-                            LinkMismatch { expected, target }
-                        );
-                        failed = true;
+            if let Some(target) = info.doctype {
+                for (expected, origin) in info.linked_from {
+                    if let Some(expected) = expected {
+                        if expected != target {
+                            report.error_at(
+                                origin,
+                                LinkMismatch { expected, target }
+                            );
+                            failed = true;
+                        }
                     }
                 }
             }
