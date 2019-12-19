@@ -418,7 +418,8 @@ data_enum! {
         { Full: "full" }
         { None: "none" }
         { Passenger: "passenger" }
-        { Freight: "freight" }
+        { Freight: "freight" } // XXX deprecated
+        { Goods: "goods" }
     }
 }
 
