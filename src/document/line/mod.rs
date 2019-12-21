@@ -21,6 +21,7 @@ pub struct Line {
     pub label: Set<Label>,
     pub note: Option<LanguageText>,
     pub events: EventList,
+    pub records: EventList,
     pub points: Points,
 }
 
@@ -102,14 +103,22 @@ impl Line {
         let common = Common::from_yaml(key, &mut doc, context, report);
         let label = doc.take_default("label", context, report);
         let note = doc.take_opt("note", context, report);
-        let events = doc.take("events", context, report);
+        let events = doc.take_opt("events", context, report);
+        let records = doc.take_opt("records", context, report);
         let points = doc.take("points", context, report);
         doc.exhausted(report)?;
+
+        let mut events: EventList = events?.unwrap_or_default();
+        events.sort_by(|left, right| left.date.sort_cmp(&right.date));
+        let mut records: EventList = records?.unwrap_or_default();
+        records.sort_by(|left, right| left.date.sort_cmp(&right.date));
+
         Ok(Line {
             common: common?,
             label: label?,
             note: note?,
-            events: events?,
+            events,
+            records,
             points: points?,
         })
     }
