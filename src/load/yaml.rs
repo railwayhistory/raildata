@@ -657,6 +657,24 @@ impl<C, T: FromYaml<C>> FromYaml<C> for Option<T> {
     }
 }
 
+impl<C, T: FromYaml<C>> FromYaml<C> for Marked<Option<T>> {
+    fn from_yaml(
+        value: Value,
+        context: &C,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        if value.is_null() {
+            Ok(Marked::new(None, value.location()))
+        }
+        else {
+            let location = value.location();
+            T::from_yaml(value, context, report).map(|value| {
+                Marked::new(Some(value), location)
+            })
+        }
+    }
+}
+
 impl<C> FromYaml<C> for Marked<bool> {
     fn from_yaml(
         value: Value,

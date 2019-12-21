@@ -515,7 +515,7 @@ pub type DeDs100 = Marked<String>;
 
 //------------ DeDstnr -------------------------------------------------------
 
-pub type DeDstnr = Marked<String>;
+pub type DeDstnr = Marked<Option<String>>;
 
 
 //------------ DeLknr --------------------------------------------------------
