@@ -147,7 +147,7 @@ impl Line {
 data_enum! {
     pub enum Label {
         { Connection: "connection" }
-        { Freight: "freight" }
+        { Goods: "goods" }
         { Port: "port" }
         { DeSBahn: "de.S-Bahn" }
     }
@@ -220,7 +220,7 @@ pub struct Event {
     pub constructor: Option<List<Marked<OrganizationLink>>>,
     pub course: Option<List<CourseSegment>>,
     pub electrified: Option<Option<Set<Electrified>>>,
-    pub freight: Option<Freight>,       // XXX Rename to "goods"
+    pub goods: Option<Goods>,
     pub gauge: Option<Set<Gauge>>,
     pub local_name: Option<LocalText>, // XXX Drop
     pub name: Option<LocalText>,
@@ -265,7 +265,7 @@ impl FromYaml<LibraryBuilder> for Event {
         let constructor = value.take_opt("constructor", context, report);
         let course = value.take_default("course", context, report);
         let electrified = value.take_opt("electrified", context, report);
-        let freight = value.take_opt("freight", context, report);
+        let goods = value.take_opt("goods", context, report);
         let gauge = value.take_opt("gauge", context, report);
         let local_name = value.take_opt("local_name", context, report);
         let name = value.take_opt("name", context, report);
@@ -321,7 +321,7 @@ impl FromYaml<LibraryBuilder> for Event {
             constructor: constructor?,
             course: course?,
             electrified: electrified?,
-            freight: freight?,
+            goods: goods?,
             gauge: gauge?,
             local_name: local_name?,
             name: name?,
@@ -468,10 +468,10 @@ impl FromYaml<LibraryBuilder> for CourseSegment {
 pub type Electrified = Marked<String>;
 
 
-//------------ Freight -------------------------------------------------------
+//------------ Goods ---------------------------------------------------------
 
 data_enum! {
-    pub enum Freight {
+    pub enum Goods {
         { None: "none" }
         { Restricted: "restricted" }
         { Full: "full" }
