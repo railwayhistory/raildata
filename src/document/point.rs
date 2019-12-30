@@ -335,6 +335,8 @@ data_enum! {
         { DeHp: "de.Hp" }
         { DeHst: "de.Hst" }
         { DeKr: "de.Kr" }
+        { DeKrbf: "de.Krbf" }
+        { DeKrst: "de.Krst" }
         { DeLdst: "de.Ldst" }
         { DeMuseum: "de.Museum" }
         { DePo: "de.Po" }
