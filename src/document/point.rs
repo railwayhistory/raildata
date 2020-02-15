@@ -531,6 +531,8 @@ data_enum! {
         { I: "I" }
         { Ii: "II" }
         { Iii: "III" }
+        { Iiia: "IIIa" }
+        { Iiib: "IIIb" }
         { Iv: "IV" }
         { V: "V" }
         { Vi: "VI" }
