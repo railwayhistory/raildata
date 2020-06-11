@@ -28,7 +28,7 @@
 use std::{cmp, fmt, hash, mem, ops};
 use std::sync::{Mutex, MutexGuard, TryLockError};
 use std::marker::PhantomData;
-use crossbeam::sync::MsQueue;
+use crossbeam::queue::SegQueue;
 use rayon::prelude::*;
 
 
@@ -88,7 +88,7 @@ pub struct StoreMut<S> {
 
 struct ItemMut<S> {
     item: Mutex<S>,
-    queue: MsQueue<Box<dyn Fn(&mut S) + Send>>,
+    queue: SegQueue<Box<dyn Fn(&mut S) + Send>>,
 }
 
 impl<S> StoreMut<S> {
@@ -97,7 +97,7 @@ impl<S> StoreMut<S> {
         StoreMut {
             items: iter.map(|item| ItemMut {
                 item: Mutex::new(item),
-                queue: MsQueue::new()
+                queue: SegQueue::new()
             }).collect()
         }
     }
@@ -173,7 +173,7 @@ impl<T> fmt::Debug for StoreMut<T> {
 
 pub struct ItemGuard<'a, T> {
     guard: MutexGuard<'a, T>,
-    queue: &'a MsQueue<Box<dyn Fn(&mut T) + Send>>
+    queue: &'a SegQueue<Box<dyn Fn(&mut T) + Send>>
 }
 
 impl<'a, T> ops::Deref for ItemGuard<'a, T> {
@@ -192,7 +192,7 @@ impl<'a, T> ops::DerefMut for ItemGuard<'a, T> {
 
 impl<'a, T> Drop for ItemGuard<'a, T> {
     fn drop(&mut self) {
-        while let Some(ref op) = self.queue.try_pop() {
+        while let Ok(ref op) = self.queue.pop() {
             op(&mut self.guard)
         }
     }

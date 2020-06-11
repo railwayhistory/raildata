@@ -9,7 +9,7 @@ doc = false
 
 [dependencies]
 bincode		= "1.1.3"
-crossbeam       = "0.2.12"
+crossbeam       = "0.7.3"
 derive_more     = "0.14.0"
 osmxml          = { git = "https://github.com/partim/osmxml.git" }
 url             = "1.2"
