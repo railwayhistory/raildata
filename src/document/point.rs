@@ -99,8 +99,7 @@ impl Point {
 
         let mut events: EventList = events?.unwrap_or_default();
         events.sort_by(|left, right| left.date.sort_cmp(&right.date));
-        let mut records: EventList = records?.unwrap_or_default();
-        records.sort_by(|left, right| left.date.sort_cmp(&right.date));
+        let records: EventList = records?.unwrap_or_default();
 
         Ok(Point {
             common: common?,
@@ -240,7 +239,7 @@ impl FromYaml<LibraryBuilder> for Event {
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
 
-        let date = value.take("date", context, report);
+        let date = value.take_default("date", context, report);
         let document = value.take_default("document", context, report);
         let source = value.take_default("source", context, report);
         let note = value.take_opt("note", context, report);

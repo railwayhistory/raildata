@@ -313,7 +313,7 @@ impl str::FromStr for Date {
 
 //------------ EventDate -----------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct EventDate(List<Marked<Date>>);
 
 impl EventDate {
