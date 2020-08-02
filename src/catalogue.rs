@@ -32,7 +32,7 @@ impl Catalogue {
     }
 
     fn normalize_name(name: &str) -> String {
-        name.nfc()
+        name.nfd()
             .filter(|ch| ch.is_alphanumeric())
             .flat_map(|ch| ch.to_lowercase())
             .collect()
