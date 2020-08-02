@@ -1,10 +1,14 @@
 
+use std::collections::HashSet;
 use std::sync::Arc;
+use derive_more::Display;
+use serde::{Deserialize, Serialize};
+use crate::catalogue::Catalogue;
 use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{EventDate, Key, LanguageText, List, LocalText, Marked, Set};
-use super::{LineLink, PathLink, PointLink, SourceLink};
+use super::{DocumentLink, LineLink, PathLink, PointLink, SourceLink};
 use super::common::{Common, Progress};
 
 
@@ -165,6 +169,28 @@ impl Point {
     pub fn verify(&self, _report: &mut StageReporter) {
     }
     */
+
+    pub fn catalogue(
+        &self,
+        link: PointLink,
+        catalogue: &mut Catalogue,
+        _report: &mut StageReporter
+    ) {
+        let link = DocumentLink::from(link);
+        // Names
+        catalogue.insert_name(self.common.key.to_string(), link);
+        let mut names = HashSet::new();
+        for event in self.events.iter().chain(self.records.iter()) {
+            if let Some(some) = event.name.as_ref() {
+                for (_, name) in some {
+                    names.insert(name.as_value());
+                }
+            }
+        }
+        for name in names {
+            catalogue.insert_name(name.into(), link)
+        }
+    }
 }
 
 

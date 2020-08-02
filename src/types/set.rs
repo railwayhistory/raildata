@@ -4,8 +4,9 @@ use std::mem;
 use std::hash::Hash;
 use std::collections::hash_set;
 use std::collections::HashSet;
-use ::load::yaml::{FromYaml, Value};
-use ::load::report::{Failed, PathReporter};
+use serde::{Deserialize, Serialize};
+use crate::load::yaml::{FromYaml, Value};
+use crate::load::report::{Failed, PathReporter};
 use super::marked::Location;
 
 

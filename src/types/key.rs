@@ -1,8 +1,10 @@
 
 use std::{borrow, cmp, fmt, ops, str};
 use std::str::FromStr;
-use ::load::report::{Failed, PathReporter};
-use ::load::yaml::{FromYaml, Value};
+use derive_more::Display;
+use serde::{Deserialize, Serialize};
+use crate::load::report::{Failed, PathReporter};
+use crate::load::yaml::{FromYaml, Value};
 use super::marked::Marked;
 
 
@@ -18,6 +20,10 @@ impl Key {
 
     pub fn as_str(&self) -> &str {
         self.0.as_ref()
+    }
+
+    pub fn to_string(&self) -> String {
+        self.0.clone()
     }
 }
 

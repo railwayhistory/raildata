@@ -30,6 +30,7 @@ use std::sync::{Mutex, MutexGuard, TryLockError};
 use std::marker::PhantomData;
 use crossbeam::queue::SegQueue;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 
 
 //------------ Store ---------------------------------------------------------
@@ -149,8 +150,12 @@ impl<S> StoreMut<S> {
         }
     }
 
-    pub fn par_iter(&self) -> impl ParallelIterator<Item=Link<S>> {
+    pub fn par_iter(&self) -> impl ParallelIterator<Item = Link<S>> {
         (0..self.items.len()).into_par_iter().map(Link::new)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = Link<S>> {
+        (0..self.items.len()).into_iter().map(Link::new)
     }
 }
 

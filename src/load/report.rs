@@ -42,6 +42,9 @@ pub enum Stage {
 
     /// Verify document sanity.
     Verify = 3,
+
+    /// Catalogue meta-data.
+    Catalogue = 4,
 }
 
 

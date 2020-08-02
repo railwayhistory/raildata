@@ -2,6 +2,7 @@
 name = "raildata"
 version = "0.1.0"
 authors = ["Martin Hoffmann <hn@nvnc.de>"]
+edition = "2018"
 
 [[bin]]
 name = "raildata"
@@ -14,7 +15,9 @@ derive_more     = "0.14.0"
 osmxml          = { git = "https://github.com/partim/osmxml.git" }
 url             = "1.2"
 ignore          = "0.2"
+radix_trie	= { version = "0.2", features = ["serde"] }
 rayon           = "1.0.1"
 serde 		= { version = "1.0", features = ["derive"] }
-yaml-rust       = { git = "https://github.com/partim/yaml-rust.git", branch="pub-marker" }
+unicode-normalization = "0.1.13"
+yaml-rust	= "0.4.4"
 

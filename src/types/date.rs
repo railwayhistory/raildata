@@ -2,6 +2,7 @@
 
 use std::{cmp, fmt, ops, str};
 use std::str::FromStr;
+use serde::{Deserialize, Serialize};
 use crate::load::yaml::{FromYaml, Value};
 use crate::load::report::{Failed, PathReporter};
 use super::list::List;

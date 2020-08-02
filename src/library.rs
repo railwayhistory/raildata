@@ -3,7 +3,10 @@ use std::{borrow, io};
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Bound;
 use std::sync::{Arc, Mutex};
+use derive_more::Display;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
+use crate::catalogue::Catalogue;
 use crate::document::{Document, DocumentLink};
 use crate::document::common::DocumentType;
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
@@ -260,17 +263,19 @@ pub struct LibraryMut(Arc<MutData>);
 
 #[derive(Debug)]
 struct MutData {
+    /// The documents.
     store: StoreMut<Document>,
     keys: BTreeMap<Key, DocumentLink>,
 }
 
 impl LibraryMut {
-    pub fn into_library(self) -> Library {
+    pub fn into_library(self, catalogue: Catalogue) -> Library {
         let data = Arc::try_unwrap(self.0).unwrap();
         Library(Arc::new(
             Data {
                 store: data.store.into(),
-                keys: data.keys
+                keys: data.keys,
+                catalogue
             }
         ))
     }
@@ -278,6 +283,10 @@ impl LibraryMut {
     pub fn update<F>(&self, link: DocumentLink, op: F)
     where F: Fn(&mut Document) + 'static + Send {
         self.0.store.update(link.into(), op)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = DocumentLink> {
+        self.0.store.iter().map(Into::into)
     }
 
     pub fn par_iter(&self) -> impl ParallelIterator<Item=DocumentLink> {
@@ -302,6 +311,7 @@ pub struct Library(Arc<Data>);
 struct Data {
     store: Store<Document>,
     keys: BTreeMap<Key, DocumentLink>,
+    catalogue: Catalogue,
 }
 
 impl Library {
@@ -332,6 +342,10 @@ impl Library {
 
     pub fn store(&self) -> &Store<Document> {
         &self.0.store
+    }
+
+    pub fn catalogue(&self) -> &Catalogue {
+        &self.0.catalogue
     }
 
     pub fn write<W: io::Write>(

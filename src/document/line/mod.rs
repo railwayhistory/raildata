@@ -1,6 +1,10 @@
 
 use std::ops;
+use std::collections::HashSet;
 use std::str::FromStr;
+use derive_more::Display;
+use serde::{Deserialize, Serialize};
+use crate::catalogue::Catalogue;
 use crate::library::{LibraryBuilder, LibraryMut, Library};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
@@ -8,7 +12,10 @@ use crate::types::{
     Date, EventDate, IntoMarked, Key, LanguageText, List, LocalText, Location,
     Marked, Set
 };
-use super::{LineLink, OrganizationLink, PathLink, Point, PointLink, SourceLink};
+use super::{
+    DocumentLink, LineLink, OrganizationLink, PathLink, Point, PointLink,
+    SourceLink
+};
 use super::common::{Alternative, Basis, Common, Contract, Progress};
 
 //mod verify;
@@ -139,6 +146,37 @@ impl Line {
         verify::verify(self, report)
     }
 */
+
+    pub fn catalogue(
+        &self,
+        link: LineLink,
+        catalogue: &mut Catalogue,
+        _report: &mut StageReporter
+    ) {
+        let link = DocumentLink::from(link);
+        // Names
+        catalogue.insert_name(self.common.key.to_string(), link);
+        match self.code() {
+            Ok((cc, line)) => {
+                catalogue.insert_name(line.into(), link);
+                catalogue.insert_name(format!("{} {}", cc, line), link);
+            }
+            Err(code) => {
+                catalogue.insert_name(code.into(), link)
+            }
+        }
+        let mut names = HashSet::new();
+        for event in self.events.iter().chain(self.records.iter()) {
+            if let Some(some) = event.name.as_ref() {
+                for (_, name) in some {
+                    names.insert(name.as_value());
+                }
+            }
+        }
+        for name in names {
+            catalogue.insert_name(name.into(), link)
+        }
+    }
 }
 
 
@@ -246,7 +284,7 @@ impl FromYaml<LibraryBuilder> for Event {
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
-        let date = value.take("date", context, report);
+        let date = value.take_default("date", context, report);
         let sections = value.take_default("sections", context, report);
         let start = value.take_opt("start", context, report);
         let end = value.take_opt("end", context, report);

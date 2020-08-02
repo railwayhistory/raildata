@@ -1,3 +1,4 @@
+use derive_more::Display;
 
 macro_rules! data_enum {
     (

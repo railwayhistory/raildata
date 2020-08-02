@@ -1,5 +1,6 @@
 //! Attributes and attribute types common to all documents.
 
+use serde::{Deserialize, Serialize};
 use crate::library::LibraryBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};

@@ -1,13 +1,16 @@
 use std::f64::INFINITY;
 use std::str::FromStr;
+use derive_more::Display;
 use osmxml::elements::{MemberType, Osm, Relation};
+use serde::{Deserialize, Serialize};
+use crate::catalogue::Catalogue;
 use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report;
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::Mapping;
 use crate::types::{IntoMarked, Location, Key, Marked};
 use crate::types::key::InvalidKey;
-use super::{PathLink, SourceLink};
+use super::{DocumentLink, PathLink, SourceLink};
 use super::common::{Common, Progress};
 
 //------------ Path ----------------------------------------------------------
@@ -282,6 +285,16 @@ impl Path {
     pub fn verify(&self, _report: &mut StageReporter) {
     }
     */
+
+    pub fn catalogue(
+        &self,
+        link: PathLink,
+        catalogue: &mut Catalogue,
+        _report: &mut StageReporter
+    ) {
+        let link = DocumentLink::from(link);
+        catalogue.insert_name(self.common.key.to_string(), link);
+    }
 }
 
 

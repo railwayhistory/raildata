@@ -1,9 +1,10 @@
 //! A list with an optimization for holding a single item.
 
 use std::{cmp, fmt, mem, slice};
+use serde::{Deserialize, Serialize};
 use crate::load::report::{Failed, PathReporter};
 use crate::load::yaml::{FromYaml, Value};
-use super::marked::{IntoMarked, Location};
+use super::marked::IntoMarked;
 
 
 //------------ List ----------------------------------------------------------
@@ -11,7 +12,6 @@ use super::marked::{IntoMarked, Location};
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct List<T> {
     inner: Inner<T, Vec<T>>,
-    location: Location,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -23,7 +23,11 @@ enum Inner<O, M> {
 
 impl<T> List<T> {
     pub fn new() -> Self {
-        List { inner: Inner::Empty, location: Location::default() }
+        List { inner: Inner::Empty }
+    }
+
+    pub fn with_value(value: T) -> Self {
+        List { inner: Inner::One(value) }
     }
 
     pub fn as_slice(&self) -> &[T] {
@@ -32,10 +36,6 @@ impl<T> List<T> {
             Inner::One(ref inner) => slice::from_ref(inner),
             Inner::Many(ref inner) => inner.as_ref(),
         }
-    }
-
-    pub fn location(&self) -> Location {
-        self.location
     }
 
     pub fn push(&mut self, item: T) {
@@ -93,7 +93,7 @@ impl<T> List<T> {
 
 impl<T> Default for List<T> {
     fn default() -> Self {
-        List { inner: Inner::Empty, location: Location::default() }
+        List { inner: Inner::Empty }
     }
 }
 
@@ -142,7 +142,7 @@ impl<C, T: FromYaml<C>> FromYaml<C> for List<T> {
             }
             Err(value) => T::from_yaml(value, context, report).map(Inner::One)?
         };
-        Ok(List { inner, location })
+        Ok(List { inner })
     }
 }
 

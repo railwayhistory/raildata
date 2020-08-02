@@ -2,8 +2,10 @@
 
 use std::{ops, str};
 use std::str::FromStr;
-use ::load::yaml::{FromYaml, Value};
-use ::load::report::{Failed, Message, PathReporter};
+use derive_more::Display;
+use serde::{Deserialize, Serialize};
+use crate::load::yaml::{FromYaml, Value};
+use crate::load::report::{Failed, Message, PathReporter};
 use super::marked::Marked;
 
 
@@ -188,6 +190,13 @@ impl<C: Ord> CodedText<C> {
             }
         }
     }
+
+    pub fn iter(&self) -> CodedTextIter<C> {
+        CodedTextIter {
+            text: self,
+            pos: 0
+        }
+    }
 }
 
 impl<Ctx, C: Ord + FromStr> FromYaml<Ctx> for CodedText<C>
@@ -229,9 +238,53 @@ where <C as FromStr>::Err: Message {
     }
 }
 
+impl<'a, C: Ord> IntoIterator for &'a CodedText<C> {
+    type Item = (Option<&'a Marked<C>>, &'a Marked<String>);
+    type IntoIter = CodedTextIter<'a, C>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
 
 pub type LocalText = CodedText<LocalCode>;
 pub type LanguageText = CodedText<LanguageCode>;
+
+
+//------------ CodedTextIter -------------------------------------------------
+
+pub struct CodedTextIter<'a, C: Ord> {
+    text: &'a CodedText<C>,
+    pos: usize
+}
+
+impl<'a, C: Ord> Iterator for CodedTextIter<'a, C> {
+    type Item = (Option<&'a Marked<C>>, &'a Marked<String>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.text.0 {
+            CTInner::Plain(ref inner) => {
+                if self.pos == 0 {
+                    self.pos = 1;
+                    Some((None, &inner))
+                }
+                else {
+                    None
+                }
+            }
+            CTInner::Map(ref inner) => {
+                if self.pos < inner.len() {
+                    let item = &inner[self.pos];
+                    self.pos += 1;
+                    Some((Some(&item.0), &item.1))
+                }
+                else {
+                    None
+                }
+            }
+        }
+    }
+}
 
 
 //------------ CountryCodeError ----------------------------------------------

@@ -6,6 +6,7 @@ use ignore::{WalkBuilder, WalkState};
 use ignore::types::TypesBuilder;
 use osmxml::read::read_xml;
 use rayon::iter::ParallelIterator;
+use crate::catalogue::Catalogue;
 use crate::document::Path;
 use crate::document::common::DocumentType;
 use crate::library::{LibraryBuilder, LibraryMut, Library};
@@ -39,7 +40,16 @@ pub fn load_tree(path: &path::Path) -> Result<Library, Report> {
         return Err(report.unwrap())
     }
 
-    Ok(store.into_library())
+    // Phase 3: Verify
+
+    // Phase 4: Catalogue
+    let catalogue = catalogue(&store, report.clone());
+    if !report.is_empty() {
+        return Err(report.unwrap())
+    }
+
+    // Phase 5: Profit
+    Ok(store.into_library(catalogue))
 }
 
 
@@ -187,3 +197,19 @@ fn crosslink(
     })
 }
 
+
+//------------ catalogue -----------------------------------------------------
+
+fn catalogue(
+    library: &LibraryMut,
+    report: Reporter
+) -> Catalogue {
+    let mut res = Catalogue::new();
+    let report = report.stage(Stage::Catalogue);
+    library.iter().for_each(|link| {
+        library.resolve_mut(link).catalogue(
+            link, &mut res, &mut report.clone()
+        )
+    });
+    res
+}
