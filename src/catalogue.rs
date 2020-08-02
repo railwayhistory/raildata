@@ -42,14 +42,13 @@ impl Catalogue {
 impl Catalogue {
     pub fn search_names(
         &self, prefix: &str, count: usize
-    ) -> Vec<(&str, DocumentLink)> {
+    ) -> impl Iterator<Item = (&str, DocumentLink)> {
         let prefix = Self::normalize_name(prefix);
         self.names.get_raw_ancestor(&prefix).iter()
-            .filter(|(key, _)| key.starts_with(&prefix))
+            .filter(move |(key, _)| key.starts_with(&prefix))
             .flat_map(|(_, value)| value)
             .map(|(name, link)| (name.as_str(), *link))
             .take(count)
-            .collect()
     }
 }
 
