@@ -1,7 +1,10 @@
+use std::collections::HashMap;
 use radix_trie::{Trie, TrieCommon};
 use serde::{Deserialize, Serialize};
 use unicode_normalization::UnicodeNormalization;
-use crate::document::DocumentLink;
+use crate::document::{Document, DocumentLink};
+use crate::document::common::DocumentType;
+use crate::library::LibraryMut;
 use crate::types::List;
 
 
@@ -14,11 +17,25 @@ pub struct Catalogue {
     ///
     /// This is the primary search index.
     names: Trie<String, List<(String, DocumentLink)>>,
+
+    /// Index of countries in alphabetical order of country code.
+    countries: Vec<DocumentLink>,
+
+    /// The number of documents for the various types.
+    doc_num: HashMap<DocumentType, usize>,
 }
 
 impl Catalogue {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn finalize(&mut self, library: &LibraryMut) {
+        self.countries.sort_unstable_by(|left, right| {
+            library.resolve_mut(*left).key().cmp(
+                library.resolve_mut(*right).key()
+            )
+        })
     }
 
     pub fn insert_name(&mut self, name: String, link: DocumentLink) {
@@ -37,6 +54,14 @@ impl Catalogue {
             .flat_map(|ch| ch.to_lowercase())
             .collect()
     }
+
+    pub fn push_country(&mut self, link: DocumentLink) {
+        self.countries.push(link)
+    }
+
+    pub fn register(&mut self, doc: &Document) {
+        *self.doc_num.entry(doc.doctype()).or_insert(0) += 1;
+    }
 }
 
 impl Catalogue {
@@ -49,6 +74,18 @@ impl Catalogue {
             .flat_map(|(_, value)| value)
             .map(|(name, link)| (name.as_str(), *link))
             .take(count)
+    }
+
+    pub fn countries<'a>(
+        &'a self
+    ) -> impl Iterator<Item = DocumentLink> + 'a {
+        self.countries.iter().cloned()
+    }
+
+    pub fn doc_nums<'a>(
+        &'a self
+    ) -> impl Iterator<Item = (DocumentType, usize)> + 'a {
+        self.doc_num.iter().map(|(k, v)| (*k, *v))
     }
 }
 

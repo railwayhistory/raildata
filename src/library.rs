@@ -269,7 +269,8 @@ struct MutData {
 }
 
 impl LibraryMut {
-    pub fn into_library(self, catalogue: Catalogue) -> Library {
+    pub fn into_library(self, mut catalogue: Catalogue) -> Library {
+        catalogue.finalize(&self);
         let data = Arc::try_unwrap(self.0).unwrap();
         Library(Arc::new(
             Data {

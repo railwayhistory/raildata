@@ -95,6 +95,11 @@ impl Organization {
         for name in names {
             catalogue.insert_name(name.into(), link)
         }
+
+        // Countries
+        if *self.subtype.as_value() == Subtype::Country {
+            catalogue.push_country(link)
+        }
     }
 }
 

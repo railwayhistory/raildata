@@ -98,6 +98,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
             catalogue: &mut Catalogue,
             report: &mut StageReporter
         ) {
+            catalogue.register(self);
             match *self {
                 $(
                     Document::$vtype(ref inner) => {
