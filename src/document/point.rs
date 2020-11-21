@@ -3,12 +3,13 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use crate::catalogue::Catalogue;
 use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-use crate::types::{EventDate, Key, LanguageText, List, LocalText, Marked, Set};
-use super::{DocumentLink, LineLink, PathLink, PointLink, SourceLink};
+use crate::types::{
+    CountryCode, EventDate, Key, LanguageText, List, LocalText, Marked, Set
+};
+use super::{LineLink, PathLink, PointLink, SourceLink};
 use super::common::{Common, Progress};
 
 
@@ -67,20 +68,95 @@ impl Point {
     }
 
     /// Returns the current name.
-    ///
-    /// This is just a temporary placeholder that doesn’t regard languages and
-    /// jurisdictions. It just picks the first name from the newest available
-    /// attribute.
-    pub fn name(&self) -> &str {
-        for event in self.events.iter().rev() {
+    pub fn name(&self, jurisdiction: Option<CountryCode>) -> &str {
+        if let Some(res) = self.events_then_records(|event| {
             if let Some(ref name) = event.name {
-                return name.first()
+                name.for_jurisdiction(jurisdiction)
             }
-            if let Some(ref name) = event.designation {
-                return name.first()
+            else if let Some(ref name) = event.designation {
+                name.for_jurisdiction(jurisdiction)
             }
+            else {
+                None
+            }
+        }) {
+            return res.0
+        }
+        if let Some(res) = self.events_then_records(|event| {
+            if let Some(ref name) = event.name {
+                Some(name.first())
+            }
+            else if let Some(ref name) = event.designation {
+                Some(name.first())
+            }
+            else {
+                None
+            }
+        }) {
+            return res.0
         }
         self.key().as_str()
+    }
+
+    /// Returns the current location for the given line.
+    ///
+    /// If the point has a location on this line, returns the location as well
+    /// as whether it has changed.
+    pub fn location(&self, line: LineLink) -> Option<(Option<&str>, bool)> {
+        self.events_then_records(|event| {
+            let location = event.location.as_ref()?;
+            for &(ref link, ref loc) in &location.0 {
+                if link.into_value() == line {
+                    return Some(
+                        loc.as_ref().map(|loc| loc.as_value().as_ref())
+                    );
+                }
+            }
+            None
+        })
+    }
+
+    /// Returns the current category of the point and whether it has changed.
+    pub fn category(&self) -> Option<(&Set<Category>, bool)> {
+        self.events_then_records(|event| event.category.as_ref())
+    }
+
+    /// Returns the current status.
+    pub fn status(&self) -> Status {
+        self.events_then_records(|event| {
+            event.status.as_ref()
+        }).map(|res| *res.0).unwrap_or(Status::Open)
+    }
+
+    /// Returns whether the point is currently open.
+    pub fn is_open(&self) -> bool {
+        self.status() == Status::Open
+    }
+
+    fn events_then_records<'a, F, R>(&'a self, op: F) -> Option<(R, bool)>
+    where F: Fn(&'a Event) -> Option<R> {
+        let mut res = None;
+        let mut changed = false;
+        for event in &self.events {
+            if let Some(value) = op(event) {
+                if res.is_some() {
+                    changed = true
+                }
+                res = Some(value)
+            }
+        }
+        if let Some(res) = res.take() {
+            return Some((res, changed))
+        }
+        for event in &self.records {
+            if let Some(value) = op(event) {
+                if res.is_some() {
+                    changed = true
+                }
+                res = Some(value)
+            }
+        }
+        res.map(|res| (res, changed))
     }
 }
 
@@ -170,15 +246,7 @@ impl Point {
     }
     */
 
-    pub fn catalogue(
-        &self,
-        link: PointLink,
-        catalogue: &mut Catalogue,
-        _report: &mut StageReporter
-    ) {
-        let link = DocumentLink::from(link);
-        // Names
-        catalogue.insert_name(self.common.key.to_string(), link);
+    pub fn process_names<F: FnMut(String)>(&self, mut process: F) {
         let mut names = HashSet::new();
         for event in self.events.iter().chain(self.records.iter()) {
             if let Some(some) = event.name.as_ref() {
@@ -188,7 +256,7 @@ impl Point {
             }
         }
         for name in names {
-            catalogue.insert_name(name.into(), link)
+            process(name.into())
         }
     }
 }

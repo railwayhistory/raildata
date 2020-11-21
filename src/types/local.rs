@@ -1,6 +1,6 @@
 //! Types for holding localized data.
 
-use std::{ops, str};
+use std::{fmt, ops, str};
 use std::str::FromStr;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
@@ -12,13 +12,21 @@ use super::marked::Marked;
 //------------ CountryCode ---------------------------------------------------
 
 #[derive(
-    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
+    Clone, Copy, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
     Serialize
 )]
 pub struct CountryCode([u8; 2]);
 
 impl CountryCode {
-    pub const DE: Self = CountryCode(*b"de");
+    pub const DE: Self = CountryCode(*b"DE");
+    pub const RU: Self = CountryCode(*b"RU");
+    pub const INVALID: Self = CountryCode(*b"XX");
+}
+
+impl CountryCode {
+    pub fn as_str(&self) -> &str {
+        unsafe { str::from_utf8_unchecked(&self.0) }
+    }
 }
 
 impl ops::Deref for CountryCode {
@@ -55,20 +63,49 @@ impl FromStr for CountryCode {
     }
 }
 
+impl fmt::Display for CountryCode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl fmt::Debug for CountryCode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CountryCode('{}')", self.as_str())
+    }
+}
+
 
 //------------ LanguageCode --------------------------------------------------
 
 #[derive(
-    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
+    Clone, Copy, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
     Serialize
 )]
 pub struct LanguageCode([u8; 3]);
+
+impl LanguageCode {
+    pub const DEU: Self = LanguageCode(*b"DEU");
+    pub const ENG: Self = LanguageCode(*b"ENG");
+}
+
+impl LanguageCode {
+    pub fn as_str(&self) -> &str {
+        unsafe { str::from_utf8_unchecked(&self.0) }
+    }
+}
 
 impl ops::Deref for LanguageCode {
     type Target = str;
 
     fn deref(&self) -> &str {
-        unsafe { str::from_utf8_unchecked(&self.0) }
+        self.as_str()
+    }
+}
+
+impl AsRef<str> for LanguageCode {
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -96,6 +133,18 @@ impl FromStr for LanguageCode {
                              to_code_byte(s, 1)?,
                              to_code_byte(s, 2)?]))
         }
+    }
+}
+
+impl fmt::Display for LanguageCode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl fmt::Debug for LanguageCode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "LanguageCode('{}')", self.as_str())
     }
 }
 
@@ -195,6 +244,47 @@ impl<C: Ord> CodedText<C> {
         CodedTextIter {
             text: self,
             pos: 0
+        }
+    }
+}
+
+impl<C: Ord + From<CountryCode>> CodedText<C> {
+    pub fn for_jurisdiction(
+        &self, jurisdiction: Option<CountryCode>
+    ) -> Option<&str> {
+        let jurisdiction = match jurisdiction {
+            Some(jurisdiction) => C::from(jurisdiction),
+            None => return Some(self.first())
+        };
+        match self.0 {
+            CTInner::Plain(_) => None,
+            CTInner::Map(ref inner) => {
+                for &(ref code, ref text) in inner.iter() {
+                    if *code.as_value() == jurisdiction {
+                        return Some(text.as_str());
+                    }
+                }
+                None
+            }
+        }
+    }
+}
+
+impl<C: Ord + From<LanguageCode>> CodedText<C> {
+    pub fn for_language(
+        &self, language: LanguageCode
+    ) -> Option<&str> {
+        let language = C::from(language);
+        match self.0 {
+            CTInner::Plain(_) => None,
+            CTInner::Map(ref inner) => {
+                for &(ref code, ref text) in inner.iter() {
+                    if *code.as_value() == language {
+                        return Some(text.as_str());
+                    }
+                }
+                None
+            }
         }
     }
 }

@@ -1,19 +1,18 @@
 
-use std::ops;
+use std::{fmt, ops};
 use std::collections::HashSet;
 use std::str::FromStr;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use crate::catalogue::Catalogue;
 use crate::library::{LibraryBuilder, LibraryMut, Library};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{
-    Date, EventDate, IntoMarked, Key, LanguageText, List, LocalText, Location,
-    Marked, Set
+    CountryCode, Date, EventDate, IntoMarked, Key, LanguageText, List,
+    LocalText, Location, Marked, Set
 };
 use super::{
-    DocumentLink, LineLink, OrganizationLink, PathLink, Point, PointLink,
+    LineLink, OrganizationLink, PathLink, Point, PointLink,
     SourceLink
 };
 use super::common::{Alternative, Basis, Common, Contract, Progress};
@@ -45,13 +44,24 @@ impl Line {
         &self.common.origin
     }
 
-    pub fn code(&self) -> Result<(&str, &str), &str> {
-        let code = self.key().as_str();
-        if code.starts_with("line.") && code.get(7..8) == Some(".") {
-            Ok((&code[5..7], &code[8..]))
+    pub fn jurisdiction(&self) -> Option<CountryCode> {
+        let key = self.key().as_str();
+        if key.starts_with("line.") && key.get(7..8) == Some(".") {
+            CountryCode::from_str(&key[5..7]).ok()
         }
         else {
-            Err(code)
+            None
+        }
+
+    }
+
+    pub fn _code(&self) -> (&str, &str) {
+        let code = self.key().as_str();
+        if code.starts_with("line.") && code.get(7..8) == Some(".") {
+            (&code[5..7], &code[8..])
+        }
+        else {
+            ("", code)
         }
     }
 
@@ -136,6 +146,20 @@ impl Line {
         library: &LibraryMut,
         _report: &mut StageReporter
     ) {
+        // Regions
+        let mut regions = HashSet::new();
+        for event in &self.events {
+            if let Some(ref region) = event.region {
+                for item in region {
+                    regions.insert(item.into_value());
+                }
+            }
+        }
+        for item in regions {
+            item.update(library, move |item| item.line_region.push(link))
+        }
+
+        // Line points
         for point in self.points.iter() {
             point.update(library, move |point| point.add_line(link))
         }
@@ -145,7 +169,6 @@ impl Line {
     pub fn verify(&self, report: &mut StageReporter) {
         verify::verify(self, report)
     }
-*/
 
     pub fn catalogue(
         &self,
@@ -154,17 +177,16 @@ impl Line {
         _report: &mut StageReporter
     ) {
         let link = DocumentLink::from(link);
-        // Names
-        catalogue.insert_name(self.common.key.to_string(), link);
-        match self.code() {
-            Ok((cc, line)) => {
-                catalogue.insert_name(line.into(), link);
-                catalogue.insert_name(format!("{} {}", cc, line), link);
-            }
-            Err(code) => {
-                catalogue.insert_name(code.into(), link)
-            }
+*/
+
+    pub fn process_names<F: FnMut(String)>(&self, mut process: F) {
+        /*
+        let (cc, line) = self.code();
+        if !cc.is_empty() {
+            process(format!("{} {}", cc, line));
         }
+        process(line.into());
+        */
         let mut names = HashSet::new();
         for event in self.events.iter().chain(self.records.iter()) {
             if let Some(some) = event.name.as_ref() {
@@ -174,7 +196,7 @@ impl Line {
             }
         }
         for name in names {
-            catalogue.insert_name(name.into(), link)
+            process(name.into())
         }
     }
 }
@@ -275,6 +297,19 @@ pub struct Event {
 }
 
 impl Event {
+    pub fn is_infrastructure(&self) -> bool {
+            self.electrified.is_some()
+        ||  self.gauge.is_some()
+        ||  self.rails.is_some()
+        ||  self.tracks.is_some()
+    }
+
+    pub fn is_operation(&self) -> bool {
+            self.category.is_some()
+        ||  self.goods.is_some()
+        ||  self.passenger.is_some()
+        ||  self.status.is_some()
+    }
 }
 
 impl FromYaml<LibraryBuilder> for Event {
@@ -597,6 +632,37 @@ data_enum! {
 
 pub type DeVzg = Marked<String>;
 
+
+//------------ LineCode ------------------------------------------------------
+
+/// Helper type for delayed printing of the line code.
+pub struct LineCode<'a>(&'a Line);
+
+impl<'a> fmt::Display for LineCode<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let key = self.0.key().as_str();
+        match self.0.jurisdiction() {
+            Some(CountryCode::RU) => {
+                if key.starts_with("line.ru.kg.") {
+                    f.write_str("RU КГ ")?;
+                    f.write_str(&key[11..])?;
+                }
+                else {
+                    f.write_str("RU ")?;
+                    f.write_str(&key[8..10])?;
+                    f.write_str(&key[11..])?;
+                }
+            }
+            Some(country) => {
+                write!(f, "{} {}", country, &key[8..])?;
+            }
+            None => {
+                f.write_str(&key[5..])?;
+            }
+        }
+        Ok(())
+    }
+}
 
 
 //============ Errors ========================================================

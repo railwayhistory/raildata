@@ -1,13 +1,14 @@
 
 use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
-use crate::catalogue::Catalogue;
 use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-use crate::types::{EventDate, Key, LanguageText, LocalText, List, Marked, Set};
+use crate::types::{
+    EventDate, Key, LanguageText, LanguageCode, LocalText, List, Marked, Set
+};
 use super::common::{Basis, Common, Progress};
-use super::{DocumentLink, OrganizationLink, SourceLink};
+use super::{LineLink, OrganizationLink, SourceLink};
 
 
 //------------ Organization --------------------------------------------------
@@ -20,6 +21,7 @@ pub struct Organization {
     pub events: EventList,
 
     // Crosslinks
+    pub line_region: List<LineLink>,
     pub source_author: Set<SourceLink>,
     pub source_editor: Set<SourceLink>,
     pub source_organization: Set<SourceLink>,
@@ -38,6 +40,42 @@ impl Organization {
     pub fn origin(&self) -> &Origin {
         &self.common.origin
     }
+
+    pub fn local_name(&self, lang: LanguageCode) -> &str {
+        for event in &self.events {
+            if let Some(ref name) = event.name {
+                if let Some(ref name) = name.for_language(lang) {
+                    return name
+                }
+            }
+        }
+        for event in &self.events {
+            if let Some(ref name) = event.name {
+                if let Some(ref name) = name.for_language(LanguageCode::ENG) {
+                    return name
+                }
+            }
+        }
+        self.key()
+    }
+
+    pub fn local_short_name(&self, lang: LanguageCode) -> &str {
+        for event in &self.events {
+            if let Some(ref name) = event.short_name {
+                if let Some(ref name) = name.for_language(lang) {
+                    return name
+                }
+            }
+        }
+        for event in &self.events {
+            if let Some(ref name) = event.short_name {
+                if let Some(ref name) = name.for_language(LanguageCode::ENG) {
+                    return name
+                }
+            }
+        }
+        self.local_name(lang)
+    }
 }
 
 impl Organization {
@@ -51,15 +89,20 @@ impl Organization {
         let subtype = doc.take("subtype", context, report);
         let events = doc.take("events", context, report);
         doc.exhausted(report)?;
-        Ok(Organization {
+
+        let mut res = Organization {
             common: common?,
             subtype: subtype?,
             events: events?,
+
+            line_region: List::new(),
             source_author: Set::new(),
             source_editor: Set::new(),
             source_organization: Set::new(),
             source_publisher: Set::new(),
-        })
+        };
+        res.events.sort_by(|left, right| left.date.sort_cmp(&right.date));
+        Ok(res)
     }
 
     pub fn crosslink(
@@ -75,15 +118,7 @@ impl Organization {
     }
     */
 
-    pub fn catalogue(
-        &self,
-        link: OrganizationLink,
-        catalogue: &mut Catalogue,
-        _report: &mut StageReporter
-    ) {
-        let link = DocumentLink::from(link);
-        // Names
-        catalogue.insert_name(self.common.key.to_string(), link);
+    pub fn process_names<F: FnMut(String)>(&self, mut process: F) {
         let mut names = HashSet::new();
         for event in &self.events {
             if let Some(some) = event.name.as_ref() {
@@ -93,12 +128,7 @@ impl Organization {
             }
         }
         for name in names {
-            catalogue.insert_name(name.into(), link)
-        }
-
-        // Countries
-        if *self.subtype.as_value() == Subtype::Country {
-            catalogue.push_country(link)
+            process(name.into())
         }
     }
 }
@@ -113,6 +143,12 @@ data_enum! {
         { Person: "person" }
         { Place: "place" }
         { Region: "region" }
+    }
+}
+
+impl Subtype {
+    pub fn is_country(self) -> bool {
+        matches!(self, Subtype::Country)
     }
 }
 

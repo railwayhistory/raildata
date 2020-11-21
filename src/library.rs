@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex};
 use derive_more::Display;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::catalogue::Catalogue;
 use crate::document::{Document, DocumentLink};
 use crate::document::common::DocumentType;
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
@@ -269,14 +268,12 @@ struct MutData {
 }
 
 impl LibraryMut {
-    pub fn into_library(self, mut catalogue: Catalogue) -> Library {
-        catalogue.finalize(&self);
+    pub fn into_library(self) -> Library {
         let data = Arc::try_unwrap(self.0).unwrap();
         Library(Arc::new(
             Data {
                 store: data.store.into(),
                 keys: data.keys,
-                catalogue
             }
         ))
     }
@@ -312,7 +309,6 @@ pub struct Library(Arc<Data>);
 struct Data {
     store: Store<Document>,
     keys: BTreeMap<Key, DocumentLink>,
-    catalogue: Catalogue,
 }
 
 impl Library {
@@ -326,6 +322,10 @@ impl Library {
 
     pub fn resolve(&self, link: DocumentLink) -> &Document {
         self.0.store.resolve(link.into())
+    }
+
+    pub fn links<'s>(&'s self) -> impl Iterator<Item = DocumentLink> + 's {
+        self.0.keys.values().copied()
     }
 
     pub fn iter<'a>(&'a self) -> impl Iterator<Item=&'a Document> + 'a {
@@ -343,10 +343,6 @@ impl Library {
 
     pub fn store(&self) -> &Store<Document> {
         &self.0.store
-    }
-
-    pub fn catalogue(&self) -> &Catalogue {
-        &self.0.catalogue
     }
 
     pub fn write<W: io::Write>(

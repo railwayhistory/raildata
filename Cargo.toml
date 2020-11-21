@@ -14,7 +14,7 @@ crossbeam       = "0.7.3"
 derive_more     = "0.14.0"
 osmxml          = { git = "https://github.com/partim/osmxml.git" }
 url             = "1.2"
-ignore          = "0.2"
+ignore          = "0.4"
 radix_trie	= { version = "0.2", features = ["serde"] }
 rayon           = "1.0.1"
 serde 		= { version = "1.0", features = ["derive"] }

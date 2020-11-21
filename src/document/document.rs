@@ -1,6 +1,5 @@
 use derive_more::From;
 use serde::{Deserialize, Serialize};
-use crate::catalogue::Catalogue;
 use crate::library::{Library, LibraryBuilder, LibraryMut};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
@@ -92,17 +91,11 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
             }
         }
 
-        pub fn catalogue(
-            &self,
-            link: DocumentLink,
-            catalogue: &mut Catalogue,
-            report: &mut StageReporter
-        ) {
-            catalogue.register(self);
+        pub fn process_names<F: FnMut(String)>(&self, process: F) {
             match *self {
                 $(
                     Document::$vtype(ref inner) => {
-                        inner.catalogue(link.into(), catalogue, report)
+                        inner.process_names(process)
                     }
                 )*
             }

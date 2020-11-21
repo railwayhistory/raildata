@@ -79,6 +79,12 @@ impl<S> From<StoreBuilder<S>> for Store<S> {
     }
 }
 
+impl<S> AsRef<Self> for Store<S> {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}
+
 
 //------------ StoreMut ------------------------------------------------------
 

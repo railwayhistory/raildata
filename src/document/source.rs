@@ -2,7 +2,6 @@
 use std::ops;
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
-use crate::catalogue::Catalogue;
 use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
@@ -204,15 +203,7 @@ impl Source {
     }
     */
 
-    pub fn catalogue(
-        &self,
-        link: SourceLink,
-        catalogue: &mut Catalogue,
-        _report: &mut StageReporter
-    ) {
-        let link = DocumentLink::from(link);
-        // Names
-        catalogue.insert_name(self.common.key.to_string(), link);
+    pub fn process_names<F: FnMut(String)>(&self, _process: F) {
     }
 }
 

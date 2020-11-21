@@ -1,12 +1,11 @@
 
 use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
-use crate::catalogue::Catalogue;
 use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{EventDate, Key, LanguageText, List, LocalText, Marked};
-use super::{DocumentLink, SourceLink, StructureLink};
+use super::{SourceLink, StructureLink};
 use super::common::{Common, Progress};
 
 //------------ Structure -----------------------------------------------------
@@ -63,15 +62,7 @@ impl Structure {
     }
     */
 
-    pub fn catalogue(
-        &self,
-        link: StructureLink,
-        catalogue: &mut Catalogue,
-        _report: &mut StageReporter
-    ) {
-        let link = DocumentLink::from(link);
-        // Names
-        catalogue.insert_name(self.common.key.to_string(), link);
+    pub fn process_names<F: FnMut(String)>(&self, mut process: F) {
         let mut names = HashSet::new();
         for event in &self.events {
             if let Some(some) = event.name.as_ref() {
@@ -81,7 +72,7 @@ impl Structure {
             }
         }
         for name in names {
-            catalogue.insert_name(name.into(), link)
+            process(name.into())
         }
     }
 }

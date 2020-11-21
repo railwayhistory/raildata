@@ -54,7 +54,7 @@ impl<T> List<T> {
     pub fn sort_by<F>(&mut self, op: F)
     where F: FnMut(&T, &T) -> cmp::Ordering {
         if let Inner::Many(ref mut inner) = self.inner {
-            inner.sort_by(op)
+            inner.sort_unstable_by(op)
         }
     }
 
