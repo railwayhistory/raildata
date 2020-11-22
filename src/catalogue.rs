@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::str::FromStr;
 use radix_trie::{Trie, TrieCommon};
 use serde::{Deserialize, Serialize};
 use unicode_normalization::UnicodeNormalization;

@@ -203,7 +203,7 @@ impl<'a, T> ops::DerefMut for ItemGuard<'a, T> {
 
 impl<'a, T> Drop for ItemGuard<'a, T> {
     fn drop(&mut self) {
-        while let Ok(ref op) = self.queue.pop() {
+        while let Some(ref op) = self.queue.pop() {
             op(&mut self.guard)
         }
     }

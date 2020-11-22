@@ -55,14 +55,8 @@ impl Line {
 
     }
 
-    pub fn _code(&self) -> (&str, &str) {
-        let code = self.key().as_str();
-        if code.starts_with("line.") && code.get(7..8) == Some(".") {
-            (&code[5..7], &code[8..])
-        }
-        else {
-            ("", code)
-        }
+    pub fn code(&self) -> LineCode {
+        LineCode(self)
     }
 
     fn last_junction_index(&self, library: &Library) -> usize {
@@ -180,13 +174,7 @@ impl Line {
 */
 
     pub fn process_names<F: FnMut(String)>(&self, mut process: F) {
-        /*
-        let (cc, line) = self.code();
-        if !cc.is_empty() {
-            process(format!("{} {}", cc, line));
-        }
-        process(line.into());
-        */
+        process(format!("{}", self.code()));
         let mut names = HashSet::new();
         for event in self.events.iter().chain(self.records.iter()) {
             if let Some(some) = event.name.as_ref() {
