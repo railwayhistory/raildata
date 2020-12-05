@@ -7,7 +7,8 @@ use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{
-    CountryCode, EventDate, Key, LanguageText, List, LocalText, Marked, Set
+    CountryCode, EventDate, Key, LanguageCode, LanguageText, List, LocalText,
+    Marked, Set
 };
 use super::{LineLink, PathLink, PointLink, SourceLink};
 use super::common::{Common, Progress};
@@ -67,8 +68,27 @@ impl Point {
         !self.junction.map(Marked::into_value).unwrap_or(true)
     }
 
+    /// Returns the preferred name for the given language.
+    pub fn name(&self, lang: LanguageCode) -> &str {
+        for event in &self.events {
+            if let Some(ref name) = event.name {
+                if let Some(name) = name.for_language(lang) {
+                    return name
+                }
+            }
+            if let Some(ref name) = event.designation {
+                if let Some(name) = name.for_language(lang) {
+                    return name
+                }
+            }
+        }
+        self.key().as_str()
+    }
+
     /// Returns the current name.
-    pub fn name(&self, jurisdiction: Option<CountryCode>) -> &str {
+    pub fn name_in_jurisdiction(
+        &self, jurisdiction: Option<CountryCode>
+    ) -> &str {
         if let Some(res) = self.events_then_records(|event| {
             if let Some(ref name) = event.name {
                 name.for_jurisdiction(jurisdiction)
@@ -455,6 +475,51 @@ data_enum! {
         { NoS: "no.s" }
         { NoSp: "no.sp" }
         { NoHp: "no.hp" }
+    }
+}
+
+impl Category {
+    pub fn code(self) -> &'static str {
+        use self::Category::*;
+
+        match self {
+            DeAbzw => "Abzw",
+            DeAnst => "Anst",
+            DeAwanst => "Awanst",
+            DeBf => "Bf",
+            DeBft => "Bft",
+            DeBk => "Bk",
+            DeDkst => "Dkst",
+            DeGlgr => "Glgr",
+            DeHp => "Hp",
+            DeHst => "Hst",
+            DeKr => "Kr",
+            DeKrbf => "Krbf",
+            DeKrst => "Krst",
+            DeLdst => "Ldst",
+            DeMuseum => "Museum",
+            DePo => "Po",
+            DeStrw => "Strw",
+            DeStw => "Stw",
+            DeUehst => "Ühst",
+            DeUest => "Üst",
+            DeAhst => "Ahst",
+            DeGnst => "Gnst",
+            DeGa => "Ga",
+            DeUst => "Ust",
+            DeTp => "Tp",
+            DeEGr => "EGr",
+            DeGp => "Gp",
+            DeLGr => "LGr",
+            DeRBGr => "RBGr",
+            DkSt => "St",
+            DkT => "T",
+            DkSmd => "Smd",
+            DkGr => "Gr",
+            NoS => "S",
+            NoSp => "Sp",
+            NoHp => "Hp",
+        }
     }
 }
 

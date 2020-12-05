@@ -41,6 +41,10 @@ impl Organization {
         &self.common.origin
     }
 
+    pub fn name(&self, lang: LanguageCode) -> &str {
+        self.local_short_name(lang)
+    }
+
     pub fn local_name(&self, lang: LanguageCode) -> &str {
         for event in &self.events {
             if let Some(ref name) = event.name {

@@ -4,7 +4,7 @@ use crate::library::{Library, LibraryBuilder, LibraryMut};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::store::Link;
-use crate::types::{Key, Location, Marked};
+use crate::types::{Key, LanguageCode, Location, Marked};
 use super::{Line, Organization, Path, Point, Source, Structure};
 use super::common::{Common, DocumentType};
 
@@ -55,6 +55,14 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
 
         pub fn location(&self) -> Location {
             self.origin().location()
+        }
+
+        pub fn name(&self, lang: LanguageCode) -> &str {
+            match *self {
+                $(
+                    Document::$vtype(ref inner) => inner.name(lang),
+                )*
+            }
         }
     }
 
@@ -226,3 +234,4 @@ document! (
     ( source, Source, SourceLink),
     ( structure, Structure, StructureLink),
 );
+

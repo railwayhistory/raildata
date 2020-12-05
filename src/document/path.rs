@@ -7,7 +7,7 @@ use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report;
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::Mapping;
-use crate::types::{IntoMarked, Location, Key, Marked};
+use crate::types::{IntoMarked, LanguageCode, Location, Key, Marked};
 use crate::types::key::InvalidKey;
 use super::{PathLink, SourceLink};
 use super::common::{Common, Progress};
@@ -37,6 +37,10 @@ impl Path {
 
     pub fn origin(&self) -> &Origin {
         &self.common.origin
+    }
+
+    pub fn name(&self, _lang: LanguageCode) -> &str {
+        self.key().as_str()
     }
 
     pub fn node(&self, pos: usize) -> Option<&Node> {

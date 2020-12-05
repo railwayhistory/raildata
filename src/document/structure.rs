@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-use crate::types::{EventDate, Key, LanguageText, List, LocalText, Marked};
+use crate::types::{
+    EventDate, Key, LanguageCode, LanguageText, List, LocalText, Marked
+};
 use super::{SourceLink, StructureLink};
 use super::common::{Common, Progress};
 
@@ -28,6 +30,10 @@ impl Structure {
 
     pub fn origin(&self) -> &Origin {
         &self.common.origin
+    }
+
+    pub fn name(&self, _lang: LanguageCode) -> &str {
+        self.key().as_str()
     }
 }
 

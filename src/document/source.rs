@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-use crate::types::{Date, Key, LanguageText, List, Marked, Set, Url};
+use crate::types::{
+    Date, Key, LanguageCode, LanguageText, List, Marked, Set, Url
+};
 use super::{DocumentLink, OrganizationLink, SourceLink};
 use super::common::{Common, Progress};
 
@@ -59,6 +61,10 @@ impl Source {
 
     pub fn origin(&self) -> &Origin {
         &self.common.origin
+    }
+
+    pub fn name(&self, _lang: LanguageCode) -> &str {
+        self.key().as_ref()
     }
 }
 

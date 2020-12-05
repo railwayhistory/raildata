@@ -1,5 +1,5 @@
 
-use std::{fmt, ops};
+use std::ops;
 use std::collections::HashSet;
 use std::str::FromStr;
 use derive_more::Display;
@@ -8,8 +8,8 @@ use crate::library::{LibraryBuilder, LibraryMut, Library};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{
-    CountryCode, Date, EventDate, IntoMarked, Key, LanguageText, List,
-    LocalText, Location, Marked, Set
+    CountryCode, Date, EventDate, IntoMarked, Key, LanguageCode, LanguageText,
+    List, LocalText, Location, Marked, Set
 };
 use super::{
     LineLink, OrganizationLink, PathLink, Point, PointLink,
@@ -26,12 +26,19 @@ pub struct Line {
     pub common: Common,
     pub label: Set<Label>,
     pub note: Option<LanguageText>,
+    pub current: Option<CurrentList>,
     pub events: EventList,
     pub records: EventList,
     pub points: Points,
+
+    code: String,
 }
 
 impl Line {
+    pub fn linked(&self, link: LineLink) -> LinkedLine {
+        LinkedLine::new(self, link)
+    }
+
     pub fn key(&self) -> &Key {
         &self.common.key
     }
@@ -45,18 +52,32 @@ impl Line {
     }
 
     pub fn jurisdiction(&self) -> Option<CountryCode> {
-        let key = self.key().as_str();
+        Self::jurisdiction_from_key(self.key())
+    }
+
+    fn jurisdiction_from_key(key: &Key) -> Option<CountryCode> {
+        let key = key.as_str();
         if key.starts_with("line.") && key.get(7..8) == Some(".") {
             CountryCode::from_str(&key[5..7]).ok()
         }
         else {
             None
         }
-
     }
 
-    pub fn code(&self) -> LineCode {
-        LineCode(self)
+    pub fn name(&self, lang: LanguageCode) -> &str {
+        for event in &self.events {
+            if let Some(name) = event.name.as_ref() {
+                if let Some(name) = name.for_language(lang) {
+                    return name
+                }
+            }
+        }
+        self.code()
+    }
+
+    pub fn code(&self) -> &str {
+        &self.code
     }
 
     fn last_junction_index(&self, library: &Library) -> usize {
@@ -114,6 +135,7 @@ impl Line {
         let common = Common::from_yaml(key, &mut doc, context, report);
         let label = doc.take_default("label", context, report);
         let note = doc.take_opt("note", context, report);
+        let current = doc.take_opt("current", context, report);
         let events = doc.take_opt("events", context, report);
         let records = doc.take_opt("records", context, report);
         let points = doc.take("points", context, report);
@@ -124,14 +146,37 @@ impl Line {
         let mut records: EventList = records?.unwrap_or_default();
         records.sort_by(|left, right| left.date.sort_cmp(&right.date));
 
+        let common = common?;
+
         Ok(Line {
-            common: common?,
+            code: Self::make_code(common.key.as_value()),
+            common,
             label: label?,
             note: note?,
+            current: current?,
             events,
             records,
             points: points?,
         })
+    }
+
+    fn make_code(key: &Key) -> String {
+        match Self::jurisdiction_from_key(key) {
+            Some(CountryCode::RU) => {
+                if key.starts_with("line.ru.kg.") {
+                    format!("RU КГ {}", &key[11..])
+                }
+                else {
+                    format!("RU {} {}", &key[8..10], &key[11..])
+                }
+            }
+            Some(country) => {
+                format!("{} {}", country, &key[8..])
+            }
+            None => {
+                format!("{}", &key[5..])
+            }
+        }
     }
 
     pub fn crosslink(
@@ -174,7 +219,20 @@ impl Line {
 */
 
     pub fn process_names<F: FnMut(String)>(&self, mut process: F) {
-        process(format!("{}", self.code()));
+        let mut key = &self.key().as_str()[5..];
+        while !key.is_empty() {
+            process(key.into());
+            match key.find('.') {
+                Some(idx) => {
+                    let (_, right) = key.split_at(idx);
+                    key = &right[1..];
+                }
+                None => {
+                    key = &""
+                }
+            }
+        }
+
         let mut names = HashSet::new();
         for event in self.events.iter().chain(self.records.iter()) {
             if let Some(some) = event.name.as_ref() {
@@ -186,6 +244,38 @@ impl Line {
         for name in names {
             process(name.into())
         }
+    }
+}
+
+
+//------------ LinkedLine ----------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+pub struct LinkedLine<'a> {
+    line: &'a Line,
+    link: LineLink,
+}
+
+impl<'a> LinkedLine<'a> {
+    fn new(line: &'a Line, link: LineLink) -> Self {
+        LinkedLine { line, link }
+    }
+
+    pub fn line(&self) -> &Line {
+        self.line
+    }
+
+    pub fn link(&self) -> LineLink {
+        self.link
+    }
+}
+
+
+impl<'a> ops::Deref for LinkedLine<'a> {
+    type Target = Line;
+
+    fn deref(&self) -> &Line {
+        self.line
     }
 }
 
@@ -240,6 +330,111 @@ impl FromYaml<LibraryBuilder> for Points {
         Ok(Points { points, indexes })
     }
 }
+
+
+//------------ CurrentList ---------------------------------------------------
+
+pub type CurrentList = List<Current>;
+
+
+//------------ Current -------------------------------------------------------
+
+#[derive(Clone, Deserialize, Debug, Serialize)]
+pub struct Current {
+    pub sections: List<Section>,
+
+    pub category: Option<Set<Category>>,
+    pub course: Option<List<CourseSegment>>,
+    pub electrified: Option<Option<Set<Electrified>>>,
+    pub goods: Option<Goods>,
+    pub gauge: Option<Set<Gauge>>,
+    pub name: Option<LocalText>,
+    pub operator: Option<List<Marked<OrganizationLink>>>,
+    pub owner: Option<List<Marked<OrganizationLink>>>,
+    pub passenger: Option<Passenger>,
+    pub rails: Option<Marked<u8>>,
+    pub region: Option<List<Marked<OrganizationLink>>>,
+    pub reused: Option<List<Marked<LineLink>>>,
+    pub status: Option<Status>,
+    pub tracks: Option<Marked<u8>>,
+
+    pub de_vzg: Option<DeVzg>,
+}
+
+impl FromYaml<LibraryBuilder> for Current {
+    fn from_yaml(
+        value: Value,
+        context: &LibraryBuilder,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let mut value = value.into_mapping(report)?;
+        let sections = value.take_default("sections", context, report);
+        let start = value.take_opt("start", context, report);
+        let end = value.take_opt("end", context, report);
+
+        let category = value.take_opt("category", context, report);
+        let course = value.take_default("course", context, report);
+        let electrified = value.take_opt("electrified", context, report);
+        let goods = value.take_opt("goods", context, report);
+        let gauge = value.take_opt("gauge", context, report);
+        let name = value.take_opt("name", context, report);
+        let operator = value.take_opt("operator", context, report);
+        let owner = value.take_opt("owner", context, report);
+        let passenger = value.take_opt("passenger", context, report);
+        let rails = value.take_opt("rails", context, report);
+        let region = value.take_opt("region", context, report);
+        let reused = value.take_opt("reused", context, report);
+        let status = value.take_opt("status", context, report);
+        let tracks = value.take_opt("tracks", context, report);
+
+        let de_vzg = value.take_opt("de.VzG", context, report);
+
+        value.exhausted(report)?;
+
+        let mut sections: List<Section> = sections?;
+        let start: Option<Marked<PointLink>> = start?;
+        let end: Option<Marked<PointLink>> = end?;
+        match (start, end) {
+            (None, None) => { },
+            (start, end) => {
+                if !sections.is_empty() {
+                    if let Some(start) = start {
+                        report.error(
+                            StartWithSections.marked(start.location())
+                        );
+                    }
+                    if let Some(end) = end {
+                        report.error(EndWithSections.marked(end.location()));
+                    }
+                    return Err(Failed)
+                }
+                sections.push(Section { start, end })
+            }
+        };
+
+        Ok(Current {
+            sections: sections,
+
+            category: category?,
+            course: course?,
+            electrified: electrified?,
+            goods: goods?,
+            gauge: gauge?,
+            name: name?,
+            operator: operator?,
+            owner: owner?,
+            passenger: passenger?,
+            rails: rails?,
+            region: region?,
+            reused: reused?,
+            status: status?,
+            tracks: tracks?,
+
+            de_vzg: de_vzg?,
+        })
+    }
+}
+
 
 
 //------------ EventList -----------------------------------------------------
@@ -619,38 +814,6 @@ data_enum! {
 //------------ DeVzg ---------------------------------------------------------
 
 pub type DeVzg = Marked<String>;
-
-
-//------------ LineCode ------------------------------------------------------
-
-/// Helper type for delayed printing of the line code.
-pub struct LineCode<'a>(&'a Line);
-
-impl<'a> fmt::Display for LineCode<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let key = self.0.key().as_str();
-        match self.0.jurisdiction() {
-            Some(CountryCode::RU) => {
-                if key.starts_with("line.ru.kg.") {
-                    f.write_str("RU КГ ")?;
-                    f.write_str(&key[11..])?;
-                }
-                else {
-                    f.write_str("RU ")?;
-                    f.write_str(&key[8..10])?;
-                    f.write_str(&key[11..])?;
-                }
-            }
-            Some(country) => {
-                write!(f, "{} {}", country, &key[8..])?;
-            }
-            None => {
-                f.write_str(&key[5..])?;
-            }
-        }
-        Ok(())
-    }
-}
 
 
 //============ Errors ========================================================
