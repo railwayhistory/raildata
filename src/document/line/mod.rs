@@ -348,6 +348,7 @@ pub struct Current {
     pub electrified: Option<Option<Set<Electrified>>>,
     pub goods: Option<Goods>,
     pub gauge: Option<Set<Gauge>>,
+    pub jurisdiction: Option<Marked<CountryCode>>,
     pub name: Option<LocalText>,
     pub operator: Option<List<Marked<OrganizationLink>>>,
     pub owner: Option<List<Marked<OrganizationLink>>>,
@@ -377,6 +378,7 @@ impl FromYaml<LibraryBuilder> for Current {
         let electrified = value.take_opt("electrified", context, report);
         let goods = value.take_opt("goods", context, report);
         let gauge = value.take_opt("gauge", context, report);
+        let jurisdiction = value.take_opt("jurisdiction", context, report);
         let name = value.take_opt("name", context, report);
         let operator = value.take_opt("operator", context, report);
         let owner = value.take_opt("owner", context, report);
@@ -420,6 +422,7 @@ impl FromYaml<LibraryBuilder> for Current {
             electrified: electrified?,
             goods: goods?,
             gauge: gauge?,
+            jurisdiction: jurisdiction?,
             name: name?,
             operator: operator?,
             owner: owner?,
@@ -465,6 +468,7 @@ pub struct Event {
     pub electrified: Option<Option<Set<Electrified>>>,
     pub goods: Option<Goods>,
     pub gauge: Option<Set<Gauge>>,
+    pub jurisdiction: Option<Marked<CountryCode>>,
     pub local_name: Option<LocalText>, // XXX Drop
     pub name: Option<LocalText>,
     pub operator: Option<List<Marked<OrganizationLink>>>,
@@ -523,6 +527,7 @@ impl FromYaml<LibraryBuilder> for Event {
         let electrified = value.take_opt("electrified", context, report);
         let goods = value.take_opt("goods", context, report);
         let gauge = value.take_opt("gauge", context, report);
+        let jurisdiction = value.take_opt("jurisdiction", context, report);
         let local_name = value.take_opt("local_name", context, report);
         let name = value.take_opt("name", context, report);
         let operator = value.take_opt("operator", context, report);
@@ -579,6 +584,7 @@ impl FromYaml<LibraryBuilder> for Event {
             electrified: electrified?,
             goods: goods?,
             gauge: gauge?,
+            jurisdiction: jurisdiction?,
             local_name: local_name?,
             name: name?,
             operator: operator?,
