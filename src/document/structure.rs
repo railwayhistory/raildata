@@ -56,7 +56,6 @@ impl Structure {
     }
 
     pub fn crosslink(
-        &self,
         _link: StructureLink,
         _library: &LibraryMut,
         _report: &mut StageReporter

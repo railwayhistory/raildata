@@ -1,6 +1,5 @@
 
 use std::{f64, fmt, ops};
-use std::collections::HashMap;
 use std::str::FromStr;
 use derive_more::Display;
 use yaml_rust::scanner::{Marker, ScanError, TokenType, TScalarStyle};
@@ -344,7 +343,7 @@ impl Value {
 
 #[derive(Clone, Debug, Default)]
 pub struct Mapping {
-    items: HashMap<Marked<String>, Value>,
+    items: Vec<(Marked<String>, Option<Value>)>,
     errors: Vec<Marked<ValueError>>,
     location: Location,
 }
@@ -352,21 +351,31 @@ pub struct Mapping {
 impl Mapping {
     fn new(location: Location) -> Self {
         Mapping {
-            items: HashMap::new(),
+            items: Vec::new(),
             errors: Vec::new(),
             location
         }
     }
 
     fn insert(&mut self, key: Value, value: Value) {
-        match key.try_into_string() {
-            Ok(key) => { self.items.insert(key, value); },
+        let key = match key.try_into_string() {
+            Ok(key) => key,
             Err(err) => {
                 let location = err.location();
                 let err = ValueError::InvalidMappingKey(err.into());
-                self.errors.push(err.marked(location))
+                self.errors.push(err.marked(location));
+                return
             }
+        };
+        if self.items.iter().find(|item| item.0 == key).is_some() {
+            self.errors.push(
+                ValueError::DuplicateMappingKey.marked(
+                    key.location()
+                )
+            );
+            return
         }
+        self.items.push((key, Some(value)));
     }
 }
 
@@ -381,7 +390,7 @@ impl Mapping {
         context: &C,
         report: &mut PathReporter
     ) -> Result<T, Failed> {
-        if let Some(value) = self.items.remove(key) {
+        if let Some(value) = self.remove(key) {
             T::from_yaml(value, context, report)
         }
         else {
@@ -396,7 +405,7 @@ impl Mapping {
         context: &C,
         report: &mut PathReporter
     ) -> Result<T, Failed> {
-        if let Some(value) = self.items.remove(key) {
+        if let Some(value) = self.remove(key) {
             T::from_yaml(value, context, report)
         }
         else {
@@ -410,7 +419,7 @@ impl Mapping {
         context: &C,
         report: &mut PathReporter
     ) -> Result<Option<T>, Failed> {
-        if let Some(value) = self.items.remove(key) {
+        if let Some(value) = self.remove(key) {
             T::from_yaml(value, context, report).map(Some)
         }
         else {
@@ -422,11 +431,11 @@ impl Mapping {
         mut self, report: &mut PathReporter
     ) -> Result<(), Failed> {
         let mut failed = self.check(report).is_err();
-        if !self.items.is_empty() {
-            for (key, _) in self.items {
+        for (key, value) in self.items.into_iter() {
+            if value.is_some() {
                 report.error(key.map(|key| UnexpectedKey(key)));
+                failed = true;
             }
-            failed = true;
         }
         if failed { Err(Failed) }
         else { Ok(()) }
@@ -443,25 +452,22 @@ impl Mapping {
             Err(Failed)
         }
     }
-}
 
-impl IntoIterator for Mapping {
-    type Item = (Marked<String>, Value);
-    type IntoIter = ::std::collections::hash_map::IntoIter<Marked<String>,
-                                                           Value>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.items.into_iter()
+    fn remove(&mut self, key: &str) -> Option<Value> {
+        if let Some(item) = self.items.iter_mut().find(|item|
+            item.0.as_value() == key
+        ) {
+            item.1.take()
+        }
+        else {
+            None
+        }
     }
-}
 
-impl IntoIterator for Marked<Mapping> {
-    type Item = (Marked<String>, Value);
-    type IntoIter = ::std::collections::hash_map::IntoIter<Marked<String>,
-                                                           Value>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.into_value().items.into_iter()
+    pub fn into_iter(self) -> impl Iterator<Item = (Marked<String>, Value)> {
+        self.items.into_iter().filter_map(|(key, value)| {
+            value.map(|value| (key, value))
+        })
     }
 }
 
@@ -810,6 +816,9 @@ impl<C, T: FromYaml<C>> FromYaml<C> for Vec<T> {
 pub enum ValueError {
     #[display(fmt="mapping key cannot be a {}", _0)]
     InvalidMappingKey(Type),
+
+    #[display(fmt="duplicate mapping key")]
+    DuplicateMappingKey,
 
     #[display(fmt="invalid boolean")]
     InvalidBool,

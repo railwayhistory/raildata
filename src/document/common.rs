@@ -1,10 +1,13 @@
 //! Attributes and attribute types common to all documents.
 
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use crate::library::LibraryBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-use crate::types::{EventDate, Key, LanguageText, List, Marked, Set};
+use crate::types::{
+    EventDate, IntoMarked, Key, LanguageText, List, Location, Marked, Set
+};
 use super::{OrganizationLink, SourceLink};
 
 
@@ -79,6 +82,12 @@ data_enum! {
     }
 }
 
+impl Progress {
+    pub fn is_stub(self) -> bool {
+        matches!(self, Progress::Stub)
+    }
+}
+
 
 //------------ Alternative ---------------------------------------------------
 
@@ -114,11 +123,10 @@ impl FromYaml<LibraryBuilder> for Alternative {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Basis {
-    pub date: Option<EventDate>,
+    pub date: EventDate,
     pub document: List<Marked<SourceLink>>,
     pub source: List<Marked<SourceLink>>,
-    pub contract: Option<Contract>,
-    pub treaty: Option<Contract>,
+    pub agreement: Option<Agreement>,
     pub note: Option<LanguageText>,
 }
 
@@ -129,21 +137,91 @@ impl FromYaml<LibraryBuilder> for Basis {
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
-        let date = value.take_opt("date", context, report);
+        let date = value.take_default("date", context, report);
         let document = value.take_default("document", context, report);
         let source = value.take_default("source", context, report);
-        let contract = value.take_opt("contract", context, report);
-        let treaty = value.take_opt("treaty", context, report);
+        let agreement = value.take_opt("agreement", context, report);
+        let contract: Result<Option<Contract>, _>
+            = value.take_opt("contract", context, report);
+        let treaty: Result<Option<Contract>, _>
+            = value.take_opt("treaty", context, report);
         let note = value.take_opt("note", context, report);
         value.exhausted(report)?;
+
+        let agreement = agreement?;
+        let contract = contract?;
+        let treaty = treaty?;
+
+        let agreement = if let Some(agreement) = agreement {
+            if let Some(contract) = contract {
+                report.error(MultipleAgreements.marked(contract.pos));
+                return Err(Failed)
+            }
+            if let Some(treaty) = treaty {
+                report.error(MultipleAgreements.marked(treaty.pos));
+                return Err(Failed)
+            }
+            Some(agreement)
+        }
+        else if let Some(contract) = contract {
+            if let Some(treaty) = treaty {
+                report.error(MultipleAgreements.marked(treaty.pos));
+                return Err(Failed)
+            }
+            Some(contract.into_agreement(AgreementType::Contract))
+        }
+        else if let Some(treaty) = treaty {
+            Some(treaty.into_agreement(AgreementType::Treaty))
+        }
+        else {
+            None
+        };
+
         Ok(Basis {
             date: date?,
             document: document?,
             source: source?,
-            contract: contract?,
-            treaty: treaty?,
+            agreement,
             note: note?,
         })
+    }
+}
+
+
+//------------ Agreement -----------------------------------------------------
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Agreement {
+    pub agreement_type: AgreementType,
+    pub parties: List<Marked<OrganizationLink>>,
+}
+
+impl FromYaml<LibraryBuilder> for Agreement {
+    fn from_yaml(
+        value: Value,
+        context: &LibraryBuilder,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let mut value = value.into_mapping(report)?;
+        let agreement_type = value.take("type", context, report);
+        let parties = value.take("parties", context, report);
+        value.exhausted(report)?;
+
+        Ok(Agreement {
+            agreement_type: agreement_type?,
+            parties: parties?
+        })
+    }
+}
+
+
+
+//------------ AgreementType -------------------------------------------------
+
+data_enum! {
+    pub enum AgreementType {
+        { Contract: "contract" }
+        { Treaty: "treaty" }
     }
 }
 
@@ -153,6 +231,16 @@ impl FromYaml<LibraryBuilder> for Basis {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Contract {
     pub parties: List<Marked<OrganizationLink>>,
+    pub pos: Location,
+}
+
+impl Contract {
+    pub fn into_agreement(self, agreement_type: AgreementType) -> Agreement {
+        Agreement {
+            agreement_type,
+            parties: self.parties
+        }
+    }
 }
 
 impl FromYaml<LibraryBuilder> for Contract {
@@ -161,10 +249,23 @@ impl FromYaml<LibraryBuilder> for Contract {
         context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
+        let pos = value.location();
         let mut value = value.into_mapping(report)?;
         let parties = value.take("parties", context, report);
         value.exhausted(report)?;
-        Ok(Contract { parties: parties? })
+        Ok(Contract { parties: parties?, pos })
     }
 }
+
+
+//============ Errors ========================================================
+
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="only one of 'agreement', 'contract', or 'treaty' allowed")]
+pub struct MultipleAgreements;
+
+#[derive(Clone, Copy, Debug, Display)]
+#[display(fmt="one of 'agreement', 'contract', or 'treaty' required")]
+pub struct MissingAgreement;
+
 

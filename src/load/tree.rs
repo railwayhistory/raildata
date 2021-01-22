@@ -5,10 +5,9 @@ use std::fs::File;
 use ignore::{WalkBuilder, WalkState};
 use ignore::types::TypesBuilder;
 use osmxml::read::read_xml;
-use rayon::iter::ParallelIterator;
 use crate::document::Path;
 use crate::document::common::DocumentType;
-use crate::library::{LibraryBuilder, LibraryMut, Library};
+use crate::library::{LibraryBuilder, Library};
 use crate::types::{IntoMarked, Location};
 use super::read::Utf8Chars;
 use super::report::{self, PathReporter, Report, Reporter, Stage};
@@ -28,20 +27,14 @@ pub fn load_tree(path: &path::Path) -> Result<Library, Report> {
         load_paths(path, builder.clone(), report.clone());
         builder.into_library_mut(&mut report.clone().stage(Stage::Translate))
     };
-    let mut store = match store {
+    let store = match store {
         Ok(store) => store,
         Err(_) => return Err(report.unwrap())
     };
 
-    // Phase 2: Cross-link.
-    crosslink(&mut store, report.clone());
-    if !report.is_empty() {
-        return Err(report.unwrap())
-    }
+    // Phase 2:  Verify
 
-    // Phase 3: Verify
-
-    // Phase 4: Profit
+    // Phase 3: Profit
     Ok(store.into_library())
 }
 
@@ -175,18 +168,5 @@ fn load_osm_file<R: io::Read>(
             Err(None) => { }
         }
     }
-}
-
-
-//------------ crosslink -----------------------------------------------------
-
-fn crosslink(
-    library: &LibraryMut,
-    report: Reporter
-) {
-    let report = report.stage(Stage::Crosslink);
-    library.par_iter().for_each(move |link| {
-        library.resolve_mut(link).crosslink(link, library, &mut report.clone())
-    })
 }
 

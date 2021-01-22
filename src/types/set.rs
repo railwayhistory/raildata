@@ -151,6 +151,19 @@ impl<C, T: FromYaml<C> + Hash + Eq> FromYaml<C> for Set<T> {
     }
 }
 
+impl<T: Hash + Eq> PartialEq for Set<T> {
+    fn eq(&self, other: &Self) -> bool {
+        use self::Inner::*;
+
+        match (&self.inner, &other.inner) {
+            (&Empty, &Empty) => true,
+            (&One(ref left), &One(ref right)) => left.eq(right),
+            (&Many(ref left), &Many(ref right)) => left.eq(right),
+            _ => false,
+        }
+    }
+}
+
 
 //------------ Iter ----------------------------------------------------------
 

@@ -1,6 +1,5 @@
 
 use std::collections::HashSet;
-use std::sync::Arc;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use crate::library::{LibraryBuilder, LibraryMut};
@@ -70,7 +69,7 @@ impl Point {
 
     /// Returns the preferred name for the given language.
     pub fn name(&self, lang: LanguageCode) -> &str {
-        for event in &self.events {
+        for event in self.events.iter().rev().chain(self.records.iter().rev()) {
             if let Some(ref name) = event.name {
                 if let Some(name) = name.for_language(lang) {
                     return name
@@ -215,44 +214,46 @@ impl Point {
     //--- Crosslinking
 
     pub fn crosslink(
-        &mut self,
         link: PointLink,
         library: &LibraryMut,
         report: &mut StageReporter
     ) {
-        // event::connection
-        //
-        // In order to get a complete set of connections, we produce a set of
-        // all connections and add that full set (sans self) to all points.
-        let mut set = Set::new();
-        for event in &self.events {
-            if let Some(ref conns) = event.connection {
-                for conn in conns {
-                    if conn.into_value() == link {
-                        report.error_at(
-                            self.origin().at(conn.location()),
-                            OwnConnection
-                        );
-                        continue;
+        let mut connections = {
+            let library = library.read();
+            let point = link.follow(&library);
+
+            // Collect all connections from all events.
+            let mut connections = Set::new();
+            for event in &point.events {
+                if let Some(ref conns) = event.connection {
+                    for conn in conns {
+                        if conn.into_value() == link {
+                            report.error_at(
+                                point.origin().at(conn.location()),
+                                OwnConnection
+                            );
+                            continue;
+                        }
+                        connections.insert(conn.into_value());
                     }
-                    set.insert(conn.into_value());
                 }
             }
-        }
-        if !set.is_empty() {
-            self.connections.merge(&set);
-            set.insert(link);
-            let set = Arc::new(set);
-            for target in set.iter() {
-                let set = set.clone();
-                let target = target.clone();
-                target.update(library, move |point| {
-                    for link in set.iter() {
-                        if *link != target {
-                            point.connections.insert(*link);
-                        }
+            connections
+        };
+ 
+        let mut library = library.write();
+
+        // Add connection set to the connection sets of all points in it.
+        if !connections.is_empty() {
+            link.follow_mut(&mut library).connections.merge(&connections);
+            connections.insert(link);
+            for target in connections.iter() {
+                let point = target.follow_mut(&mut library);
+                for link in connections.iter() {
+                    if link != target {
+                        point.connections.insert(*link);
                     }
-                })
+                }
             }
         }
     }
@@ -537,7 +538,7 @@ impl FromYaml<LibraryBuilder> for Location {
     ) -> Result<Self, Failed> {
         let mut res = List::new();
         let mut err = false;
-        for (key, value) in value.into_mapping(report)? {
+        for (key, value) in value.into_mapping(report)?.into_iter() {
             let key = match Marked::from_string(key, report) {
                 Ok(key) => key,
                 Err(_) => {
@@ -620,7 +621,7 @@ impl FromYaml<LibraryBuilder> for Site {
     ) -> Result<Self, Failed> {
         let mut res = List::new();
         let mut err = false;
-        for (key, value) in value.into_mapping(report)? {
+        for (key, value) in value.into_mapping(report)?.into_iter() {
             let key = match Marked::from_string(key, report) {
                 Ok(key) => key,
                 Err(_) => {

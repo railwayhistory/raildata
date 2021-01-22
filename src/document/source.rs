@@ -1,12 +1,11 @@
 
 use std::ops;
-use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{
-    Date, Key, LanguageCode, LanguageText, List, Marked, Set, Url
+    EventDate, Key, LanguageCode, LanguageText, List, Marked, Set, Url
 };
 use super::{DocumentLink, OrganizationLink, SourceLink};
 use super::common::{Common, Progress};
@@ -21,7 +20,7 @@ pub struct Source {
     // Type-dependent attributes
     pub author: List<Marked<OrganizationLink>>,
     pub collection: Option<Marked<SourceLink>>,
-    pub date: Option<Marked<Date>>,
+    pub date: EventDate,
     pub designation: Option<Marked<String>>,
     pub digital: List<Marked<Url>>,
     pub edition: Option<Marked<String>>,
@@ -79,7 +78,7 @@ impl Source {
         let subtype = doc.take_default("subtype", context, report);
         let author = doc.take_opt("author", context, report);
         let collection = doc.take_opt("collection", context, report);
-        let date = doc.take_opt("date", context, report);
+        let date = doc.take_default("date", context, report);
         let designation = doc.take_opt("designation", context, report);
         let digital = doc.take_default("digital", context, report);
         let edition = doc.take_opt("edition", context, report);
@@ -132,11 +131,11 @@ impl Source {
     }
 
     pub fn crosslink(
-        &self,
-        link: SourceLink,
-        library: &LibraryMut,
+        _link: SourceLink,
+        _library: &LibraryMut,
         _report: &mut StageReporter
     ) {
+        /*
         // author
         for target in &self.author {
             target.update(library, move |org| {
@@ -202,6 +201,7 @@ impl Source {
                 document.common_mut().sources.insert(link);
             })
         }
+        */
     }
 
     /*

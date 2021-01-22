@@ -1,6 +1,6 @@
 //! A list with an optimization for holding a single item.
 
-use std::{cmp, fmt, mem, slice};
+use std::{cmp, fmt, mem, ops, slice};
 use serde::{Deserialize, Serialize};
 use crate::load::report::{Failed, PathReporter};
 use crate::load::yaml::{FromYaml, Value};
@@ -51,6 +51,10 @@ impl<T> List<T> {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.inner = Inner::Empty
+    }
+
     pub fn sort_by<F>(&mut self, op: F)
     where F: FnMut(&T, &T) -> cmp::Ordering {
         if let Inner::Many(ref mut inner) = self.inner {
@@ -89,6 +93,22 @@ impl<T> List<T> {
             Inner::Many(ref vec) => vec.first(),
         }
     }
+
+    pub fn last(&self) -> Option<&T> {
+        match self.inner {
+            Inner::Empty => None,
+            Inner::One(ref item) => Some(item),
+            Inner::Many(ref vec) => vec.last(),
+        }
+    }
+
+    pub fn last_mut(&mut self) -> Option<&mut T> {
+        match self.inner {
+            Inner::Empty => None,
+            Inner::One(ref mut item) => Some(item),
+            Inner::Many(ref mut vec) => vec.last_mut(),
+        }
+    }
 }
 
 impl<T> Default for List<T> {
@@ -102,6 +122,21 @@ impl<T> From<Option<List<T>>> for List<T> {
         match list {
             Some(list) => list,
             None => List::default()
+        }
+    }
+}
+
+impl<T> From<Vec<T>> for List<T> {
+    fn from(src: Vec<T>) -> Self {
+        if src.is_empty() {
+            List { inner: Inner::Empty }
+        }
+        else if src.len() == 1 {
+            let mut iter = src.into_iter();
+            List { inner: Inner::One(iter.next().unwrap()) }
+        }
+        else {
+            List { inner: Inner::Many(src) }
         }
     }
 }
@@ -161,6 +196,29 @@ impl<'a, T> IntoIterator for &'a mut List<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         IterMut::new(self)
+    }
+}
+
+impl<T: PartialEq> PartialEq for List<T> {
+    fn eq(&self, other: &Self) -> bool {
+        use self::Inner::*;
+
+        match (&self.inner, &other.inner) {
+            (&Empty, &Empty) => true,
+            (&One(ref left), &One(ref right)) => left.eq(right),
+            (&Many(ref left), &Many(ref right)) => left.eq(right),
+            _ => false,
+        }
+    }
+}
+
+impl<T: Eq> Eq for List<T> { }
+
+impl<T> ops::Index<usize> for List<T> {
+    type Output = T;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        self.as_slice().index(index)
     }
 }
 

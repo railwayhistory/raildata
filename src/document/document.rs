@@ -1,7 +1,9 @@
 use derive_more::From;
 use serde::{Deserialize, Serialize};
-use crate::library::{Library, LibraryBuilder, LibraryMut};
-use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
+use crate::library::{
+    LibraryBuilder, LinkTarget, LinkTargetMut
+};
+use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::store::Link;
 use crate::types::{Key, LanguageCode, Location, Marked};
@@ -84,21 +86,6 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
             }
         }
 
-        pub fn crosslink(
-            &mut self,
-            link: DocumentLink,
-            library: &LibraryMut,
-            report: &mut StageReporter
-        ) {
-            match *self {
-                $(
-                    Document::$vtype(ref mut inner) => {
-                        inner.crosslink(link.into(), library, report)
-                    }
-                )*
-            }
-        }
-
         pub fn process_names<F: FnMut(String)>(&self, process: F) {
             match *self {
                 $(
@@ -118,7 +105,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
             Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq,
             PartialOrd, Serialize
         )]
-        pub struct $vlink(Link<Document>);
+        pub struct $vlink(DocumentLink);
 
         impl $vlink {
             pub fn build(
@@ -130,33 +117,32 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                     .map(Into::into)
             }
 
-            pub fn follow(self, library: &Library) -> &$vtype {
-                match *self.0.follow(library.store()) {
+            pub fn follow(self, library: &impl LinkTarget) -> &$vtype {
+                match *library.resolve(self.0) {
                     Document::$vtype(ref inner) => inner,
                     _ => panic!("link to wrong document type")
                 }
             }
 
-            pub fn update<F>(self, library: &LibraryMut, op: F)
-            where F: Fn(&mut $vtype) + 'static + Send {
-                library.update(self.into(), move |document| {
-                    match *document {
-                        Document::$vtype(ref mut inner) => op(inner),
-                        _ => panic!("link to wrong document type")
-                    }
-                })
+            pub fn follow_mut(
+                self, library: &mut impl LinkTargetMut
+            ) -> &mut $vtype {
+                match *library.resolve_mut(self.0) {
+                    Document::$vtype(ref mut inner) => inner,
+                    _ => panic!("link to wrong document type")
+                }
             }
         }
 
         impl From<DocumentLink> for $vlink {
             fn from(link: DocumentLink) -> $vlink {
-                $vlink(link.0)
+                $vlink(link)
             }
         }
 
         impl From<$vlink> for DocumentLink {
             fn from(link: $vlink) -> DocumentLink {
-                DocumentLink(link.0)
+                link.0
             }
         }
 
@@ -190,11 +176,6 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
             report: &mut PathReporter,
         ) -> Marked<Self> {
             store.build_link(key, None, report).map(Into::into)
-        }
-
-        pub fn update<F>(self, library: &LibraryMut, op: F)
-        where F: Fn(&mut Document) + 'static + Send {
-            library.update(self, op)
         }
     }
 

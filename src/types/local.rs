@@ -18,8 +18,21 @@ use super::marked::Marked;
 pub struct CountryCode([u8; 2]);
 
 impl CountryCode {
+    pub const AT: Self = CountryCode(*b"AT");
+    pub const BE: Self = CountryCode(*b"BE");
+    pub const CH: Self = CountryCode(*b"CH");
+    pub const DD: Self = CountryCode(*b"DD");
     pub const DE: Self = CountryCode(*b"DE");
+    pub const DK: Self = CountryCode(*b"DK");
+    pub const FR: Self = CountryCode(*b"FR");
+    pub const GB: Self = CountryCode(*b"GB");
+    pub const LT: Self = CountryCode(*b"LT");
+    pub const LU: Self = CountryCode(*b"LU");
+    pub const NL: Self = CountryCode(*b"NL");
+    pub const NO: Self = CountryCode(*b"NO");
+    pub const PL: Self = CountryCode(*b"PL");
     pub const RU: Self = CountryCode(*b"RU");
+    pub const SE: Self = CountryCode(*b"SE");
     pub const INVALID: Self = CountryCode(*b"XX");
 }
 
@@ -85,8 +98,18 @@ impl fmt::Debug for CountryCode {
 pub struct LanguageCode([u8; 3]);
 
 impl LanguageCode {
+    pub const CES: Self = LanguageCode(*b"CES");
+    pub const DAN: Self = LanguageCode(*b"DAN");
     pub const DEU: Self = LanguageCode(*b"DEU");
     pub const ENG: Self = LanguageCode(*b"ENG");
+    pub const FRA: Self = LanguageCode(*b"FRA");
+    pub const LAV: Self = LanguageCode(*b"LAV");
+    pub const NOB: Self = LanguageCode(*b"NOB");
+    pub const NLD: Self = LanguageCode(*b"NLD");
+    pub const NNO: Self = LanguageCode(*b"NNO");
+    pub const POL: Self = LanguageCode(*b"POL");
+    pub const RUS: Self = LanguageCode(*b"RUS");
+    pub const SWE: Self = LanguageCode(*b"SWE");
 }
 
 impl LanguageCode {
@@ -161,16 +184,31 @@ impl fmt::Debug for LanguageCode {
 )]
 pub struct LocalCode([u8; 3]);
 
-impl ops::Deref for LocalCode {
-    type Target = str;
+impl LocalCode {
+    pub fn try_into_language(self) -> Result<LanguageCode, CountryCode> {
+        if self.0[2] == 0 {
+            Err(CountryCode([self.0[0], self.0[1]]))
+        }
+        else {
+            Ok(LanguageCode(self.0))
+        }
+    }
 
-    fn deref(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         if self.0[2] == 0 {
             unsafe { str::from_utf8_unchecked(&self.0[..2]) }
         }
         else {
             unsafe { str::from_utf8_unchecked(&self.0) }
         }
+    }
+}
+
+impl ops::Deref for LocalCode {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -276,7 +314,7 @@ impl<C: Ord + From<LanguageCode>> CodedText<C> {
     ) -> Option<&str> {
         let language = C::from(language);
         match self.0 {
-            CTInner::Plain(_) => None,
+            CTInner::Plain(ref inner) => Some(inner.as_ref()),
             CTInner::Map(ref inner) => {
                 for &(ref code, ref text) in inner.iter() {
                     if *code.as_value() == language {
@@ -300,7 +338,7 @@ where <C as FromStr>::Err: Message {
             Ok(mut value) => {
                 let mut res = Vec::new();
                 let mut failed = value.check(report).is_err();
-                for (key, value) in value {
+                for (key, value) in value.into_iter() {
                     let key = key.try_map(|s| C::from_str(&s))
                                  .map_err(|err| { report.error(err); Failed });
                     let value = value.into_string(report);
@@ -315,7 +353,6 @@ where <C as FromStr>::Err: Message {
                     Err(Failed)
                 }
                 else {
-                    res.sort_by(|left, right| left.0.cmp(&right.0));
                     Ok(CodedText(CTInner::Map(res)))
                 }
             }

@@ -1,4 +1,5 @@
 
+use std::cmp;
 use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 use crate::library::{LibraryBuilder, LibraryMut};
@@ -80,6 +81,80 @@ impl Organization {
         }
         self.local_name(lang)
     }
+
+    pub fn historic_name(
+        &self, lang: LanguageCode, date: &EventDate
+    ) -> &str {
+        let mut local = None;
+        let mut default = None;
+        for event in self.events.iter().rev() {
+            if date.sort_cmp(&event.date) == cmp::Ordering::Greater {
+                if let Some(ref name) = event.name {
+                    if let Some(name) = name.for_language(lang) {
+                        local = Some(name)
+                    }
+                    else {
+                        default = Some(name.first())
+                    }
+                }
+                continue
+            }
+            if let Some(ref name) = event.name {
+                if let Some(ref name) = name.for_language(lang) {
+                    return name
+                }
+                else {
+                    default = Some(name.first())
+                }
+            }
+        }
+        if let Some(local) = local {
+            local
+        }
+        else if let Some(default) = default {
+            default
+        }
+        else {
+            self.key()
+        }
+    }
+
+    pub fn historic_short_name(
+        &self, lang: LanguageCode, date: &EventDate
+    ) -> &str {
+        let mut local = None;
+        let mut default = None;
+        for event in self.events.iter().rev() {
+            if date.sort_cmp(&event.date) == cmp::Ordering::Greater {
+                if let Some(ref name) = event.short_name {
+                    if let Some(name) = name.for_language(lang) {
+                        local = Some(name)
+                    }
+                    else {
+                        default = Some(name.first())
+                    }
+                }
+                continue
+            }
+            if let Some(ref name) = event.short_name {
+                if let Some(ref name) = name.for_language(lang) {
+                    return name
+                }
+                else {
+                    default = Some(name.first())
+                }
+            }
+        }
+        if let Some(local) = local {
+            local
+        }
+        else if let Some(default) = default {
+            default
+        }
+        else {
+            self.historic_name(lang, date)
+        }
+    }
 }
 
 impl Organization {
@@ -110,7 +185,6 @@ impl Organization {
     }
 
     pub fn crosslink(
-        &self,
         _link: OrganizationLink,
         _library: &LibraryMut,
         _report: &mut StageReporter
@@ -154,6 +228,10 @@ impl Subtype {
     pub fn is_country(self) -> bool {
         matches!(self, Subtype::Country)
     }
+
+    pub fn is_geographical(self) -> bool {
+        matches!(self, Subtype::Country | Subtype::Place | Subtype::Region)
+    }
 }
 
 
@@ -173,15 +251,21 @@ pub struct Event {
     pub basis: List<Basis>,
     pub note: Option<LanguageText>,
 
-    // Organization property attributes
+    //--- Organization property attributes
+    //
+    /// The place of domicile of an organization.
+    ///
+    /// For geographic organizations, this is their capital.
     pub domicile: List<Marked<OrganizationLink>>,
-    pub master: Option<Marked<OrganizationLink>>,
     pub name: Option<LocalText>,
     pub owner: Option<List<Marked<OrganizationLink>>>,
     pub property: Option<Property>,
     pub short_name: Option<LocalText>,
-    pub status: Option<Status>,
+    pub status: Option<Marked<Status>>,
     pub successor: Option<Marked<OrganizationLink>>,
+
+    /// An organization this organization is a unit of.
+    pub superior: Option<Marked<OrganizationLink>>,
 }
 
 impl FromYaml<LibraryBuilder> for Event {
@@ -191,19 +275,19 @@ impl FromYaml<LibraryBuilder> for Event {
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
-        let date = value.take("date", context, report);
+       let date = value.take("date", context, report);
         let document = value.take_default("document", context, report);
         let source = value.take_default("source", context, report);
         let basis = value.take_default("basis", context, report);
         let note = value.take_opt("note", context, report);
         let domicile = value.take_default("domicile", context, report);
-        let master = value.take_opt("master", context, report);
         let name = value.take_opt("name", context, report);
         let owner = value.take_default("owner", context, report);
         let property = value.take_opt("property", context, report);
         let short_name = value.take_opt("short_name", context, report);
         let status = value.take_opt("status", context, report);
         let successor = value.take_opt("successor", context, report);
+        let superior = value.take_opt("superior", context, report);
         value.exhausted(report)?;
         Ok(Event {
             date: date?,
@@ -212,13 +296,13 @@ impl FromYaml<LibraryBuilder> for Event {
             basis: basis?,
             note: note?,
             domicile: domicile?,
-            master: master?,
             name: name?,
             owner: owner?,
             property: property?,
             short_name: short_name?,
             status: status?,
             successor: successor?,
+            superior: superior?,
         })
     }
 }
@@ -260,7 +344,7 @@ impl FromYaml<LibraryBuilder> for Property {
 
 data_enum! {
     pub enum PropertyRole {
-        { Constructur: "constructor" }
+        { Constructor: "constructor" }
         { Owner: "owner" }
         { Operator: "operator" }
     }
@@ -275,5 +359,27 @@ data_enum! {
         { Open: "open" }
         { Closed: "closed" }
     }
+}
+
+
+//------------ Crosslinks ----------------------------------------------------
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Crosslink {
+    /// Lines related to this organization.
+    ///
+    /// The list is ordered by line code.
+    pub lines: Vec<LineCrossref>,
+}
+
+
+//------------ LineCrossref --------------------------------------------------
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct LineCrossref {
+    pub line: LineLink,
+    pub region: bool,
+    pub owned: bool,
+    pub operated: bool,
 }
 

@@ -10,7 +10,9 @@ use crate::document::{Document, DocumentLink};
 use crate::document::common::DocumentType;
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::Value;
-use crate::store::{ItemGuard, Store, StoreBuilder, StoreMut};
+use crate::store::{
+    Store, StoreBuilder, StoreMut, StoreReadGuard, StoreWriteGuard
+};
 use crate::types::{IntoMarked, Key, Location, Marked};
 
 
@@ -278,11 +280,6 @@ impl LibraryMut {
         ))
     }
 
-    pub fn update<F>(&self, link: DocumentLink, op: F)
-    where F: Fn(&mut Document) + 'static + Send {
-        self.0.store.update(link.into(), op)
-    }
-
     pub fn iter(&self) -> impl Iterator<Item = DocumentLink> {
         self.0.store.iter().map(Into::into)
     }
@@ -291,8 +288,38 @@ impl LibraryMut {
         self.0.store.par_iter().map(Into::into)
     }
 
-    pub fn resolve_mut(&self, link: DocumentLink) -> ItemGuard<Document> {
-        self.0.store.resolve_mut(link.into())
+    pub fn read(&self) -> LibraryReadGuard {
+        LibraryReadGuard { guard: self.0.store.read() }
+    }
+
+    pub fn write(&self) -> LibraryWriteGuard {
+        LibraryWriteGuard { guard: self.0.store.write() }
+    }
+}
+
+
+//------------ LibraryReadGuard ----------------------------------------------
+
+pub struct LibraryReadGuard<'a> {
+    guard: StoreReadGuard<'a, Document>,
+}
+
+impl<'a> LinkTarget for LibraryReadGuard<'a> {
+    fn resolve(&self, link: DocumentLink) -> &Document {
+        self.guard.resolve(link.into())
+    }
+}
+
+
+//------------ LibraryWriteGuard ---------------------------------------------
+
+pub struct LibraryWriteGuard<'a> {
+    guard: StoreWriteGuard<'a, Document>,
+}
+
+impl<'a> LinkTargetMut for LibraryWriteGuard<'a> {
+    fn resolve_mut(&mut self, link: DocumentLink) -> &mut Document {
+        self.guard.resolve_mut(link.into())
     }
 }
 
@@ -318,10 +345,6 @@ impl Library {
 
     pub fn get(&self, key: &Key) -> Option<DocumentLink> {
         self.0.keys.get(key).cloned()
-    }
-
-    pub fn resolve(&self, link: DocumentLink) -> &Document {
-        self.0.store.resolve(link.into())
     }
 
     pub fn links<'s>(&'s self) -> impl Iterator<Item = DocumentLink> + 's {
@@ -357,6 +380,23 @@ impl Library {
         bincode::deserialize_from(reader)
             .map(|data| Library(Arc::new(data)))
     }
+}
+
+impl LinkTarget for Library {
+    fn resolve(&self, link: DocumentLink) -> &Document {
+        self.0.store.resolve(link.into())
+    }
+}
+
+
+//------------ LinkTarget, LinkTargetMut -------------------------------------
+
+pub trait LinkTarget {
+    fn resolve(&self, link: DocumentLink) -> &Document;
+}
+
+pub trait LinkTargetMut {
+    fn resolve_mut(&mut self, link: DocumentLink) -> &mut Document;
 }
 
 

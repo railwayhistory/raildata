@@ -25,10 +25,9 @@
 //! This module contains a generic version. It is used by the *library*
 //! module for our very specific case.
 
-use std::{cmp, fmt, hash, mem, ops};
-use std::sync::{Mutex, MutexGuard, TryLockError};
+use std::{cmp, fmt, hash, mem};
+use std::sync::{ Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::marker::PhantomData;
-use crossbeam::queue::SegQueue;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -63,11 +62,9 @@ impl<S> Store<S> {
 
 impl<S> From<StoreMut<S>> for Store<S> {
     fn from(store: StoreMut<S>) -> Self {
-        Self::from_iter(
-            store.items.into_iter().map(|item| {
-                item.item.into_inner().unwrap()
-            })
-        )
+        Store {
+            items: store.items.into_inner().unwrap(),
+        }
     }
 }
 
@@ -86,6 +83,7 @@ impl<S> AsRef<Self> for Store<S> {
 }
 
 
+/*
 //------------ StoreMut ------------------------------------------------------
 
 /// An imutable place to store mutable items.
@@ -208,6 +206,82 @@ impl<'a, T> Drop for ItemGuard<'a, T> {
         }
     }
 }
+*/
+
+
+//------------ StoreMut ------------------------------------------------------
+
+pub struct StoreMut<T> {
+    items: RwLock<Vec<T>>,
+    len: usize,
+}
+
+impl<T> StoreMut<T> {
+    /// Creates a new store from an iterator over items.
+    pub fn from_iter<I: Iterator<Item = T>>(iter: I) -> Self {
+        let items: Vec<T> = iter.collect();
+        StoreMut {
+            len: items.len(),
+            items: RwLock::new(items)
+        }
+    }
+
+    pub fn read(&self) -> StoreReadGuard<T> {
+        StoreReadGuard { guard: self.items.read().unwrap() }
+    }
+
+    pub fn write(&self) -> StoreWriteGuard<T> {
+        StoreWriteGuard { guard: self.items.write().unwrap() }
+    }
+
+    pub fn par_iter(&self) -> impl ParallelIterator<Item = Link<T>> {
+        (0..self.len).into_par_iter().map(Link::new)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = Link<T>> {
+        (0.. self.len).into_iter().map(Link::new)
+    }
+}
+
+impl<T> From<StoreBuilder<T>> for StoreMut<T> {
+    fn from(store: StoreBuilder<T>) -> StoreMut<T> {
+        Self::from_iter(
+            store.items.into_inner().unwrap().into_iter().map(Option::unwrap)
+        )
+    }
+}
+
+impl<T> fmt::Debug for StoreMut<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "StoreMut {{ ... }}")
+    }
+}
+
+
+//------------ StoreReadGuard ------------------------------------------------
+
+pub struct StoreReadGuard<'a, T> {
+    guard: RwLockReadGuard<'a, Vec<T>>,
+}
+
+impl<'a, T> StoreReadGuard<'a, T> {
+    pub fn resolve(&self, link: Link<T>) -> &T {
+        self.guard.get(link.index).unwrap()
+    }
+}
+
+
+//------------ StoreWriteGuard -----------------------------------------------
+
+pub struct StoreWriteGuard<'a, T> {
+    guard: RwLockWriteGuard<'a, Vec<T>>,
+}
+
+impl<'a, T> StoreWriteGuard<'a, T> {
+    pub fn resolve_mut(&mut self, link: Link<T>) -> &mut T {
+        self.guard.get_mut(link.index).unwrap()
+    }
+}
 
 
 //------------ StoreBuilder --------------------------------------------------
@@ -280,14 +354,6 @@ impl<T> Link<T> {
 
     pub fn follow(self, store: &Store<T>) -> &T {
         store.resolve(self)
-    }
-
-    pub fn follow_mut(self, store: &StoreMut<T>) -> ItemGuard<T> {
-        store.resolve_mut(self)
-    }
-
-    pub fn try_follow_mut(self, store: &StoreMut<T>) -> Option<ItemGuard<T>> {
-        store.try_resolve_mut(self)
     }
 }
 
