@@ -2,8 +2,8 @@
 use std::cmp;
 use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
-use crate::library::{LibraryBuilder, LibraryMut};
-use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
+use crate::library::LibraryBuilder;
+use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{
     EventDate, Key, LanguageText, LanguageCode, LocalText, List, Marked, Set
@@ -184,22 +184,15 @@ impl Organization {
         Ok(res)
     }
 
-    pub fn crosslink(
-        _link: OrganizationLink,
-        _library: &LibraryMut,
-        _report: &mut StageReporter
-    ) {
-    }
-
-    /*
-    pub fn verify(&self, _report: &mut StageReporter) {
-    }
-    */
-
     pub fn process_names<F: FnMut(String)>(&self, mut process: F) {
         let mut names = HashSet::new();
         for event in &self.events {
             if let Some(some) = event.name.as_ref() {
+                for (_, name) in some {
+                    names.insert(name.as_value());
+                }
+            }
+            if let Some(some) = event.short_name.as_ref() {
                 for (_, name) in some {
                     names.insert(name.as_value());
                 }

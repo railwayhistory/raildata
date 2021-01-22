@@ -1,4 +1,5 @@
 use derive_more::From;
+use paste::paste;
 use serde::{Deserialize, Serialize};
 use crate::library::{
     LibraryBuilder, LinkTarget, LinkTargetMut
@@ -65,6 +66,17 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                     Document::$vtype(ref inner) => inner.name(lang),
                 )*
             }
+        }
+
+        paste! {
+            $(
+                pub fn [<try_as $vtype:lower>](&self) -> Option<&$vtype> {
+                    match *self {
+                        Document::$vtype(ref inner) => Some(inner),
+                        _ => None
+                    }
+                }
+            )*
         }
     }
 
