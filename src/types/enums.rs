@@ -46,6 +46,20 @@ macro_rules! data_enum {
             $( $(#[$variant_attr])* $variant ),*,
         }
 
+        impl $name {
+            pub const ALL: &'static [$name] = &[
+                $( $name::$variant ),*
+            ];
+
+            pub fn as_str(self) -> &'static str {
+                match self {
+                    $(
+                        $name::$variant => $yaml
+                    ),*
+                }
+            }
+        }
+
         impl<C> $crate::load::yaml::FromYaml<C> for $name {
             fn from_yaml(
                 value: $crate::load::yaml::Value,

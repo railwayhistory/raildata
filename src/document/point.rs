@@ -1,32 +1,30 @@
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use crate::library::{LibraryBuilder, LibraryMut};
-use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
+use crate::library::{LibraryBuilder};
+use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{
-    CountryCode, EventDate, Key, LanguageCode, LanguageText, List, LocalText,
-    Marked, Set
+    CountryCode, EventDate, IntoMarked, Key, LanguageCode, LanguageText, List,
+    LocalText, Marked, Set
 };
-use super::{LineLink, PathLink, PointLink, SourceLink};
-use super::common::{Common, Progress};
+use super::{DocumentLink, LineLink, PathLink, PointLink, SourceLink};
+use super::common::{Basis, Common, Progress};
 
 
 //------------ Point ---------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Point {
+    link: PointLink,
+
     // Attributes
     pub common: Common,
-    pub events: List<Event>,
-    pub records: List<Event>,
+    pub events: EventList,
+    pub records: RecordList,
     pub junction: Option<Marked<bool>>,
     pub subtype: Marked<Subtype>,
-
-    // Crosslinked and derived data.
-    pub lines: List<LineLink>,
-    pub connections: Set<PointLink>,
 }
 
 /// # Data Access
@@ -44,20 +42,8 @@ impl Point {
         &self.common.origin
     }
 
-    /// Returns whether the point is a junction.
-    ///
-    /// A junction is a point that connects lines. Any point can be declared
-    /// a junction or not a junction via the `junction` point attribute. If
-    /// this attribute is missing, it becomes a junction if it is listed in
-    /// the `points` attribute of more than one line or if it is connected to
-    /// some other point via its or the other point’s `connection` attribute.
-    pub fn is_junction(&self) -> bool {
-        match self.junction {
-            Some(value) => value.into_value(),
-            None => {
-                !self.connections.is_empty() || self.lines.len() > 1
-            }
-        } 
+    pub fn link(&self) -> PointLink {
+        self.link
     }
 
     /// Returns whether the point can’t be a junction.
@@ -69,13 +55,17 @@ impl Point {
 
     /// Returns the preferred name for the given language.
     pub fn name(&self, lang: LanguageCode) -> &str {
-        for event in self.events.iter().rev().chain(self.records.iter().rev()) {
-            if let Some(ref name) = event.name {
+        for properties in
+            self.events.iter().map(|item| &item.properties).rev().chain(
+                self.records.iter().map(|item| &item.properties).rev()
+            )
+        {
+            if let Some(ref name) = properties.name {
                 if let Some(name) = name.for_language(lang) {
                     return name
                 }
             }
-            if let Some(ref name) = event.designation {
+            if let Some(ref name) = properties.designation {
                 if let Some(name) = name.for_language(lang) {
                     return name
                 }
@@ -88,11 +78,11 @@ impl Point {
     pub fn name_in_jurisdiction(
         &self, jurisdiction: Option<CountryCode>
     ) -> &str {
-        if let Some(res) = self.events_then_records(|event| {
-            if let Some(ref name) = event.name {
+        if let Some(res) = self.events_then_records(|properties| {
+            if let Some(ref name) = properties.name {
                 name.for_jurisdiction(jurisdiction)
             }
-            else if let Some(ref name) = event.designation {
+            else if let Some(ref name) = properties.designation {
                 name.for_jurisdiction(jurisdiction)
             }
             else {
@@ -101,11 +91,11 @@ impl Point {
         }) {
             return res.0
         }
-        if let Some(res) = self.events_then_records(|event| {
-            if let Some(ref name) = event.name {
+        if let Some(res) = self.events_then_records(|properties| {
+            if let Some(ref name) = properties.name {
                 Some(name.first())
             }
-            else if let Some(ref name) = event.designation {
+            else if let Some(ref name) = properties.designation {
                 Some(name.first())
             }
             else {
@@ -122,13 +112,13 @@ impl Point {
     /// If the point has a location on this line, returns the location as well
     /// as whether it has changed.
     pub fn location(&self, line: LineLink) -> Option<(Option<&str>, bool)> {
-        self.events_then_records(|event| {
-            let location = event.location.as_ref()?;
-            for &(ref link, ref loc) in &location.0 {
-                if link.into_value() == line {
-                    return Some(
-                        loc.as_ref().map(|loc| loc.as_value().as_ref())
-                    );
+        self.events_then_records(|properties| {
+            if properties.location.is_empty() {
+                return None
+            }
+            for (link, loc) in properties.location.iter() {
+                if link == line {
+                    return Some(loc)
                 }
             }
             None
@@ -136,15 +126,21 @@ impl Point {
     }
 
     /// Returns the current category of the point and whether it has changed.
-    pub fn category(&self) -> Option<(&Set<Category>, bool)> {
-        self.events_then_records(|event| event.category.as_ref())
+    pub fn category(
+        &self
+    ) -> Option<(impl Iterator<Item = Category> + '_, bool)> {
+        self.events_then_records(
+            |properties| properties.category.as_ref()
+        ).map(|(res, changed)| {
+            (res.iter().map(|cat| cat.into_value()), changed)
+        })
     }
 
     /// Returns the current status.
     pub fn status(&self) -> Status {
-        self.events_then_records(|event| {
-            event.status.as_ref()
-        }).map(|res| *res.0).unwrap_or(Status::Open)
+        self.events_then_records(|properties| {
+            properties.status.as_ref()
+        }).map(|res| res.0.into_value()).unwrap_or(Status::Open)
     }
 
     /// Returns whether the point is currently open.
@@ -152,12 +148,12 @@ impl Point {
         self.status() == Status::Open
     }
 
-    fn events_then_records<'a, F, R>(&'a self, op: F) -> Option<(R, bool)>
-    where F: Fn(&'a Event) -> Option<R> {
+    fn events_then_records<'a, F, R>(&'a self, mut op: F) -> Option<(R, bool)>
+    where F: FnMut(&'a Properties) -> Option<R> {
         let mut res = None;
         let mut changed = false;
         for event in &self.events {
-            if let Some(value) = op(event) {
+            if let Some(value) = op(&event.properties) {
                 if res.is_some() {
                     changed = true
                 }
@@ -167,8 +163,8 @@ impl Point {
         if let Some(res) = res.take() {
             return Some((res, changed))
         }
-        for event in &self.records {
-            if let Some(value) = op(event) {
+        for record in &self.records {
+            if let Some(value) = op(&record.properties) {
                 if res.is_some() {
                     changed = true
                 }
@@ -186,6 +182,7 @@ impl Point {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
+        link: DocumentLink,
         context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
@@ -198,68 +195,16 @@ impl Point {
 
         let mut events: EventList = events?.unwrap_or_default();
         events.sort_by(|left, right| left.date.sort_cmp(&right.date));
-        let records: EventList = records?.unwrap_or_default();
+        let records: RecordList = records?.unwrap_or_default();
 
         Ok(Point {
+            link: link.into(),
             common: common?,
             events,
             records,
             junction: junction?,
             subtype: subtype?,
-            lines: List::new(),
-            connections: Set::new(),
         })
-    }
-
-    //--- Crosslinking
-
-    pub fn crosslink(
-        link: PointLink,
-        library: &LibraryMut,
-        report: &mut StageReporter
-    ) {
-        let mut connections = {
-            let library = library.read();
-            let point = link.follow(&library);
-
-            // Collect all connections from all events.
-            let mut connections = Set::new();
-            for event in &point.events {
-                if let Some(ref conns) = event.connection {
-                    for conn in conns {
-                        if conn.into_value() == link {
-                            report.error_at(
-                                point.origin().at(conn.location()),
-                                OwnConnection
-                            );
-                            continue;
-                        }
-                        connections.insert(conn.into_value());
-                    }
-                }
-            }
-            connections
-        };
- 
-        let mut library = library.write();
-
-        // Add connection set to the connection sets of all points in it.
-        if !connections.is_empty() {
-            link.follow_mut(&mut library).connections.merge(&connections);
-            connections.insert(link);
-            for target in connections.iter() {
-                let point = target.follow_mut(&mut library);
-                for link in connections.iter() {
-                    if link != target {
-                        point.connections.insert(*link);
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn add_line(&mut self, line: LineLink) {
-        self.lines.push(line);
     }
 
     /*
@@ -269,13 +214,14 @@ impl Point {
 
     pub fn process_names<F: FnMut(String)>(&self, mut process: F) {
         let mut names = HashSet::new();
-        for event in self.events.iter().chain(self.records.iter()) {
-            if let Some(some) = event.name.as_ref() {
+        self.events_then_records(|properties| {
+            if let Some(some) = properties.name.as_ref() {
                 for (_, name) in some {
                     names.insert(name.as_value());
                 }
             }
-        }
+            Some(())
+        });
         for name in names {
             process(name.into())
         }
@@ -296,6 +242,12 @@ data_enum! {
     }
 }
 
+impl Subtype {
+    pub fn is_post(self) -> bool {
+        matches!(self, Subtype::Post)
+    }
+}
+
 
 //------------ EventList -----------------------------------------------------
 
@@ -309,41 +261,16 @@ pub struct Event {
     pub date: EventDate,
     pub document: List<Marked<SourceLink>>,
     pub source: List<Marked<SourceLink>>,
+    pub basis: List<Basis>,
     pub note: Option<LanguageText>,
 
-    pub category: Option<Set<Category>>,
-    pub connection: Option<List<Marked<PointLink>>>,
-    pub designation: Option<LocalText>,
-    pub express: Option<ServiceRate>,
-    pub goods: Option<ServiceRate>,
-    pub location: Option<Location>,
-    pub luggage: Option<ServiceRate>,
-    pub master: Option<Option<List<Marked<PointLink>>>>,
-    pub merged: Option<Marked<PointLink>>,
-    pub name: Option<LocalText>,
-    pub passenger: Option<ServiceRate>,
-    pub plc: Option<Plc>,
-    pub public_name: Option<List<LocalText>>,
-    pub site: Option<Site>,
-    pub short_name: Option<LocalText>,
-    pub staff: Option<Staff>,
-    pub status: Option<Status>,
-
-    pub service: Option<Service>,
     pub split_from: Option<Marked<PointLink>>,
+    pub merged: Option<Marked<PointLink>>,
 
-    pub de_ds100: Option<DeDs100>,
-    pub de_dstnr: Option<DeDstnr>,
-    pub de_lknr: Option<List<DeLknr>>,
-    pub de_name16: Option<DeName16>,
-    pub de_rang: Option<DeRang>,
-    pub de_vbl: Option<DeVbl>,
+    pub connection: Option<List<Marked<PointLink>>>,
+    pub site: Option<Site>,
 
-    pub dk_ref: Option<Marked<String>>,
-
-    pub no_fs: Option<Marked<String>>,
-    pub no_njk: Option<Marked<String>>,
-    pub no_nsb: Option<Marked<String>>,
+    pub properties: Properties,
 }
 
 impl FromYaml<LibraryBuilder> for Event {
@@ -357,81 +284,169 @@ impl FromYaml<LibraryBuilder> for Event {
         let date = value.take_default("date", context, report);
         let document = value.take_default("document", context, report);
         let source = value.take_default("source", context, report);
+        let basis = value.take_default("basis", context, report);
         let note = value.take_opt("note", context, report);
 
-        let category = value.take_opt("category", context, report);
-        let connection = value.take_opt("connection", context, report);
-        let designation = value.take_opt("designation", context, report);
-        let express = value.take_opt("express", context, report);
-        let goods = value.take_opt("goods", context, report);
-        let location = value.take_opt("location", context, report);
-        let luggage = value.take_opt("luggage", context, report);
-        let master = value.take_opt("master", context, report);
-        let merged = value.take_opt("merged", context, report);
-        let name = value.take_opt("name", context, report);
-        let passenger = value.take_opt("passenger", context, report);
-        let plc = value.take_opt("PLC", context, report);
-        let public_name = value.take_opt("public_name", context, report);
-        let site = value.take_opt("site", context, report);
-        let short_name = value.take_opt("short_name", context, report);
-        let staff = value.take_opt("staff", context, report);
-        let status = value.take_opt("status", context, report);
-
-        let service = value.take_opt("service", context, report);
         let split_from = value.take_opt("split_from", context, report);
+        let merged = value.take_opt("merged", context, report);
 
-        let de_ds100 = value.take_opt("de.DS100", context, report);
-        let de_dstnr = value.take_opt("de.dstnr", context, report);
-        let de_lknr = value.take_opt("de.lknr", context, report);
-        let de_name16 = value.take_opt("de.name16", context, report);
-        let de_rang = value.take_opt("de.rang", context, report);
-        let de_vbl = value.take_opt("de.VBL", context, report);
+        let connection = value.take_opt("connection", context, report);
+        let site = value.take_opt("site", context, report);
 
-        let dk_ref = value.take_opt("dk.ref", context, report);
-        
-        let no_fs = value.take_opt("no.fs", context, report);
-        let no_njk = value.take_opt("no.NJK", context, report);
-        let no_nsb = value.take_opt("no.NSB", context, report);
+        let properties = Properties::from_yaml(&mut value, context, report);
 
         value.exhausted(report)?;
+
         Ok(Event {
             date: date?,
             document: document?,
             source: source?,
+            basis: basis?,
             note: note?,
-            category: category?,
-            connection: connection?,
-            designation: designation?,
-            express: express?,
-            goods: goods?,
-            location: location?,
-            luggage: luggage?,
-            master: master?,
+
             merged: merged?,
-            name: name?,
-            passenger: passenger?,
-            plc: plc?,
-            public_name: public_name?,
-            site: site?,
-            short_name: short_name?,
-            staff: staff?,
-            status: status?,
-            service: service?,
             split_from: split_from?,
-            de_ds100: de_ds100?,
-            de_dstnr: de_dstnr?,
-            de_lknr: de_lknr?,
-            de_name16: de_name16?,
-            de_rang: de_rang?,
-            de_vbl: de_vbl?,
-            dk_ref: dk_ref?,
-            no_fs: no_fs?,
-            no_njk: no_njk?,
-            no_nsb: no_nsb?,
+
+            connection: connection?,
+            site: site?,
+
+            properties: properties?,
         })
     }
 }
 
+
+//------------ RecordList ----------------------------------------------------
+
+pub type RecordList = List<Record>;
+
+
+//------------ Record --------------------------------------------------------
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Record {
+    pub document: Marked<SourceLink>,
+    pub note: Option<LanguageText>,
+
+    pub properties: Properties,
+}
+
+impl FromYaml<LibraryBuilder> for Record {
+    fn from_yaml(
+        value: Value,
+        context: &LibraryBuilder,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let mut value = value.into_mapping(report)?;
+
+        let date = value.take_default("date", context, report);
+        let document = value.take("document", context, report);
+        let note = value.take_opt("note", context, report);
+
+        let properties = Properties::from_yaml(&mut value, context, report);
+        value.exhausted(report)?;
+
+        let _: EventDate = date?;
+        Ok(Record {
+            document: document?,
+            note: note?,
+            properties: properties?,
+        })
+    }
+}
+
+
+//------------ Properties ----------------------------------------------------
+
+#[derive(Clone, Deserialize, Debug, Serialize)]
+pub struct Properties {
+    pub status: Option<Marked<Status>>,
+
+    pub name: Option<LocalText>,
+    pub short_name: Option<LocalText>,
+    pub public_name: Option<List<LocalText>>,
+    pub designation: Option<LocalText>,
+    pub de_name16: Option<DeName16>,
+
+    pub category: Option<Set<Marked<Category>>>,
+    pub de_rang: Option<Marked<DeRang>>,
+    pub superior: Option<List<Marked<PointLink>>>,
+    pub codes: Codes,
+
+    pub location: Location,
+
+    pub staff: Option<Staff>,
+    pub service: Option<Marked<Service>>,
+    pub passenger: Option<Marked<ServiceRate>>,
+    pub luggage: Option<Marked<ServiceRate>>,
+    pub express: Option<Marked<ServiceRate>>,
+    pub goods: Option<Marked<ServiceRate>>,
+}
+
+impl Properties {
+    fn from_yaml(
+        value: &mut Mapping,
+        context: &LibraryBuilder,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let pos = value.location();
+
+        let status = value.take_opt("status", context, report);
+
+        let name = value.take_opt("name", context, report);
+        let short_name = value.take_opt("short_name", context, report);
+        let public_name = value.take_opt("public_name", context, report);
+        let designation = value.take_opt("designation", context, report);
+        let de_name16 = value.take_opt("de.name16", context, report);
+
+        let category = value.take_opt("category", context, report);
+        let de_rang = value.take_opt("de.rang", context, report);
+        let superior = value.take_opt("superior", context, report);
+        let codes = Codes::from_yaml(value, context, report);
+
+        let location = value.take_default("location", context, report);
+
+        let staff = value.take_opt("staff", context, report);
+        let service = value.take_opt("service", context, report);
+        let passenger = value.take_opt("passenger", context, report);
+        let luggage = value.take_opt("luggage", context, report);
+        let express = value.take_opt("express", context, report);
+        let goods = value.take_opt("goods", context, report);
+
+        let master = value.take_opt("master", context, report);
+
+        let mut superior = superior?;
+        if let Some(master) = master? {
+            if superior.is_some() {
+                report.error(SuperiorAndMaster.marked(pos));
+                return Err(Failed);
+            }
+            else {
+                superior = master;
+            }
+        }
+
+        Ok(Properties {
+            status: status?,
+            name: name?,
+            short_name: short_name?,
+            public_name: public_name?,
+            designation: designation?,
+            de_name16: de_name16?,
+            category: category?,
+            de_rang: de_rang?,
+            superior: superior,
+            codes: codes?,
+            location: location?,
+            staff: staff?,
+            service: service?,
+            passenger: passenger?,
+            luggage: luggage?,
+            express: express?,
+            goods: goods?,
+        })
+    }
+}
 
 
 //------------ Category ------------------------------------------------------
@@ -527,8 +542,30 @@ impl Category {
 
 //------------ Location ------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Location(pub List<(Marked<LineLink>, Option<Marked<String>>)>);
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Location(List<(Marked<LineLink>, Option<Marked<String>>)>);
+
+impl Location {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn first(&self) -> Option<(LineLink, Option<&str>)> {
+        self.0.first().map(|(link, value)| {
+            (link.into_value(), value.as_ref().map(|value| value.as_str()))
+        })
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (LineLink, Option<&str>)> {
+        self.0.iter().map(|item| {
+            (item.0.into_value(), item.1.as_ref().map(|s| s.as_str()))
+        })
+    }
+}
 
 impl FromYaml<LibraryBuilder> for Location {
     fn from_yaml(
@@ -567,11 +604,6 @@ impl FromYaml<LibraryBuilder> for Location {
 }
 
 
-//------------ Plc -----------------------------------------------------------
-
-pub type Plc = Marked<String>;
-
-
 //------------ Service -------------------------------------------------------
 
 data_enum! {
@@ -591,6 +623,86 @@ data_enum! {
         { None: "none" }
         { Limited: "limited" }
         { Full: "full" }
+    }
+}
+
+
+//------------ ServiceSet ----------------------------------------------------
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ServiceSet {
+    pub passenger: Option<ServiceRate>,
+    pub luggage: Option<ServiceRate>,
+    pub express: Option<ServiceRate>,
+    pub goods: Option<ServiceRate>,
+}
+
+impl ServiceSet {
+    pub fn is_some(&self) -> bool {
+        self.passenger.is_some() || self.luggage.is_some()
+            || self.express.is_some() || self.goods.is_some()
+    }
+}
+
+impl From<Service> for ServiceSet {
+    fn from(service: Service) -> ServiceSet {
+        match service {
+            Service::Full => {
+                ServiceSet {
+                    passenger: Some(ServiceRate::Full),
+                    luggage: Some(ServiceRate::Full),
+                    express: Some(ServiceRate::Full),
+                    goods: Some(ServiceRate::Full),
+                }
+            }
+            Service::None => {
+                ServiceSet {
+                    passenger: Some(ServiceRate::None),
+                    luggage: Some(ServiceRate::None),
+                    express: Some(ServiceRate::None),
+                    goods: Some(ServiceRate::None),
+                }
+            }
+            Service::Passenger => {
+                ServiceSet {
+                    passenger: Some(ServiceRate::Full),
+                    luggage: Some(ServiceRate::None),
+                    express: Some(ServiceRate::None),
+                    goods: Some(ServiceRate::None),
+                }
+            }
+            Service::Goods => {
+                ServiceSet {
+                    passenger: Some(ServiceRate::None),
+                    luggage: Some(ServiceRate::None),
+                    express: Some(ServiceRate::None),
+                    goods: Some(ServiceRate::Full),
+                }
+            }
+        }
+    }
+}
+
+impl<'a> From<&'a Properties> for ServiceSet {
+    fn from(properties: &'a Properties) -> ServiceSet {
+        let mut res = properties.service.map(|s|
+            s.into_value().into()
+        ).unwrap_or_else(ServiceSet::default);
+        
+        if let Some(rate) = properties.passenger {
+            res.passenger = Some(rate.into_value())
+        }
+        if let Some(rate) = properties.luggage {
+            res.luggage = Some(rate.into_value())
+        }
+        if let Some(rate) = properties.express {
+            res.express = Some(rate.into_value())
+        }
+        if let Some(rate) = properties.goods {
+            res.goods = Some(rate.into_value())
+        }
+
+        res
     }
 }
 
@@ -662,25 +774,10 @@ data_enum! {
     pub enum Status {
         { Open: "open" }
         { Suspended: "suspended" }
+        { Reopened: "reopened" }
         { Closed: "closed" }
-        { Merged: "merged" }
     }
 }
-
-
-//------------ DeDs100 -------------------------------------------------------
-
-pub type DeDs100 = Marked<String>;
-
-
-//------------ DeDstnr -------------------------------------------------------
-
-pub type DeDstnr = Marked<Option<String>>;
-
-
-//------------ DeLknr --------------------------------------------------------
-
-pub type DeLknr = Marked<String>; 
 
 
 //------------ DeRang --------------------------------------------------------
@@ -701,19 +798,97 @@ data_enum! {
 }
 
 
-//------------ DeVbl ---------------------------------------------------------
-
-pub type DeVbl = Marked<String>;
-
-
 //------------ DeName16 ------------------------------------------------------
 
 pub type DeName16 = Marked<String>;
 
 
+//------------ Codes ---------------------------------------------------------
+
+#[derive(Clone, Deserialize, Debug, Serialize)]
+pub struct Codes {
+    codes: HashMap<CodeType, List<Marked<String>>>,
+}
+
+impl Codes {
+    pub fn iter(
+        &self
+    ) -> impl Iterator<Item = (CodeType, impl Iterator<Item = &str>)> + '_ {
+        self.codes.iter().map(|(key, value)| {
+            (*key, value.iter().map(|item| item.as_str()))
+        })
+    }
+}
+
+impl Codes {
+    fn from_yaml(
+        value: &mut Mapping,
+        context: &LibraryBuilder,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let mut err = false;
+        let mut res = HashMap::new();
+
+        for &item in CodeType::ALL {
+            let code = match value.take_opt(item.as_str(), context, report) {
+                Ok(Some(Some(code))) => code,
+                Ok(Some(None)) => List::default(),
+                Ok(None) => continue,
+                Err(_) => {
+                    err = true;
+                    continue
+                }
+            };
+
+            for value in &code {
+                if item.check_value(value, report).is_err() {
+                    err = true
+                }
+            }
+
+            if !err {
+                res.insert(item, code);
+            }
+        }
+
+        if err {
+            Err(Failed)
+        }
+        else {
+            Ok(Codes { codes: res })
+        }
+    }
+}
+
+
+//------------ CodeType ------------------------------------------------------
+
+data_enum! {
+    pub enum CodeType {
+        { Plc: "PLC" }
+        { DeDs100: "de.DS100" }
+        { DeDstnr: "de.dstnr" }
+        { DeLknr: "de.lknr" }
+        { DeVbl: "de.VBL" }
+        { DkRef: "dk.ref" }
+        { NoFs: "no.fs" }
+        { NoNjk: "no.NJK" }
+        { NoNsb: "no.NSB" }
+    }
+}
+
+impl CodeType {
+    fn check_value(
+        self, _value: &Marked<String>, _report: &mut PathReporter
+    ) -> Result<(), Failed> {
+        Ok(())
+    }
+}
+
+
 //============ Errors ========================================================
 
 #[derive(Clone, Copy, Debug, Display)]
-#[display(fmt="point listed as its own connection")]
-pub struct OwnConnection;
+#[display(fmt="only one of 'superior' and 'master' allowed")]
+pub struct SuperiorAndMaster;
 

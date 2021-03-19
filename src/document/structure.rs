@@ -7,13 +7,14 @@ use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{
     EventDate, Key, LanguageCode, LanguageText, List, LocalText, Marked
 };
-use super::{SourceLink, StructureLink};
+use super::{DocumentLink, SourceLink, StructureLink};
 use super::common::{Common, Progress};
 
 //------------ Structure -----------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Structure {
+    pub link: StructureLink,
     pub common: Common,
     pub subtype: Marked<Subtype>,
     pub events: EventList,
@@ -41,6 +42,7 @@ impl Structure {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
+        link: DocumentLink,
         context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
@@ -49,6 +51,7 @@ impl Structure {
         let events = doc.take("events", context, report);
         doc.exhausted(report)?;
         Ok(Structure {
+            link: link.into(),
             common: common?,
             subtype: subtype?,
             events: events?,

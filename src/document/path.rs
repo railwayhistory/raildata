@@ -9,7 +9,7 @@ use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::Mapping;
 use crate::types::{IntoMarked, LanguageCode, Location, Key, Marked};
 use crate::types::key::InvalidKey;
-use super::{PathLink, SourceLink};
+use super::{DocumentLink, PathLink, SourceLink};
 use super::common::{Common, Progress};
 
 //------------ Path ----------------------------------------------------------
@@ -73,6 +73,7 @@ impl Path {
     pub fn from_yaml(
         _key: Marked<Key>,
         doc: Mapping,
+        _link: DocumentLink,
         _context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {

@@ -1,4 +1,3 @@
-use url;
 use derive_more::Display;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error as _;
@@ -11,6 +10,18 @@ use super::{IntoMarked, Marked};
 
 #[derive(Clone, Debug)]
 pub struct Url(url::Url);
+
+impl Url {
+    pub fn as_str(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl AsRef<str> for Url {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
 
 impl<C> FromYaml<C> for Marked<Url> {
     fn from_yaml(

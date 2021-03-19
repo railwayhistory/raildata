@@ -9,13 +9,15 @@ use crate::types::{
     EventDate, Key, LanguageText, LanguageCode, LocalText, List, Marked, Set
 };
 use super::common::{Basis, Common, Progress};
-use super::{LineLink, OrganizationLink, SourceLink};
+use super::{DocumentLink, LineLink, OrganizationLink, SourceLink};
 
 
 //------------ Organization --------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Organization {
+    pub link: OrganizationLink,
+
     // Attributes
     pub common: Common,
     pub subtype: Marked<Subtype>,
@@ -161,6 +163,7 @@ impl Organization {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
+        link: DocumentLink,
         context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
@@ -170,6 +173,8 @@ impl Organization {
         doc.exhausted(report)?;
 
         let mut res = Organization {
+            link: link.into(),
+
             common: common?,
             subtype: subtype?,
             events: events?,

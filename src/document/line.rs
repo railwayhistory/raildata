@@ -5,8 +5,8 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use crate::library::{Library, LibraryBuilder, LibraryMut};
-use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
+use crate::library::LibraryBuilder;
+use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::list;
 use crate::types::{
@@ -14,7 +14,7 @@ use crate::types::{
     List, LocalText, Location, Marked, Set
 };
 use super::{
-    LineLink, OrganizationLink, PathLink, Point, PointLink,
+    DocumentLink, LineLink, OrganizationLink, PathLink, PointLink,
     SourceLink
 };
 use super::common::{
@@ -26,6 +26,7 @@ use super::common::{
 
 #[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Line {
+    link: LineLink,
     pub common: Common,
     pub label: Set<Label>,
     pub note: Option<LanguageText>,
@@ -38,8 +39,8 @@ pub struct Line {
 }
 
 impl Line {
-    pub fn linked(&self, link: LineLink) -> LinkedLine {
-        LinkedLine::new(self, link)
+    pub fn link(&self) -> LineLink {
+        self.link
     }
 
     pub fn key(&self) -> &Key {
@@ -55,10 +56,14 @@ impl Line {
     }
 
     pub fn jurisdiction(&self) -> Option<CountryCode> {
-        Self::jurisdiction_from_key(self.key())
+        self.country()
     }
 
-    fn jurisdiction_from_key(key: &Key) -> Option<CountryCode> {
+    pub fn country(&self) -> Option<CountryCode> {
+        Self::country_from_key(self.key())
+    }
+
+    fn country_from_key(key: &Key) -> Option<CountryCode> {
         let key = key.as_str();
         if key.starts_with("line.") && key.get(7..8) == Some(".") {
             CountryCode::from_str(&key[5..7]).ok()
@@ -83,6 +88,7 @@ impl Line {
         &self.code
     }
 
+    /*
     fn last_junction_index(&self, library: &Library) -> usize {
         self.points.iter().enumerate().rev().map(|(idx, point)| {
             (idx, point.follow(library))
@@ -126,12 +132,14 @@ impl Line {
             }
         })
     }
+    */
 }
 
 impl Line {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
+        link: DocumentLink,
         context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
@@ -148,6 +156,7 @@ impl Line {
         let common = common?;
 
         Ok(Line {
+            link: link.into(),
             code: Self::make_code(common.key.as_value()),
             common,
             label: label?,
@@ -160,7 +169,7 @@ impl Line {
     }
 
     fn make_code(key: &Key) -> String {
-        match Self::jurisdiction_from_key(key) {
+        match Self::country_from_key(key) {
             Some(CountryCode::RU) => {
                 if key.starts_with("line.ru.kg.") {
                     format!("RU КГ {}", &key[11..])
@@ -175,35 +184,6 @@ impl Line {
             None => {
                 format!("{}", &key[5..])
             }
-        }
-    }
-
-    pub fn crosslink(
-        link: LineLink,
-        library: &LibraryMut,
-        _report: &mut StageReporter
-    ) {
-        let (regions, points) = {
-            let library = library.read();
-            let line = link.follow(&library);
-            let mut regions = HashSet::new();
-            for event in &line.events {
-                if let Some(ref region) = event.region {
-                    for item in region {
-                        regions.insert(item.into_value());
-                    }
-                }
-            }
-            
-            (regions, line.points.clone())
-        };
-
-        let mut library = library.write();
-        for item in regions {
-            item.follow_mut(&mut library).line_region.push(link);
-        }
-        for point in points.iter() {
-            point.follow_mut(&mut library).add_line(link);
         }
     }
 
@@ -247,38 +227,6 @@ impl Line {
         for name in names {
             process(name.into())
         }
-    }
-}
-
-
-//------------ LinkedLine ----------------------------------------------------
-
-#[derive(Clone, Copy, Debug)]
-pub struct LinkedLine<'a> {
-    line: &'a Line,
-    link: LineLink,
-}
-
-impl<'a> LinkedLine<'a> {
-    fn new(line: &'a Line, link: LineLink) -> Self {
-        LinkedLine { line, link }
-    }
-
-    pub fn line(&self) -> &Line {
-        self.line
-    }
-
-    pub fn link(&self) -> LineLink {
-        self.link
-    }
-}
-
-
-impl<'a> ops::Deref for LinkedLine<'a> {
-    type Target = Line;
-
-    fn deref(&self) -> &Line {
-        self.line
     }
 }
 
@@ -352,11 +300,11 @@ impl ops::Deref for Points {
     }
 }
 
-impl ops::Index<usize> for Points {
-    type Output = PointLink;
+impl<I: std::slice::SliceIndex<[Marked<PointLink>]>> ops::Index<I> for Points {
+    type Output = <I as std::slice::SliceIndex<[Marked<PointLink>]>>::Output;
 
-    fn index(&self, index: usize) -> &Self::Output {
-        self.points[index].as_value()
+    fn index(&self, index: I) -> &Self::Output {
+        &self.points[index]
     }
 }
 
@@ -401,7 +349,7 @@ pub struct Current {
     pub passenger: CurrentValue<Passenger>,
     pub rails: CurrentValue<Marked<u8>>,
     pub region: CurrentValue<List<Marked<OrganizationLink>>>,
-    pub reused: CurrentValue<List<Marked<LineLink>>>,
+    pub reused: CurrentValue<Option<List<Marked<LineLink>>>>,
     pub status: CurrentValue<Status>,
     pub tracks: CurrentValue<Marked<u8>>,
 

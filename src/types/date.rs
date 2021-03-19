@@ -318,6 +318,11 @@ impl str::FromStr for Date {
 pub struct EventDate(List<Marked<Date>>);
 
 impl EventDate {
+    /// Creates a new, empty date.
+    pub const fn new() -> Self {
+        EventDate(List::new())
+    }
+
     /// Returns the sort order of two event dates.
     ///
     /// This is not the same as the ordering of those dates.

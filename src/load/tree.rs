@@ -156,9 +156,7 @@ fn load_osm_file<R: io::Read>(
     for relation in relations.drain() {
         match Path::from_osm(relation, &osm, docs, report) {
             Ok(path) => {
-                let _ = docs.insert(
-                    path.key().clone(), path.into(), report
-                );
+                let _ = docs.insert(path.into(), report);
             }
             Err(Some(key)) => {
                 let _ = docs.insert_broken(

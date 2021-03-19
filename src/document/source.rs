@@ -1,21 +1,24 @@
 
 use std::ops;
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use crate::library::{LibraryBuilder, LibraryMut};
-use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
+use crate::library::{Library, LibraryBuilder};
+use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::types::{
-    EventDate, Key, LanguageCode, LanguageText, List, Marked, Set, Url
+    EventDate, Key, IntoMarked, LanguageCode, LanguageText, List, Marked, Url
 };
 use super::{DocumentLink, OrganizationLink, SourceLink};
 use super::common::{Common, Progress};
+
 
 //------------ Source --------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Source {
+    link: SourceLink,
     pub common: Common,
-    pub subtype: Subtype,
+    pub subtype: Marked<Subtype>,
     
     // Type-dependent attributes
     pub author: List<Marked<OrganizationLink>>,
@@ -42,11 +45,6 @@ pub struct Source {
     pub crossref: List<Marked<SourceLink>>,
     pub note: Option<LanguageText>,
     pub regards: List<Marked<DocumentLink>>,
-
-    // Crosslinks
-    pub in_collection: Set<SourceLink>,
-    pub variants: Set<SourceLink>, // based on the also field
-    pub crossrefed: Set<SourceLink>,
 }
 
 impl Source {
@@ -62,8 +60,24 @@ impl Source {
         &self.common.origin
     }
 
+    pub fn link(&self) -> SourceLink {
+        self.link
+    }
+
     pub fn name(&self, _lang: LanguageCode) -> &str {
         self.key().as_ref()
+    }
+
+    pub fn date<'s>(&'s self, library: &'s Library) -> Option<&'s EventDate> {
+        if !self.date.is_empty() {
+            Some(&self.date)
+        }
+        else if let Some(collection) = self.collection {
+            collection.follow(library).date(library)
+        }
+        else {
+            None
+        }
     }
 }
 
@@ -71,6 +85,7 @@ impl Source {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
+        link: DocumentLink,
         context: &LibraryBuilder,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
@@ -99,7 +114,8 @@ impl Source {
         let note = doc.take_opt("note", context, report);
         let regards = doc.take_default("regards", context, report);
         doc.exhausted(report)?;
-        Ok(Source {
+        let source = Source {
+            link: link.into(),
             common: common?,
             subtype: subtype?,
             author: author?.into(),
@@ -124,90 +140,10 @@ impl Source {
             crossref: crossref?,
             note: note?,
             regards: regards?,
-            in_collection: Set::new(),
-            variants: Set::new(),
-            crossrefed: Set::new(),
-        })
+        };
+        source.check_attributes(report)?;
+        Ok(source)
     }
-
-    pub fn crosslink(
-        _link: SourceLink,
-        _library: &LibraryMut,
-        _report: &mut StageReporter
-    ) {
-        /*
-        // author
-        for target in &self.author {
-            target.update(library, move |org| {
-                org.source_author.insert(link);
-            })
-        }
-
-        // collection
-        if let Some(target) = self.collection {
-            target.update(library, move |source| {
-                source.in_collection.insert(link);
-            })
-        }
-
-        // editor
-        for target in &self.editor {
-            target.update(library, move |org| {
-                org.source_editor.insert(link);
-            })
-        }
-
-        // organization
-        for target in &self.organization {
-            target.update(library, move |org| {
-                org.source_organization.insert(link);
-            })
-        }
-
-        // publisher
-        for target in &self.publisher {
-            target.update(library, move |org| {
-                org.source_publisher.insert(link);
-            })
-        }
-
-        // also -- to make sure we don’t miss any, we add the full also list
-        // to all mentioned sources.
-        if !self.also.is_empty() {
-            let mut also = Vec::with_capacity(self.also.len() + 1);
-            also.push(link);
-            also.extend(self.also.iter().map(|item| item.into_value()));
-            let also = Arc::new(also);
-            for target in also.clone().iter() {
-                let also = also.clone();
-                target.update(library, move |source| {
-                    for item in also.iter() {
-                        source.variants.insert(*item);
-                    }
-                })
-            }
-        }
-
-        // crossref
-        for target in &self.crossref {
-            target.update(library, move |source| {
-                source.crossrefed.insert(link);
-            })
-        }
-
-        // regards
-        for target in &self.regards {
-            target.update(library, move |document| {
-                document.common_mut().sources.insert(link);
-            })
-        }
-        */
-    }
-
-    /*
-    pub fn verify(&self, _report: &mut StageReporter) {
-    }
-    */
 
     pub fn process_names<F: FnMut(String)>(&self, _process: F) {
     }
@@ -231,8 +167,9 @@ data_enum! {
         
         default Misc
     }
-
 }
+
+
 
 
 //------------ Pages ---------------------------------------------------------
@@ -241,6 +178,12 @@ data_enum! {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Pages(Marked<String>);
+
+impl Pages {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
 
 impl<C> FromYaml<C> for Pages {
     fn from_yaml(
@@ -271,6 +214,12 @@ impl ops::Deref for Pages {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Isbn(Marked<String>);
 
+impl Isbn {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
 impl<C> FromYaml<C> for Isbn {
     fn from_yaml(
         value: Value,
@@ -287,5 +236,106 @@ impl ops::Deref for Isbn {
     fn deref(&self) -> &str {
         self.0.as_value().as_ref()
     }
+}
+
+
+//------------ check_attributes ----------------------------------------------
+
+impl Source {
+    fn check_attributes(
+        &self, report: &mut PathReporter
+    ) -> Result<(), Failed> {
+        let mut res = Ok(());
+        match self.subtype.into_value() {
+            Subtype::Article => {
+                self.check(
+                    self.title.is_some() || self.designation.is_some(),
+                    "'title' or 'designation'", report, &mut res
+                );
+                self.check(
+                    self.collection.is_some(), "'collection'",
+                    report, &mut res
+                );
+            }
+            Subtype::Book => {
+                self.check(
+                    !self.author.is_empty() || !self.editor.is_empty()
+                        || !self.organization.is_empty(),
+                    "'author' or 'editor' or 'organization'",
+                    report, &mut res
+                );
+                self.check(
+                    self.title.is_some() || self.designation.is_some(),
+                    "'title' or 'designation'", report, &mut res
+                );
+            }
+            Subtype::Inarticle => {
+                self.check(
+                    self.title.is_some() || self.designation.is_some(),
+                    "'title' or 'designation'", report, &mut res
+                );
+                self.check(
+                    self.collection.is_some(), "'collection'",
+                    report, &mut res
+                );
+            }
+            Subtype::Issue => {
+                self.check(
+                    self.collection.is_some(), "'collection'",
+                    report, &mut res
+                );
+                self.check(
+                    self.number.is_some(), "'number'", report, &mut res
+                );
+            }
+            Subtype::Journal => {
+            }
+            Subtype::Map => {
+            }
+            Subtype::Online => {
+            }
+            Subtype::Series => {
+            }
+            Subtype::Volume => {
+                self.check(
+                    self.collection.is_some(), "'collection'",
+                    report, &mut res
+                );
+                self.check(
+                    self.volume.is_some(), "'volume'", report, &mut res
+                );
+            }
+            Subtype::Misc => {
+            }
+        }
+        res
+    }
+
+    fn check(
+        &self, condition: bool, missing: &'static str,
+        report: &mut PathReporter, res: &mut Result<(), Failed>,
+    ) {
+        if !condition {
+            report.error(
+                MissingAttribute {
+                    subtype: self.subtype.into_value(),
+                    missing,
+                }.marked(self.origin().location())
+            );
+            *res = Err(Failed)
+        }
+    }
+}
+
+
+//============ Errors ========================================================
+
+#[derive(Clone, Debug, Display)]
+#[display(
+    fmt="missing {} in {} source", missing, subtype
+)]
+pub struct MissingAttribute {
+    subtype: Subtype,
+    missing: &'static str,
 }
 

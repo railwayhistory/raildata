@@ -70,7 +70,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
 
         paste! {
             $(
-                pub fn [<try_as $vtype:lower>](&self) -> Option<&$vtype> {
+                pub fn [<try_as_ $vtype:lower>](&self) -> Option<&$vtype> {
                     match *self {
                         Document::$vtype(ref inner) => Some(inner),
                         _ => None
@@ -85,13 +85,14 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
             key: Marked<Key>,
             doctype: DocumentType,
             doc: Mapping,
+            link: DocumentLink,
             context: &LibraryBuilder,
             report: &mut PathReporter
         ) -> Result<Self, Failed> {
             match doctype {
                 $(
                     DocumentType::$vtype => {
-                        $vtype::from_yaml(key, doc, context, report)
+                        $vtype::from_yaml(key, doc, link, context, report)
                             .map(Document::$vtype)
                     }
                 )*
@@ -189,6 +190,10 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
         ) -> Marked<Self> {
             store.build_link(key, None, report).map(Into::into)
         }
+
+            pub fn follow(self, library: &impl LinkTarget) -> &Document {
+                library.resolve(self.0.into())
+            }
     }
 
 

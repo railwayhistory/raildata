@@ -22,7 +22,7 @@ enum Inner<O, M> {
 }
 
 impl<T> List<T> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         List { inner: Inner::Empty }
     }
 
@@ -48,6 +48,43 @@ impl<T> List<T> {
                 Inner::One(first) => Inner::Many(vec![first, item]),
                 _ => unreachable!()
             };
+        }
+    }
+
+    pub fn insert_sorted_by(
+        &mut self,
+        item: T,
+        sort: impl Fn(&T, &T) -> cmp::Ordering
+    ) {
+        if let Inner::Many(ref mut vec) = self.inner {
+            let idx = match vec.binary_search_by(|probe| sort(probe, &item)) {
+                Ok(idx) => idx + 1,
+                Err(idx) => idx,
+            };
+            vec.insert(idx, item);
+        }
+        else {
+            self.inner = match mem::replace(&mut self.inner, Inner::Empty) {
+                Inner::Empty => Inner::One(item),
+                Inner::One(first) => {
+                    Inner::Many(
+                        if sort(&first, &item) == cmp::Ordering::Greater {
+                            vec![item, first]
+                        }
+                        else {
+                            vec![first, item]
+                        }
+                    )
+                }
+                _ => unreachable!()
+            }
+        }
+    }
+
+    pub fn extend_from_slice(&mut self, slice: &[T])
+    where T: Clone {
+        for item in slice {
+            self.push(item.clone())
         }
     }
 

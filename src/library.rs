@@ -73,35 +73,33 @@ impl LibraryBuilder {
         let location = value.location();
         let mut doc = value.into_mapping(report)?;
         let key: Marked<Key> = doc.take("key", self, report)?;
+        let link = self._get_link(key.as_value());
         let doctype = match doc.take("type", self, report) {
             Ok(doctype) => doctype,
             Err(_) => {
-                let _ = self.insert_broken(
-                    key.into_value(), None, doc.location(), report
+                let _ = self._update_broken(
+                    key.as_value(), None, doc.location(), report
                 );
                 return Ok(())
             }
         };
-        match Document::from_yaml(key.clone(), doctype, doc, self, report) {
-            Ok(doc) => self.insert(key.into_value(), doc, report),
+        match Document::from_yaml(
+            key.clone(), doctype, doc, link, self, report
+        ) {
+            Ok(doc) => self._update(link, doc, report),
             Err(_) => {
-                self.insert_broken(
-                    key.into_value(),
-                    Some(doctype),
-                    location,
-                    report
-                )
+                self._update_broken(&key, Some(doctype), location, report)
             }
         }
     }
 
     pub fn insert(
         &self,
-        key: Key,
         document: Document,
         report: &mut PathReporter
     ) -> Result<(), Failed> {
-        self._insert(key, Ok(document), report)
+        let link = self._get_link(document.key());
+        self._update(link, document, report)
     }
 
     pub fn insert_broken(
@@ -111,55 +109,83 @@ impl LibraryBuilder {
         location: Location,
         report: &mut PathReporter
     ) -> Result<(), Failed> {
-        self._insert(key, Err((doctype, location)), report)
+        let _ = self._get_link(&key);
+        self._update_broken(&key, doctype, location, report)
     }
 
-    fn _insert(
+    fn _get_link(
         &self,
-        key: Key,
-        document: Result<Document, (Option<DocumentType>, Location)>,
-        report: &mut PathReporter
-    ) -> Result<(), Failed> {
-        let (doctype, location, document) = match document {
-            Ok(doc) => (Some(doc.doctype()), doc.location(), Some(doc)),
-            Err((doctype, location)) => (doctype, location, None)
-        };
-
-        // Lock keys and use that lock to execute the rest exclusively.
+        key: &Key,
+    ) -> DocumentLink {
         let mut keys = self.0.keys.lock().unwrap();
 
-        if let Some(info) = keys.get_mut(&key) {
-            if info.origin.is_some() {
-                report.error(
-                    DuplicateDocument(
-                        info.origin.clone().unwrap()
-                    ).marked(location)
-                );
-                return Err(Failed);
-            }
-            
-            info.broken = document.is_none();
-            info.doctype = doctype;
-            info.origin = Some(report.origin(location));
-            if let Some(document) = document {
-                self.0.store.update(info.link.into(), document);
-            }
-            
-            return Ok(())
+        if let Some(info) = keys.get_mut(key) {
+            return info.link
         }
 
-        // We haven’t seen this key before. Otherwise we have returned early.
-        // This is necessary to drop the mutuable reference to keys.
+        let link = self.0.store.push(None).into();
         keys.insert(
-            key,
+            key.clone(),
             DocumentInfo {
-                broken: document.is_none(),
-                doctype,
-                origin: Some(report.origin(location)),
-                link: self.0.store.push(document).into(),
-                linked_from: Vec::new()
+                link,
+                doctype: None,
+                origin: None,
+                linked_from: Vec::new(),
+                broken: false,
             }
         );
+        link
+    }
+
+    fn _update(
+        &self, link: DocumentLink, document: Document, report: &mut PathReporter
+    ) -> Result<(), Failed> {
+        let mut keys = self.0.keys.lock().unwrap();
+
+        let info = keys.get_mut(document.key()).unwrap();
+
+        if info.origin.is_some() {
+            report.error(
+                DuplicateDocument(
+                    info.origin.clone().unwrap()
+                ).marked(document.origin().location())
+            );
+            return Err(Failed);
+        }
+
+        info.doctype = Some(document.doctype());
+        info.origin = Some(document.origin().clone());
+        info.broken = false;
+
+        let res = self.0.store.update(link.into(), document);
+        assert!(res.is_none());
+        Ok(())
+    }
+        
+
+    fn _update_broken(
+        &self,
+        key: &Key,
+        doctype: Option<DocumentType>,
+        location: Location,
+        report: &mut PathReporter
+    ) -> Result<(), Failed> {
+        let mut keys = self.0.keys.lock().unwrap();
+
+        let info = keys.get_mut(key).unwrap();
+
+        if info.origin.is_some() {
+            report.error(
+                DuplicateDocument(
+                    info.origin.clone().unwrap()
+                ).marked(location)
+            );
+            return Err(Failed);
+        }
+            
+        info.doctype = doctype;
+        info.origin = Some(report.origin(location));
+        info.broken = true;
         Ok(())
     }
 
@@ -343,7 +369,8 @@ impl Library {
         self.0.store.len()
     }
 
-    pub fn get(&self, key: &Key) -> Option<DocumentLink> {
+    pub fn get<Q>(&self, key: &Q) -> Option<DocumentLink>
+    where Key: borrow::Borrow<Q>, Q: Ord + ?Sized {
         self.0.keys.get(key).cloned()
     }
 
