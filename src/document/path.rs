@@ -146,6 +146,7 @@ impl Path {
             let tension = match way.tags().get("type") {
                 None => 1.,
                 Some("arc") => 1.,
+                Some("curved") => 1.,
                 Some("straight") => INFINITY,
                 Some(value) => {
                     report.unmarked_warning(
