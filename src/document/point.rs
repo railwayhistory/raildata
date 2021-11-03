@@ -325,7 +325,7 @@ pub type RecordList = List<Record>;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Record {
-    pub document: Marked<SourceLink>,
+    pub document: List<Marked<SourceLink>>,
     pub note: Option<LanguageText>,
 
     pub properties: Properties,
@@ -370,7 +370,7 @@ pub struct Properties {
 
     pub category: Option<Set<Marked<Category>>>,
     pub de_rang: Option<Marked<DeRang>>,
-    pub superior: Option<List<Marked<PointLink>>>,
+    pub superior: Option<Option<List<Marked<PointLink>>>>,
     pub codes: Codes,
 
     pub location: Location,
@@ -772,6 +772,8 @@ data_enum! {
 
 data_enum! {
     pub enum Status {
+        { Planned: "planned" }
+        { Construction: "construction" }
         { Open: "open" }
         { Suspended: "suspended" }
         { Reopened: "reopened" }
