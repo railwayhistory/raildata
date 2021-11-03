@@ -33,7 +33,15 @@ impl Structure {
         &self.common.origin
     }
 
-    pub fn name(&self, _lang: LanguageCode) -> &str {
+    /// Returns the name for the given language.
+    pub fn name(&self, lang: LanguageCode) -> &str {
+        for event in self.events.iter().rev() {
+            if let Some(name) = event.name.as_ref() {
+                if let Some(name) = name.for_language(lang) {
+                    return name
+                }
+            }
+        }
         self.key().as_str()
     }
 }
