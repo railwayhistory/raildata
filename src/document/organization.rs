@@ -219,6 +219,7 @@ data_enum! {
         { Person: "person" }
         { Place: "place" }
         { Region: "region" }
+        { Placeholder: "placeholder" }
     }
 }
 
