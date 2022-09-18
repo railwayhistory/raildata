@@ -453,6 +453,7 @@ impl Properties {
 
 data_enum! {
     pub enum Category {
+        { Border: "border" }
         { DeAbzw: "de.Abzw" }
         { DeAnst: "de.Anst" }
         { DeAwanst: "de.Awanst" }
@@ -499,6 +500,7 @@ impl Category {
         use self::Category::*;
 
         match self {
+            Border => "border",
             DeAbzw => "Abzw",
             DeAnst => "Anst",
             DeAwanst => "Awanst",
