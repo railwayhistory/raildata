@@ -312,6 +312,7 @@ impl FromYaml<LibraryBuilder> for Event {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Property {
     pub role: Marked<PropertyRole>,
+    pub region: List<Marked<OrganizationLink>>,
     pub constructor: List<Marked<OrganizationLink>>,
     pub operator: List<Marked<OrganizationLink>>,
     pub owner: List<Marked<OrganizationLink>>,
@@ -325,12 +326,14 @@ impl FromYaml<LibraryBuilder> for Property {
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
         let role = value.take("role", context, report);
+        let region = value.take_default("region", context, report);
         let constructor = value.take_default("constructor", context, report);
         let owner = value.take_default("owner", context, report);
         let operator = value.take_default("operator", context, report);
         value.exhausted(report)?;
         Ok(Property {
             role: role?,
+            region: region?,
             constructor: constructor?,
             owner: owner?,
             operator: operator?,
