@@ -489,6 +489,13 @@ data_enum! {
         { DkSmd: "dk.Smd" }
         { DkGr: "dk.Gr" }
 
+        { NlAansl: "nl.Aansl" }
+        { NlGem: "nl.Gem" }
+        { NlH: "nl.H" }
+        { NlKnp: "nl.Knp" }
+        { NlOlp: "nl.Olp" }
+        { NlSt: "nl.St" }
+
         { NoS: "no.s" }
         { NoSp: "no.sp" }
         { NoHp: "no.hp" }
@@ -534,6 +541,12 @@ impl Category {
             DkT => "T",
             DkSmd => "Smd",
             DkGr => "Gr",
+            NlAansl => "Aansluiting",
+            NlGem => "Goederen Emplacement",
+            NlH => "Halte",
+            NlKnp => "Knooppunt",
+            NlOlp => "Overloop",
+            NlSt => "Station",
             NoS => "S",
             NoSp => "Sp",
             NoHp => "Hp",
@@ -875,6 +888,7 @@ data_enum! {
         { DeLknr: "de.lknr" }
         { DeVbl: "de.VBL" }
         { DkRef: "dk.ref" }
+        { NlAfk: "nl.afk" }
         { NoFs: "no.fs" }
         { NoNjk: "no.NJK" }
         { NoNsb: "no.NSB" }

@@ -344,8 +344,8 @@ pub struct Current {
     pub goods: CurrentValue<Goods>,
     pub jurisdiction: CurrentValue<Marked<CountryCode>>,
     pub name: CurrentValue<LocalText>,
-    pub operator: CurrentValue<List<Marked<OrganizationLink>>>,
-    pub owner: CurrentValue<List<Marked<OrganizationLink>>>,
+    pub operator: CurrentValue<Option<List<Marked<OrganizationLink>>>>,
+    pub owner: CurrentValue<Option<List<Marked<OrganizationLink>>>>,
     pub passenger: CurrentValue<Passenger>,
     pub rails: CurrentValue<Marked<u8>>,
     pub region: CurrentValue<List<Marked<OrganizationLink>>>,
@@ -354,6 +354,7 @@ pub struct Current {
     pub tracks: CurrentValue<Marked<u8>>,
 
     pub de_vzg: CurrentValue<Option<DeVzg>>,
+    pub fr_rfn: CurrentValue<Option<FrRfn>>,
 
     pub source: List<Marked<SourceLink>>,
     pub note: Option<LanguageText>,
@@ -384,6 +385,7 @@ impl FromYaml<PointsContext<'_>> for Current {
         let tracks = value.take_default("tracks", context, report);
 
         let de_vzg = value.take_default("de.VzG", context, report);
+        let fr_rfn = value.take_default("fr.RFN", context, report);
 
         let source = value.take_default("source", context.context, report);
         let note = value.take_opt("note", context, report);
@@ -408,6 +410,7 @@ impl FromYaml<PointsContext<'_>> for Current {
             tracks: tracks?,
 
             de_vzg: de_vzg?,
+            fr_rfn: fr_rfn?,
 
             source: source?,
             note: note?,
@@ -464,7 +467,6 @@ where T: FromYaml<LibraryBuilder> {
                         }
                     };
                     if end_idx <= start_idx {
-                        println!("{} {}", end_idx, start_idx);
                         report.error(
                             EndBeforeStart.marked(end.location())
                         );
@@ -806,6 +808,7 @@ pub struct Properties {
     pub region: Option<List<Marked<OrganizationLink>>>,
 
     pub de_vzg: Option<DeVzg>,
+    pub fr_rfn: Option<FrRfn>,
 }
 
 impl Properties {
@@ -827,6 +830,7 @@ impl Properties {
         || self.status.is_some()
         || self.tracks.is_some()
         || self.de_vzg.is_some()
+        || self.fr_rfn.is_some()
     }
 }
 
@@ -854,6 +858,7 @@ impl Properties {
         let tracks = value.take_opt("tracks", context, report);
 
         let de_vzg = value.take_opt("de.VzG", context, report);
+        let fr_rfn = value.take_opt("fr.RFN", context, report);
         
         Ok(Properties {
             category: category?,
@@ -874,6 +879,7 @@ impl Properties {
             tracks: tracks?,
 
             de_vzg: de_vzg?,
+            fr_rfn: fr_rfn?,
         })
     }
 }
@@ -1293,6 +1299,7 @@ data_enum! {
 
 data_enum! {
     pub enum Status {
+        { None: "none" }
         { Planned: "planned" }
         { Construction: "construction" }
         { Open: "open" }
@@ -1308,6 +1315,11 @@ data_enum! {
 //------------ DeVzg ---------------------------------------------------------
 
 pub type DeVzg = Marked<String>;
+
+
+//------------ FrRfn ---------------------------------------------------------
+
+pub type FrRfn = Marked<String>;
 
 
 //============ Errors ========================================================
