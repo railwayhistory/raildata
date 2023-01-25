@@ -8,7 +8,7 @@ use ignore::types::TypesBuilder;
 use osmxml::read::read_xml;
 use crate::document::Path;
 use crate::document::common::DocumentType;
-use crate::store::{FullStore, StoreLoader};
+use crate::store::{DataStore, StoreLoader};
 use crate::types::{IntoMarked, Location};
 use super::read::Utf8Chars;
 use super::report::{self, PathReporter, Report, Reporter, Stage};
@@ -17,11 +17,9 @@ use super::yaml::Loader;
 
 //------------ load_tree -----------------------------------------------------
 
-pub fn load_tree(path: &path::Path) -> Result<FullStore, Report> {
+pub fn load_tree(path: &path::Path) -> Result<DataStore, Report> {
     let report = Reporter::new();
 
-    // Phase 1: Construct all documents and check that they are all present
-    //          and accounted for.
     let store = {
         let builder = Arc::new(StoreLoader::new());
         load_facts(path, builder.clone(), report.clone());
@@ -29,21 +27,7 @@ pub fn load_tree(path: &path::Path) -> Result<FullStore, Report> {
         let builder = Arc::try_unwrap(builder).unwrap();
         builder.into_data_store(&mut report.clone().stage(Stage::Translate))
     };
-    let store = match store {
-        Ok(store) => store,
-        Err(_) => return Err(report.unwrap())
-    };
-
-    // Phase 2: Generate the cross references.
-    let store = match store.into_xref_store(
-        report.clone().stage(Stage::Crossref)
-    ) {
-        Ok(store) => store,
-        Err(_) => return Err(report.unwrap())
-    };
-
-    // Phase 3: Build meta data.
-    match store.into_full_store(report.clone().stage(Stage::Catalogue)) {
+    match store {
         Ok(store) => Ok(store),
         Err(_) => Err(report.unwrap())
     }

@@ -2,9 +2,12 @@
 use std::ops;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
+use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-use crate::store::{LinkTarget, StoreLoader, XrefsBuilder, XrefsStore};
+use crate::store::{
+    FullStore, LinkTarget, StoreLoader, XrefsBuilder, XrefsStore
+};
 use crate::types::{
     EventDate, Key, IntoMarked, LanguageCode, LanguageText, List, Marked, Url
 };
@@ -162,7 +165,13 @@ impl Data {
         Ok(())
     }
 
-    pub fn process_names<F: FnMut(String)>(&self, _process: F) {
+    pub fn catalogue(
+        &self,
+        _builder: &mut CatalogueBuilder,
+        _store: &FullStore,
+        _report: &mut PathReporter,
+    ) -> Result<(), Failed> {
+        Ok(())
     }
 }
 

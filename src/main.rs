@@ -1,6 +1,6 @@
 extern crate raildata;
 
-use std::env;
+use std::{env, process};
 use std::path::Path;
 use std::time::Instant;
 use raildata::load::load_tree;
@@ -10,8 +10,8 @@ use raildata::document::Data;
 fn main() {
     let time = Instant::now();
     let path = env::args().nth(1).unwrap_or("../data".into());
-    let library = match load_tree(Path::new(&path).into()) {
-        Ok(library) => library,
+    let store = match load_tree(Path::new(&path).into()) {
+        Ok(store) => store,
         Err(mut err) => {
             err.sort();
 
@@ -29,7 +29,19 @@ fn main() {
                     println!("{}", item)
                 }
             }
-            ::std::process::exit(1);
+            process::exit(1);
+        }
+    };
+
+    let store = match store.into_full_store() {
+        Ok(store) => store,
+        Err(mut err) => {
+            err.sort();
+            println!("{} errors.", err.len());
+            for item in err.iter() {
+                println!("{}", item)
+            }
+            process::exit(1);
         }
     };
 
@@ -40,8 +52,8 @@ fn main() {
     let mut sources = 0;
     let mut structures = 0;
 
-    for key in library.links() {
-        match *key.data(&library) {
+    for key in store.links() {
+        match *key.data(&store) {
             Data::Line(_) => lines += 1,
             Data::Entity (_) => entities += 1,
             Data::Path(_) => paths += 1,

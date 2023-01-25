@@ -3,10 +3,11 @@ use std::str::FromStr;
 use derive_more::Display;
 use osmxml::elements::{MemberType, Osm, Relation};
 use serde::{Deserialize, Serialize};
+use crate::catalogue::CatalogueBuilder;
 use crate::load::report;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::Mapping;
-use crate::store::{StoreLoader, XrefsBuilder, XrefsStore};
+use crate::store::{FullStore, StoreLoader, XrefsBuilder, XrefsStore};
 use crate::types::{IntoMarked, LanguageCode, Location, Key, Marked};
 use crate::types::key::InvalidKey;
 use super::{DocumentLink, SourceLink};
@@ -293,7 +294,13 @@ impl Data {
         Ok(())
     }
 
-    pub fn process_names<F: FnMut(String)>(&self, _process: F) {
+    pub fn catalogue(
+        &self,
+        _builder: &mut CatalogueBuilder,
+        _store: &FullStore,
+        _report: &mut PathReporter,
+    ) -> Result<(), Failed> {
+        Ok(())
     }
 }
 

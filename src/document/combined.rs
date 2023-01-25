@@ -1,10 +1,12 @@
 use derive_more::From;
 use paste::paste;
 use serde::{Deserialize, Serialize};
-use crate::load::report::{Failed, Origin, PathReporter};
+use crate::catalogue::CatalogueBuilder;
+use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 pub use crate::store::{
-    LinkTarget, LinkTargetMut, DocumentLink, StoreLoader, XrefsBuilder,
+    FullStore, LinkTarget, LinkTargetMut, DocumentLink, StoreLoader,
+    XrefsBuilder,
 };
 use crate::types::{Key, LanguageCode, Location, Marked};
 use super::{Line, Entity, Path, Point, Source, Structure};
@@ -130,11 +132,21 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
             }
         }
 
-        pub fn process_names<F: FnMut(String)>(&self, process: F) {
+        pub fn catalogue(
+            &self,
+            builder: &mut CatalogueBuilder,
+            store: &FullStore,
+            report: &StageReporter,
+        ) -> Result<(), Failed> {
             match *self {
                 $(
                     Data::$vtype(ref inner) => {
-                        inner.process_names(process)
+                        inner.catalogue(
+                            builder, store,
+                            &mut report.clone().with_path(
+                                inner.origin().path().clone()
+                            ),
+                        )
                     }
                 )*
             }

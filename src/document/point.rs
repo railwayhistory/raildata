@@ -2,9 +2,10 @@
 use std::collections::{HashSet, HashMap};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
+use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-use crate::store::{StoreLoader, XrefsBuilder, XrefsStore};
+use crate::store::{FullStore, StoreLoader, XrefsBuilder, XrefsStore};
 use crate::types::{
     CountryCode, EventDate, IntoMarked, Key, LanguageCode, LanguageText, List,
     LocalText, Marked, Set
@@ -221,6 +222,15 @@ impl Data {
         &self, 
         _builder: &mut XrefsBuilder,
         _store: &crate::store::DataStore,
+        _report: &mut PathReporter,
+    ) -> Result<(), Failed> {
+        Ok(())
+    }
+
+    pub fn catalogue(
+        &self,
+        _builder: &mut CatalogueBuilder,
+        _store: &FullStore,
         _report: &mut PathReporter,
     ) -> Result<(), Failed> {
         Ok(())

@@ -40,8 +40,11 @@ pub enum Stage {
     /// Generating cross references.
     Crossref = 2,
 
-    /// Catalogue meta-data.
-    Catalogue = 3,
+    /// Generate meta-data.
+    Meta = 3,
+
+    /// Generate the catalogue.
+    Catalogue = 4,
 }
 
 

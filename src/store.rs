@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::document::combined::{Data, Meta, Xrefs};
 use crate::document::common::DocumentType;
 use crate::load::report::{
-    Failed, Origin, PathReporter, StageReporter
+    Failed, Origin, PathReporter, Report, Reporter, Stage, StageReporter
 };
 use crate::load::yaml::{FromYaml, Value};
 use crate::types::{IntoMarked, Key, Location, Marked};
@@ -295,6 +295,24 @@ impl DataStore {
         self, report: StageReporter
     ) -> Result<XrefsStore, Failed> {
         XrefsStore::generate(self, report)
+    }
+
+    pub fn into_full_store(self) -> Result<FullStore, Report> {
+        let report = Reporter::new();
+
+        // Generate the cross references.
+        let store = match self.into_xref_store(
+            report.clone().stage(Stage::Crossref)
+        ) {
+            Ok(store) => store,
+            Err(_) => return Err(report.unwrap())
+        };
+
+        // Generate meta data.
+        match store.into_full_store(report.clone().stage(Stage::Meta)) {
+            Ok(store) => Ok(store),
+            Err(_) => Err(report.unwrap())
+        }
     }
 
     pub fn len(&self) -> usize {
