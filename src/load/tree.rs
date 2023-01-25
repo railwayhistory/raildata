@@ -30,18 +30,23 @@ pub fn load_tree(path: &path::Path) -> Result<FullStore, Report> {
         builder.into_data_store(&mut report.clone().stage(Stage::Translate))
     };
     let store = match store {
-        Ok(store) => store.into_enricher(),
-        Err(_) => return Err(report.unwrap())
-    };
-
-    // Phase 2: Build meta data.
-    let store = match store.process(report.clone().stage(Stage::Catalogue)) {
         Ok(store) => store,
         Err(_) => return Err(report.unwrap())
     };
 
-    // Phase 3: Profit
-    Ok(store)
+    // Phase 2: Generate the cross references.
+    let store = match store.into_xref_store(
+        report.clone().stage(Stage::Crossref)
+    ) {
+        Ok(store) => store,
+        Err(_) => return Err(report.unwrap())
+    };
+
+    // Phase 3: Build meta data.
+    match store.into_full_store(report.clone().stage(Stage::Catalogue)) {
+        Ok(store) => Ok(store),
+        Err(_) => Err(report.unwrap())
+    }
 }
 
 

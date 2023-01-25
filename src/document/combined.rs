@@ -3,7 +3,9 @@ use paste::paste;
 use serde::{Deserialize, Serialize};
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-pub use crate::store::{LinkTarget, DocumentLink, StoreLoader};
+pub use crate::store::{
+    LinkTarget, LinkTargetMut, DocumentLink, StoreLoader, XrefsBuilder,
+};
 use crate::types::{Key, LanguageCode, Location, Marked};
 use super::{Line, Entity, Path, Point, Source, Structure};
 use super::common::{Common, DocumentType};
@@ -98,6 +100,36 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
             }
         }
 
+        pub fn default_xrefs(&self) -> Xrefs {
+            match *self {
+                $(
+                    Data::$vtype(_) => {
+                        Xrefs::$vtype(super::$vattr::Xrefs::default())
+                    }
+                )*
+            }
+        }
+
+        pub fn xrefs(
+            &self,
+            builder: &mut XrefsBuilder,
+            store: &crate::store::DataStore,
+            report: &mut crate::load::report::StageReporter,
+        ) -> Result<(), crate::load::report::Failed> {
+            match *self {
+                $(
+                    Data::$vtype(ref inner) => {
+                        inner.xrefs(
+                            builder, store,
+                            &mut report.clone().with_path(
+                                inner.origin().path().clone()
+                            ),
+                        )
+                    }
+                )*
+            }
+        }
+
         pub fn process_names<F: FnMut(String)>(&self, process: F) {
             match *self {
                 $(
@@ -107,6 +139,19 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                 )*
             }
         }
+    }
+
+
+    //------------ Xrefs -----------------------------------------------------
+
+    #[derive(Clone, Debug, Deserialize, From, Serialize)]
+    pub enum Xrefs {
+        $(
+            $vtype(super::$vattr::Xrefs),
+        )*
+    }
+
+    impl Xrefs {
     }
 
 
@@ -122,7 +167,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
     impl Meta {
         pub fn generate(
             data: &Data,
-            store: &crate::store::StoreEnricher,
+            store: &crate::store::XrefsStore,
             report: &mut crate::load::report::StageReporter,
         ) -> Result<Self, crate::load::report::Failed> {
             match *data {
@@ -165,6 +210,24 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
             ) -> &super::$vattr::Data {
                 match *self.0.data(store) {
                     Data::$vtype(ref inner) => inner,
+                    _ => panic!("link to wrong document type")
+                }
+            }
+
+            pub fn xrefs(
+                self, store: &impl LinkTarget<Xrefs>
+            ) -> &super::$vattr::Xrefs {
+                match *self.0.xrefs(store) {
+                    Xrefs::$vtype(ref inner) => inner,
+                    _ => panic!("link to wrong document type")
+                }
+            }
+
+            pub fn xrefs_mut(
+                self, store: &mut impl LinkTargetMut<Xrefs>
+            ) -> &mut super::$vattr::Xrefs {
+                match *self.0.xrefs_mut(store) {
+                    Xrefs::$vtype(ref mut inner) => inner,
                     _ => panic!("link to wrong document type")
                 }
             }

@@ -37,8 +37,11 @@ pub enum Stage {
     /// Translation of parsed data into its structural components.
     Translate = 1,
 
+    /// Generating cross references.
+    Crossref = 2,
+
     /// Catalogue meta-data.
-    Catalogue = 2,
+    Catalogue = 3,
 }
 
 

@@ -1,6 +1,6 @@
 
 use serde::{Deserialize, Serialize};
-use crate::store::StoreEnricher;
+use crate::store::XrefsStore;
 use crate::document::entity;
 use crate::document::combined::EntityLink;
 use crate::load::report::{Failed, PathReporter};
@@ -17,7 +17,7 @@ pub struct Meta {
 
 impl Meta {
     pub fn generate(
-        data: &Data, store: &StoreEnricher, _report: &mut PathReporter,
+        data: &Data, store: &XrefsStore, _report: &mut PathReporter,
     ) -> Result<Self, Failed> {
         Ok(Meta {
             property: PropertyList::generate(data, store),
@@ -34,7 +34,7 @@ struct PropertyList {
 }
 
 impl PropertyList {
-    fn generate(data: &Data, _store: &StoreEnricher) -> Self {
+    fn generate(data: &Data, _store: &XrefsStore) -> Self {
         let res = Self::default();
         let (_date, _events) = match property::find_first(data) {
             Some(some) => some,
@@ -87,7 +87,7 @@ mod property {
     }
 
     pub fn find_next(
-        date: EventDate, data: &Data, store: &StoreEnricher
+        date: EventDate, data: &Data, store: &XrefsStore
     ) -> Option<(EventDate, Vec<Event>)> {
         unimplemented!()
     }

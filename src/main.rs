@@ -40,8 +40,8 @@ fn main() {
     let mut sources = 0;
     let mut structures = 0;
 
-    for (doc, _meta) in library.iter() {
-        match *doc {
+    for key in library.links() {
+        match *key.data(&library) {
             Data::Line(_) => lines += 1,
             Data::Entity (_) => entities += 1,
             Data::Path(_) => paths += 1,

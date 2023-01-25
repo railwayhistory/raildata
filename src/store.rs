@@ -1,13 +1,14 @@
-use std::{borrow, mem, thread};
+use std::{borrow, mem};
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Bound;
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{self, AtomicUsize};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use crate::document::combined::{Data, Meta};
+use crate::document::combined::{Data, Meta, Xrefs};
 use crate::document::common::DocumentType;
-use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
+use crate::load::report::{
+    Failed, Origin, PathReporter, StageReporter
+};
 use crate::load::yaml::{FromYaml, Value};
 use crate::types::{IntoMarked, Key, Location, Marked};
 
@@ -290,8 +291,10 @@ impl DataStore {
         DataStore { data, keys }
     }
 
-    pub fn into_enricher(self) -> StoreEnricher {
-        StoreEnricher::new(self)
+    pub fn into_xref_store(
+        self, report: StageReporter
+    ) -> Result<XrefsStore, Failed> {
+        XrefsStore::generate(self, report)
     }
 
     pub fn len(&self) -> usize {
@@ -327,94 +330,83 @@ impl LinkTarget<Data> for DataStore {
     }
 }
 
-impl LinkTarget<Data> for Arc<DataStore> {
+
+//------------ XrefsBuilder --------------------------------------------------
+
+#[derive(Debug)]
+pub struct XrefsBuilder {
+    xrefs: Vec<Xrefs>,
+}
+
+impl XrefsBuilder {
+    fn new(store: &DataStore) -> Self {
+        XrefsBuilder {
+            xrefs: store.data.iter().map(Data::default_xrefs).collect()
+        }
+    }
+}
+
+impl LinkTargetMut<Xrefs> for XrefsBuilder {
+    fn resolve_mut(&mut self, link: DocumentLink) -> &mut Xrefs {
+        &mut self.xrefs[link.index]
+    }
+}
+
+
+//------------ XrefsStore -----------------------------------------------------
+
+/// A store holding the data and cross references of documents.
+#[derive(Debug)]
+pub struct XrefsStore {
+    data: Vec<Data>,
+    xrefs: Vec<Xrefs>,
+    keys: BTreeMap<Key, DocumentLink>,
+}
+
+impl XrefsStore {
+    fn generate(
+        data: DataStore, mut report: StageReporter
+    ) -> Result<Self, Failed> {
+        let mut xrefs = XrefsBuilder::new(&data);
+        let mut ok = true;
+        for item in &data.data {
+            if item.xrefs(&mut xrefs, &data, &mut report).is_err() {
+                ok = false;
+            }
+        }
+        if ok {
+            Ok(XrefsStore {
+                data: data.data,
+                xrefs: xrefs.xrefs,
+                keys: data.keys,
+            })
+        }
+        else {
+            Err(Failed)
+        }
+    }
+
+    pub fn into_full_store(
+        self, report: StageReporter
+    ) -> Result<FullStore, Failed> {
+        FullStore::generate(self, report)
+    }
+
+    pub fn links(&self) -> impl Iterator<Item = DocumentLink> + '_ {
+        self.keys.values().copied()
+    }
+}
+
+impl LinkTarget<Data> for XrefsStore {
     fn resolve(&self, link: DocumentLink) -> &Data {
-        self.as_ref().resolve(link)
+        &self.data[link.index]
     }
 }
 
-
-//------------ StoreEnricher -------------------------------------------------
-
-/// The store during enriching data with meta data.
-pub struct StoreEnricher {
-    data: DataStore,
-    meta: Vec<Arc<Mutex<Option<Result<Arc<Meta>, Failed>>>>>,
-    next_meta: AtomicUsize,
-}
-
-impl StoreEnricher {
-    fn new(data: DataStore) -> Self {
-        let mut meta = Vec::with_capacity(data.len());
-        meta.resize_with(data.len(), || Arc::new(Mutex::new(None)));
-        StoreEnricher {
-            data,
-            meta,
-            next_meta: AtomicUsize::new(0)
-        }
+impl LinkTarget<Xrefs> for XrefsStore {
+    fn resolve(&self, link: DocumentLink) -> &Xrefs {
+        &self.xrefs[link.index]
     }
-
-    pub fn process(self, report: StageReporter) -> Result<FullStore, Failed> {
-        thread::scope(|scope| {
-            for _ in 0..8 {
-                scope.spawn(|| {
-                    self.process_one(&mut report.clone());
-                });
-            }
-        });
-
-        let mut items = Vec::new();
-        for (data, meta) in
-            self.data.data.into_iter().zip(self.meta.into_iter())
-        {
-            items.push(
-                (
-                    data,
-                    Arc::try_unwrap(
-                        Arc::try_unwrap(
-                            meta
-                        ).unwrap().into_inner().unwrap().unwrap()?
-                    ).unwrap()
-                )
-            )
-        }
-        Ok(FullStore::new(items, self.data.keys))
-    }
-
-    fn process_one(&self, report: &mut StageReporter) {
-        while self.next_meta.load(atomic::Ordering::Relaxed) < self.data.len() {
-            let idx = self.next_meta.fetch_add(1, atomic::Ordering::SeqCst);
-            let item = self.meta[idx].clone();
-            let mut item = item.lock().unwrap();
-            if item.is_some() {
-                continue
-            }
-            *item = Some(
-                Meta::generate(
-                    &self.data.data[idx], self, report
-                ).map(Arc::new)
-            );
-        }
-    }
-
-    pub fn data(&self, link: DocumentLink) -> &Data {
-        self.data.resolve(link)
-    }
-
-    /*
-    pub fn meta(&self, link: DocumentLink) -> Arc<Meta> {
-        let item = self.meta[link.index].clone();
-        let mut item = item.lock().unwrap();
-        if let Some(res) = item.as_ref() {
-            return res.clone()
-        }
-        let meta = Arc::new(
-            self.data.resolve(link).generate_meta(self)
-        );
-        *item = Some(meta.clone());
-        meta
-    }
-    */
 }
 
 
@@ -423,20 +415,43 @@ impl StoreEnricher {
 /// The store with both the data and the meta data.
 #[derive(Debug)]
 pub struct FullStore {
-    items: Vec<(Data, Meta)>,
+    data: Vec<Data>,
+    xrefs: Vec<Xrefs>,
+    meta: Vec<Meta>,
     keys: BTreeMap<Key, DocumentLink>,
 }
 
 impl FullStore {
-    fn new(
-        items: Vec<(Data, Meta)>,
-        keys: BTreeMap<Key, DocumentLink>,
-    ) -> Self {
-        FullStore { items, keys }
+    fn generate(
+        store: XrefsStore, mut report: StageReporter
+    ) -> Result<Self, Failed> {
+        let mut meta = Vec::with_capacity(store.data.len());
+        let mut ok = true;
+        for data in &store.data {
+            match Meta::generate(data, &store, &mut report) {
+                Ok(res) => {
+                    if ok {
+                        meta.push(res)
+                    }
+                }
+                Err(_) => { ok = false; }
+            }
+        }
+        if ok {
+            Ok(FullStore {
+                data: store.data,
+                xrefs: store.xrefs,
+                meta,
+                keys: store.keys,
+            })
+        }
+        else {
+            Err(Failed)
+        }
     }
 
     pub fn len(&self) -> usize {
-        self.items.len()
+        self.data.len()
     }
 
     pub fn get<Q>(&self, key: &Q) -> Option<DocumentLink>
@@ -448,47 +463,32 @@ impl FullStore {
         self.keys.values().copied()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=(&'_ Data, &'_ Meta)> + '_ {
-        self.keys.values().map(move |link| {
-            let item = &self.items[link.index];
-            (&item.0, &item.1)
-        })
-    }
-
     pub fn iter_from<T>(
         &self,
         start: &T
-    ) -> impl Iterator<Item=(&'_ Data, &'_ Meta)> + '_
+    ) -> impl Iterator<Item = DocumentLink> + '_
     where T: Ord + ?Sized, Key: borrow::Borrow<T> {
-        self.keys.range((Bound::Included(start), Bound::Unbounded))
-            .map(move |link| {
-            let item = &self.items[link.1.index];
-            (&item.0, &item.1)
-        })
+        self.keys.range(
+            (Bound::Included(start), Bound::Unbounded)
+        ).map(|item| *item.1)
     }
 }
 
 impl LinkTarget<Data> for FullStore {
     fn resolve(&self, link: DocumentLink) -> &Data {
-        &self.items[link.index].0
+        &self.data[link.index]
     }
 }
 
-impl LinkTarget<Data> for Arc<FullStore> {
-    fn resolve(&self, link: DocumentLink) -> &Data {
-        self.as_ref().resolve(link)
+impl LinkTarget<Xrefs> for FullStore {
+    fn resolve(&self, link: DocumentLink) -> &Xrefs {
+        &self.xrefs[link.index]
     }
 }
 
 impl LinkTarget<Meta> for FullStore {
     fn resolve(&self, link: DocumentLink) -> &Meta {
-        &self.items[link.index].1
-    }
-}
-
-impl LinkTarget<Meta> for Arc<FullStore> {
-    fn resolve(&self, link: DocumentLink) -> &Meta {
-        self.as_ref().resolve(link)
+        &self.meta[link.index]
     }
 }
 
@@ -516,6 +516,16 @@ impl DocumentLink {
         store.resolve(self)
     }
 
+    pub fn xrefs(self, store: &impl LinkTarget<Xrefs>) -> &Xrefs {
+        store.resolve(self)
+    }
+
+    pub fn xrefs_mut(
+        self, store: &mut impl LinkTargetMut<Xrefs>
+    ) -> &mut Xrefs {
+        store.resolve_mut(self)
+    }
+
     pub fn meta(self, store: &impl LinkTarget<Meta>) -> &Meta {
         store.resolve(self)
     }
@@ -539,6 +549,17 @@ impl FromYaml<StoreLoader> for Marked<DocumentLink> {
 pub trait LinkTarget<T> {
     fn resolve(&self, link: DocumentLink) -> &T;
 }
+
+impl<T, U: LinkTarget<T>> LinkTarget<T> for Arc<U> {
+    fn resolve(&self, link: DocumentLink) -> &T {
+        self.as_ref().resolve(link)
+    }
+}
+
+pub trait LinkTargetMut<T> {
+    fn resolve_mut(&mut self, link: DocumentLink) -> &mut T;
+}
+
 
 
 //============ Errors ========================================================
