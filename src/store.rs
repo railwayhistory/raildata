@@ -1,398 +1,549 @@
-//! A document store.
-//!
-//! This is a generic store for documents that are created in (at least) three
-//! steps: First, all documents are collected from wherever they come from and
-//! placed into a `StoreBuilder`. Connections between documents are
-//! represented through `Link`s (which are really just glorified indexes into
-//! the store). In a second phase, the collected documents can be modified
-//! via a `StoreMut`. Finally, when the dust has settled, the store becomes
-//! imutable as a `Store`.
-//!
-//! All of this is here so that we can have concurrent processing in all three
-//! stages. In the first stage, you can only trade in documents for links,
-//! possibly creating a placeholder link that can later be updated with a
-//! real document. Stored documents themselves cannot be accessed during this
-//! stage.
-//!
-//! In stage two, mutable access to all documents is possible which is why
-//! they are all stuck behind a mutex. Because this still isn’t quite enough
-//! to avoid deadlocks, there also is a mechanism to defer changes if they
-//! can’t be done right now via boxed closures.
-//!
-//! Because stage three is entirely imutable, concurrent access is not a
-//! problem.
-//!
-//! This module contains a generic version. It is used by the *library*
-//! module for our very specific case.
-
-use std::{cmp, fmt, hash, mem};
-use std::sync::{ Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
-use std::marker::PhantomData;
-use rayon::prelude::*;
+use std::{borrow, mem, thread};
+use std::collections::{BTreeMap, HashMap};
+use std::ops::Bound;
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{self, AtomicUsize};
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
+use crate::document::combined::{Data, Meta};
+use crate::document::common::DocumentType;
+use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
+use crate::load::yaml::{FromYaml, Value};
+use crate::types::{IntoMarked, Key, Location, Marked};
 
 
-//------------ Store ---------------------------------------------------------
+//------------ StoreLoader ---------------------------------------------------
 
-/// An imutable place to store imutable items.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Store<S> {
-    items: Vec<S>,
+/// The store during loading.
+#[derive(Debug)]
+pub struct StoreLoader {
+    data: Mutex<Vec<Option<Data>>>,
+    keys: Mutex<HashMap<Key, DocumentInfo>>,
 }
 
-impl<S> Store<S> {
-    /// Creates a new store from an iterator over its future items.
-    pub fn from_iter<I: Iterator<Item=S>>(iter: I) -> Self {
-        Store { items: iter.collect() }
+
+#[derive(Debug)]
+struct DocumentInfo {
+    /// A link to this document.
+    link: DocumentLink,
+
+    /// The document type, if already known.
+    doctype: Option<DocumentType>,
+
+    /// The document origin, if already known.
+    ///
+    /// This also serves as an indication whether we have an actual document
+    /// for this key already.
+    origin: Option<Origin>,
+
+    /// A list of who linked to this document.
+    ///
+    /// The entries are the origin and optionally if they requested a certain
+    /// type.
+    linked_from: Vec<(Option<DocumentType>, Origin)>,
+
+    /// Is this a broken document?
+    broken: bool,
+}
+
+impl StoreLoader {
+    pub fn new() -> Self {
+        StoreLoader {
+            data: Mutex::new(Vec::new()),
+            keys: Mutex::new(HashMap::new()),
+        }
     }
 
-    /// Resolves a link into a reference to an item.
-    ///
-    /// # Panic
-    ///
-    /// This methods panics if `link` doesn’t link to an existing item.
-    pub fn resolve(&self, link: Link<S>) -> &S {
-        &self.items[link.index]
+    pub fn from_yaml(
+        &self,
+        value: Value,
+        report: &mut PathReporter
+    ) -> Result<(), Failed> {
+        let location = value.location();
+        let mut doc = value.into_mapping(report)?;
+        let key: Marked<Key> = doc.take("key", self, report)?;
+        let link = self.get_link(key.as_value());
+        let doctype = match doc.take("type", self, report) {
+            Ok(doctype) => doctype,
+            Err(_) => {
+                let _ = self.update_broken(
+                    key.as_value(), None, doc.location(), report
+                );
+                return Ok(())
+            }
+        };
+        match Data::from_yaml(
+            key.clone(), doctype, doc, link, self, report
+        ) {
+            Ok(doc) => self.update(link, doc, report),
+            Err(_) => {
+                self.update_broken(&key, Some(doctype), location, report)
+            }
+        }
+    }
+
+    pub fn insert(
+        &self,
+        data: Data,
+        report: &mut PathReporter
+    ) -> Result<(), Failed> {
+        let link = self.get_link(data.key());
+        self.update(link, data, report)
+    }
+
+    pub fn insert_broken(
+        &self,
+        key: Key,
+        doctype: Option<DocumentType>,
+        location: Location,
+        report: &mut PathReporter
+    ) -> Result<(), Failed> {
+        let _ = self.get_link(&key);
+        self.update_broken(&key, doctype, location, report)
+    }
+
+    fn get_link(
+        &self,
+        key: &Key,
+    ) -> DocumentLink {
+        let mut keys = self.keys.lock().unwrap();
+
+        if let Some(info) = keys.get_mut(key) {
+            return info.link
+        }
+
+        let link = self.push_none();
+        keys.insert(
+            key.clone(),
+            DocumentInfo {
+                link,
+                doctype: None,
+                origin: None,
+                linked_from: Vec::new(),
+                broken: false,
+            }
+        );
+        link
+    }
+
+    fn push_none(&self) -> DocumentLink {
+        let mut data = self.data.lock().unwrap();
+        let index = data.len();
+        data.push(None);
+        DocumentLink::from_index(index)
+    }
+
+    fn update(
+        &self, link: DocumentLink, document: Data, report: &mut PathReporter
+    ) -> Result<(), Failed> {
+        let mut keys = self.keys.lock().unwrap();
+
+        let info = keys.get_mut(document.key()).unwrap();
+
+        if info.origin.is_some() {
+            report.error(
+                DuplicateDocument(
+                    info.origin.clone().unwrap()
+                ).marked(document.origin().location())
+            );
+            return Err(Failed);
+        }
+
+        info.doctype = Some(document.doctype());
+        info.origin = Some(document.origin().clone());
+        info.broken = false;
+
+        let old = mem::replace(
+            &mut self.data.lock().unwrap()[link.index],
+            Some(document)
+        );
+        assert!(old.is_none());
+        Ok(())
+    }
+
+    fn update_broken(
+        &self,
+        key: &Key,
+        doctype: Option<DocumentType>,
+        location: Location,
+        report: &mut PathReporter
+    ) -> Result<(), Failed> {
+        let mut keys = self.keys.lock().unwrap();
+
+        let info = keys.get_mut(key).unwrap();
+
+        if info.origin.is_some() {
+            report.error(
+                DuplicateDocument(
+                    info.origin.clone().unwrap()
+                ).marked(location)
+            );
+            return Err(Failed);
+        }
+            
+        info.doctype = doctype;
+        info.origin = Some(report.origin(location));
+        info.broken = true;
+        Ok(())
+    }
+
+    pub fn build_link(
+        &self,
+        key: Marked<Key>,
+        doctype: Option<DocumentType>,
+        report: &mut PathReporter
+    ) -> Marked<DocumentLink> {
+        let location = key.location();
+        let mut keys = self.keys.lock().unwrap();
+
+        if let Some(info) = keys.get_mut(key.as_ref()) {
+            // We don’t check link types here just yet. That happens once
+            // when converting to a LibraryMut for all links.
+            info.linked_from.push((doctype, report.origin(key.location())));
+            return info.link.marked(location)
+        }
+
+        let link = self.push_none();
+        keys.insert(
+            key.into_value(),
+            DocumentInfo {
+                link,
+                doctype: None,
+                origin: None,
+                linked_from: vec![(doctype, report.origin(location))],
+                broken: false
+            }
+        );
+        link.marked(location)
+    }
+
+    pub fn into_data_store(
+        self, report: &mut StageReporter
+    ) -> Result<DataStore, Failed> {
+        let data = self.data.into_inner().unwrap();
+        let docinfo = self.keys.into_inner().unwrap();
+
+        let mut failed = false;
+        let mut keys = BTreeMap::new();
+        for (key, info) in docinfo {
+            // If the document is broken, there was an error before and we
+            // don’t need to worry about it. But, we said failed just so we
+            // stop.
+            if info.broken {
+                failed = true;
+            }
+
+            // If origin is None, we have a missing document. All links are
+            // errors.
+            if info.origin.is_none() {
+                for &(_, ref origin) in &info.linked_from {
+                    report.error_at(
+                        origin.clone(), MissingDocument(key.clone())
+                    );
+                }
+                failed = true;
+            }
+
+            // All links that have a differing doctype are bad.
+            if let Some(target) = info.doctype {
+                for (expected, origin) in info.linked_from {
+                    if let Some(expected) = expected {
+                        if expected != target {
+                            report.error_at(
+                                origin,
+                                LinkMismatch { expected, target }
+                            );
+                            failed = true;
+                        }
+                    }
+                }
+            }
+
+            if !failed {
+                keys.insert(key, info.link);
+            }
+        }
+        if failed {
+            Err(Failed)
+        }
+        else {
+            Ok(DataStore::new(
+                data.into_iter().map(Option::unwrap).collect(),
+                keys
+            ))
+        }
+    }
+}
+
+
+//------------ DataStore -----------------------------------------------------
+
+/// A store holding the data portion of documents only.
+#[derive(Debug)]
+pub struct DataStore {
+    data: Vec<Data>,
+    keys: BTreeMap<Key, DocumentLink>,
+}
+
+impl DataStore {
+    fn new(data: Vec<Data>, keys: BTreeMap<Key, DocumentLink>) -> Self {
+        DataStore { data, keys }
+    }
+
+    pub fn into_full_store(self) -> FullStore {
+        let enricher = StoreEnricher::new(self);
+        enricher.process()
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn get<Q>(&self, key: &Q) -> Option<DocumentLink>
+    where Key: borrow::Borrow<Q>, Q: Ord + ?Sized {
+        self.keys.get(key).cloned()
+    }
+
+    pub fn links(&self) -> impl Iterator<Item = DocumentLink> + '_ {
+        self.keys.values().copied()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item=&'_ Data> + '_ {
+        self.keys.values().map(move |link| self.resolve(*link))
+    }
+
+    pub fn iter_from<T>(
+        &self,
+        start: &T
+    ) -> impl Iterator<Item=&'_ Data> + '_
+    where T: Ord + ?Sized, Key: borrow::Borrow<T> {
+        self.keys.range((Bound::Included(start), Bound::Unbounded))
+            .map(move |link| self.resolve(*link.1))
+    }
+}
+
+impl LinkTarget<Data> for DataStore {
+    fn resolve(&self, link: DocumentLink) -> &Data {
+        &self.data[link.index]
+    }
+}
+
+impl LinkTarget<Data> for Arc<DataStore> {
+    fn resolve(&self, link: DocumentLink) -> &Data {
+        self.as_ref().resolve(link)
+    }
+}
+
+
+//------------ StoreEnricher -------------------------------------------------
+
+/// The store during enriching data with meta data.
+pub struct StoreEnricher {
+    data: DataStore,
+    meta: Vec<Arc<Mutex<Option<Arc<Meta>>>>>,
+    next_meta: AtomicUsize,
+}
+
+impl StoreEnricher {
+    fn new(data: DataStore) -> Self {
+        let mut meta = Vec::with_capacity(data.len());
+        meta.resize_with(data.len(), || Arc::new(Mutex::new(None)));
+        StoreEnricher {
+            data,
+            meta,
+            next_meta: AtomicUsize::new(0)
+        }
+    }
+
+    pub fn process(self) -> FullStore {
+        thread::scope(|scope| {
+            for _ in 0..8 {
+                scope.spawn(|| { self.process_one(); });
+            }
+        });
+
+        FullStore::new(
+            self.data,
+            self.meta.into_iter().map(|item| {
+                Arc::try_unwrap(
+                    Arc::try_unwrap(
+                        item
+                    ).unwrap().into_inner().unwrap().unwrap()
+                ).unwrap()
+            })
+        )
+    }
+
+    fn process_one(&self) {
+        while self.next_meta.load(atomic::Ordering::Relaxed) < self.data.len() {
+            let idx = self.next_meta.fetch_add(1, atomic::Ordering::SeqCst);
+            let item = self.meta[idx].clone();
+            let mut item = item.lock().unwrap();
+            if item.is_some() {
+                continue
+            }
+            *item = Some(Arc::new(
+                self.data.data[idx].generate_meta(self)
+            ));
+        }
+    }
+
+    pub fn data(&self, link: DocumentLink) -> &Data {
+        self.data.resolve(link)
+    }
+
+    pub fn meta(&self, link: DocumentLink) -> Arc<Meta> {
+        let item = self.meta[link.index].clone();
+        let mut item = item.lock().unwrap();
+        if let Some(res) = item.as_ref() {
+            return res.clone()
+        }
+        let meta = Arc::new(
+            self.data.resolve(link).generate_meta(self)
+        );
+        *item = Some(meta.clone());
+        meta
+    }
+}
+
+
+//------------ FullStore -----------------------------------------------------
+
+/// The store with both the data and the meta data.
+#[derive(Debug)]
+pub struct FullStore {
+    items: Vec<(Data, Meta)>,
+    keys: BTreeMap<Key, DocumentLink>,
+}
+
+impl FullStore {
+    fn new(data: DataStore, meta: impl Iterator<Item = Meta>) -> Self {
+        FullStore {
+            items: data.data.into_iter().zip(meta).collect(),
+            keys: data.keys,
+        }
     }
 
     pub fn len(&self) -> usize {
         self.items.len()
     }
-}
 
-impl<S> From<StoreMut<S>> for Store<S> {
-    fn from(store: StoreMut<S>) -> Self {
-        Store {
-            items: store.items.into_inner().unwrap(),
-        }
-    }
-}
-
-impl<S> From<StoreBuilder<S>> for Store<S> {
-    fn from(store: StoreBuilder<S>) -> Self {
-        Self::from_iter(
-            store.items.into_inner().unwrap().into_iter().map(Option::unwrap),
-        )
-    }
-}
-
-impl<S> AsRef<Self> for Store<S> {
-    fn as_ref(&self) -> &Self {
-        self
-    }
-}
-
-
-/*
-//------------ StoreMut ------------------------------------------------------
-
-/// An imutable place to store mutable items.
-pub struct StoreMut<S> {
-    items: Vec<ItemMut<S>>,
-}
-
-struct ItemMut<S> {
-    item: Mutex<S>,
-    queue: SegQueue<Box<dyn Fn(&mut S) + Send>>,
-}
-
-impl<S> StoreMut<S> {
-    /// Creates a new store from an iterator over items.
-    pub fn from_iter<I: Iterator<Item=S>>(iter: I) -> Self {
-        StoreMut {
-            items: iter.map(|item| ItemMut {
-                item: Mutex::new(item),
-                queue: SegQueue::new()
-            }).collect()
-        }
+    pub fn get<Q>(&self, key: &Q) -> Option<DocumentLink>
+    where Key: borrow::Borrow<Q>, Q: Ord + ?Sized {
+        self.keys.get(key).cloned()
     }
 
-    /// Resolves a link.
-    ///
-    /// Blocks the current thread until the link can be resolved. This may
-    /// lead to deadlocks if you aren’t careful.
-    ///
-    /// For simplicity, this panics if the item has been poisoned. This also
-    /// panics if the link isn’t pointing to an item.
-    pub fn resolve_mut(&self, link: Link<S>) -> ItemGuard<S> {
-        Self::_resolve_mut(&self.items[link.index])
+    pub fn links(&self) -> impl Iterator<Item = DocumentLink> + '_ {
+        self.keys.values().copied()
     }
 
-    fn _resolve_mut(item: &ItemMut<S>) -> ItemGuard<S> {
-        ItemGuard {
-            guard: item.item.lock().unwrap(),
-            queue: &item.queue
-        }
-    }
-
-    /// Attempts to resolve a link.
-    ///
-    /// If resolving would block the thread, returns `None`. The same caveats
-    /// as for `resolve_mut` apply.
-    fn try_resolve_mut(&self, link: Link<S>) -> Option<ItemGuard<S>> {
-        Self::_try_resolve_mut(&self.items[link.index])
-    }
-
-    fn _try_resolve_mut(item: &ItemMut<S>) -> Option<ItemGuard<S>> {
-        Some(ItemGuard {
-            guard: match item.item.try_lock() {
-                Ok(guard) => guard,
-                Err(TryLockError::Poisoned(_)) => panic!("poisoned mutex"),
-                Err(TryLockError::WouldBlock) => return None,
-            },
-            queue: &item.queue
+    pub fn iter(&self) -> impl Iterator<Item=(&'_ Data, &'_ Meta)> + '_ {
+        self.keys.values().map(move |link| {
+            let item = &self.items[link.index];
+            (&item.0, &item.1)
         })
     }
 
-    pub fn update<F: Fn(&mut S) + 'static + Send>(&self, link: Link<S>, op: F) {
-        let item = &self.items[link.index];
-        if let Some(mut guard) = Self::_try_resolve_mut(item) {
-            op(&mut guard)
-        }
-        else {
-            item.queue.push(Box::new(op))
-        }
-    }
-
-    pub fn par_iter(&self) -> impl ParallelIterator<Item = Link<S>> {
-        (0..self.items.len()).into_par_iter().map(Link::new)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = Link<S>> {
-        (0..self.items.len()).into_iter().map(Link::new)
+    pub fn iter_from<T>(
+        &self,
+        start: &T
+    ) -> impl Iterator<Item=(&'_ Data, &'_ Meta)> + '_
+    where T: Ord + ?Sized, Key: borrow::Borrow<T> {
+        self.keys.range((Bound::Included(start), Bound::Unbounded))
+            .map(move |link| {
+            let item = &self.items[link.1.index];
+            (&item.0, &item.1)
+        })
     }
 }
 
-impl<T> From<StoreBuilder<T>> for StoreMut<T> {
-    fn from(store: StoreBuilder<T>) -> StoreMut<T> {
-        Self::from_iter(
-            store.items.into_inner().unwrap().into_iter().map(Option::unwrap)
-        )
+impl LinkTarget<Data> for FullStore {
+    fn resolve(&self, link: DocumentLink) -> &Data {
+        &self.items[link.index].0
     }
 }
 
-impl<T> fmt::Debug for StoreMut<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "StoreMut {{ ... }}")
+impl LinkTarget<Data> for Arc<FullStore> {
+    fn resolve(&self, link: DocumentLink) -> &Data {
+        self.as_ref().resolve(link)
     }
 }
 
-
-//------------ ItemGuard ----------------------------------------------------
-
-pub struct ItemGuard<'a, T> {
-    guard: MutexGuard<'a, T>,
-    queue: &'a SegQueue<Box<dyn Fn(&mut T) + Send>>
-}
-
-impl<'a, T> ops::Deref for ItemGuard<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        self.guard.deref()
+impl LinkTarget<Meta> for FullStore {
+    fn resolve(&self, link: DocumentLink) -> &Meta {
+        &self.items[link.index].1
     }
 }
 
-impl<'a, T> ops::DerefMut for ItemGuard<'a, T> {
-    fn deref_mut(&mut self) -> &mut T {
-        self.guard.deref_mut()
-    }
-}
-
-impl<'a, T> Drop for ItemGuard<'a, T> {
-    fn drop(&mut self) {
-        while let Some(ref op) = self.queue.pop() {
-            op(&mut self.guard)
-        }
-    }
-}
-*/
-
-
-//------------ StoreMut ------------------------------------------------------
-
-pub struct StoreMut<T> {
-    items: RwLock<Vec<T>>,
-    len: usize,
-}
-
-impl<T> StoreMut<T> {
-    /// Creates a new store from an iterator over items.
-    pub fn from_iter<I: Iterator<Item = T>>(iter: I) -> Self {
-        let items: Vec<T> = iter.collect();
-        StoreMut {
-            len: items.len(),
-            items: RwLock::new(items)
-        }
-    }
-
-    pub fn read(&self) -> StoreReadGuard<T> {
-        StoreReadGuard { guard: self.items.read().unwrap() }
-    }
-
-    pub fn write(&self) -> StoreWriteGuard<T> {
-        StoreWriteGuard { guard: self.items.write().unwrap() }
-    }
-
-    pub fn par_iter(&self) -> impl ParallelIterator<Item = Link<T>> {
-        (0..self.len).into_par_iter().map(Link::new)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = Link<T>> {
-        (0.. self.len).into_iter().map(Link::new)
-    }
-}
-
-impl<T> From<StoreBuilder<T>> for StoreMut<T> {
-    fn from(store: StoreBuilder<T>) -> StoreMut<T> {
-        Self::from_iter(
-            store.items.into_inner().unwrap().into_iter().map(Option::unwrap)
-        )
-    }
-}
-
-impl<T> fmt::Debug for StoreMut<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "StoreMut {{ ... }}")
+impl LinkTarget<Meta> for Arc<FullStore> {
+    fn resolve(&self, link: DocumentLink) -> &Meta {
+        self.as_ref().resolve(link)
     }
 }
 
 
-//------------ StoreReadGuard ------------------------------------------------
+//------------ DocumentLink --------------------------------------------------
 
-pub struct StoreReadGuard<'a, T> {
-    guard: RwLockReadGuard<'a, Vec<T>>,
-}
-
-impl<'a, T> StoreReadGuard<'a, T> {
-    pub fn resolve(&self, link: Link<T>) -> &T {
-        self.guard.get(link.index).unwrap()
-    }
-}
-
-
-//------------ StoreWriteGuard -----------------------------------------------
-
-pub struct StoreWriteGuard<'a, T> {
-    guard: RwLockWriteGuard<'a, Vec<T>>,
-}
-
-impl<'a, T> StoreWriteGuard<'a, T> {
-    pub fn resolve_mut(&mut self, link: Link<T>) -> &mut T {
-        self.guard.get_mut(link.index).unwrap()
-    }
-}
-
-
-//------------ StoreBuilder --------------------------------------------------
-
-/// A mutable place to store imutable items.
-#[derive(Debug)]
-pub struct StoreBuilder<T> {
-    items: Mutex<Vec<Option<T>>>,
-}
-
-impl<T> StoreBuilder<T> {
-    /// Creates a new, empty store.
-    pub fn new() -> Self {
-        StoreBuilder { items: Mutex::new(Vec::new()) }
-    }
-
-    /// Creates a store from an iterator over items.
-    pub fn from_iter<I: Iterator<Item=T>>(iter: I) -> Self {
-        StoreBuilder {
-            items: Mutex::new(iter.map(Some).collect()),
-        }
-    }
-
-    /// Appends a new item to the store, returning a link to it.
-    pub fn push(&self, item: Option<T>) -> Link<T> {
-        let index = {
-            let mut items = self.items.lock().unwrap();
-            let res = items.len();
-            items.push(item);
-            res
-        };
-        Link::new(index)
-    }
-
-    /// Checkes whether a linked item already exists.
-    pub fn exists(&self, link: Link<T>) -> bool {
-        self.items.lock().unwrap()[link.index].is_some()
-    }
-
-    /// Updates an item.
-    ///
-    /// Returns the previous item.
-    pub fn update(&self, link: Link<T>, item: T) -> Option<T> {
-        mem::replace(&mut self.items.lock().unwrap()[link.index], Some(item))
-    }
-}
-
-
-impl<T> Default for StoreBuilder<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-
-//------------ Link ----------------------------------------------------------
-
-/// A link to an item in a store.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Link<T> {
+/// A link to another document.
+///
+/// Links remain stable between all stores derived from the same
+/// [`StoreLoader`] instance.
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
+    Serialize
+)]
+pub struct DocumentLink {
     index: usize,
-    marker: PhantomData<T>,
 }
 
-impl<T> Link<T> {
-    /// Creates a new link from an index.
-    fn new(index: usize) -> Self {
-        Link { index, marker: PhantomData }
+impl DocumentLink {
+    fn from_index(index: usize) -> Self {
+        DocumentLink { index }
     }
 
-    pub fn follow(self, store: &Store<T>) -> &T {
+    pub fn data(self, store: &impl LinkTarget<Data>) -> &Data {
+        store.resolve(self)
+    }
+
+    pub fn meta(self, store: &impl LinkTarget<Meta>) -> &Meta {
         store.resolve(self)
     }
 }
 
-unsafe impl<T> Send for Link<T> { }
-
-impl<T> Clone for Link<T> {
-    fn clone(&self) -> Self {
-        Link {
-            index: self.index,
-            marker: PhantomData
-        }
+impl FromYaml<StoreLoader> for Marked<DocumentLink> {
+    fn from_yaml(
+        value: Value,
+        context: &StoreLoader,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        Ok(context.build_link(
+            Marked::from_yaml(value, context, report)?, None, report
+        ))
     }
 }
 
-impl<T> Copy for Link<T> { }
 
-impl<T> PartialEq for Link<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.index == other.index
-    }
+//------------ LinkTarget ----------------------------------------------------
+
+pub trait LinkTarget<T> {
+    fn resolve(&self, link: DocumentLink) -> &T;
 }
 
-impl<T> Eq for Link<T> { }
 
-impl<T> PartialOrd for Link<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        self.index.partial_cmp(&other.index)
-    }
+//============ Errors ========================================================
+
+#[derive(Clone, Debug, Display)]
+#[display(fmt="document already exists, first defined at {}", _0)]
+pub struct DuplicateDocument(Origin);
+
+#[derive(Clone, Debug, Display)]
+#[display(fmt="link to '{}', expected '{}'", target, expected)]
+pub struct LinkMismatch {
+    expected: DocumentType,
+    target: DocumentType
 }
 
-impl<T> Ord for Link<T> {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.index.cmp(&other.index)
-    }
-}
-
-impl<T> hash::Hash for Link<T> {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.index.hash(state)
-    }
-}
+#[derive(Clone, Debug, Display)]
+#[display(fmt="link to missing document '{}'", _0)]
+pub struct MissingDocument(Key);
 

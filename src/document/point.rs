@@ -2,9 +2,9 @@
 use std::collections::{HashSet, HashMap};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use crate::library::{LibraryBuilder};
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
+use crate::store::{StoreEnricher, StoreLoader};
 use crate::types::{
     CountryCode, EventDate, IntoMarked, Key, LanguageCode, LanguageText, List,
     LocalText, Marked, Set
@@ -13,10 +13,10 @@ use super::{DocumentLink, LineLink, PathLink, PointLink, SourceLink};
 use super::common::{Basis, Common, Progress};
 
 
-//------------ Point ---------------------------------------------------------
+//------------ Data ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Point {
+pub struct Data {
     link: PointLink,
 
     // Attributes
@@ -29,7 +29,7 @@ pub struct Point {
 
 /// # Data Access
 ///
-impl Point {
+impl Data {
     pub fn key(&self) -> &Key {
         &self.common.key
     }
@@ -178,12 +178,12 @@ impl Point {
 
 /// # Loading
 ///
-impl Point {
+impl Data {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
         link: DocumentLink,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -197,7 +197,7 @@ impl Point {
         events.sort_by(|left, right| left.date.sort_cmp(&right.date));
         let records: RecordList = records?.unwrap_or_default();
 
-        Ok(Point {
+        Ok(Data {
             link: link.into(),
             common: common?,
             events,
@@ -205,6 +205,10 @@ impl Point {
             junction: junction?,
             subtype: subtype?,
         })
+    }
+
+    pub(super) fn generate_meta(&self, _store: &StoreEnricher) -> Meta {
+        Meta
     }
 
     /*
@@ -227,6 +231,12 @@ impl Point {
         }
     }
 }
+
+
+//------------ Meta ----------------------------------------------------------
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Meta;
 
 
 //------------ Subtype -------------------------------------------------------
@@ -273,10 +283,10 @@ pub struct Event {
     pub properties: Properties,
 }
 
-impl FromYaml<LibraryBuilder> for Event {
+impl FromYaml<StoreLoader> for Event {
     fn from_yaml(
         value: Value,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -331,10 +341,10 @@ pub struct Record {
     pub properties: Properties,
 }
 
-impl FromYaml<LibraryBuilder> for Record {
+impl FromYaml<StoreLoader> for Record {
     fn from_yaml(
         value: Value,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -386,7 +396,7 @@ pub struct Properties {
 impl Properties {
     fn from_yaml(
         value: &mut Mapping,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let pos = value.location();
@@ -582,10 +592,10 @@ impl Location {
     }
 }
 
-impl FromYaml<LibraryBuilder> for Location {
+impl FromYaml<StoreLoader> for Location {
     fn from_yaml(
         value: Value,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut res = List::new();
@@ -740,10 +750,10 @@ data_enum! {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Site(pub List<(Marked<PathLink>, Marked<String>)>);
 
-impl FromYaml<LibraryBuilder> for Site {
+impl FromYaml<StoreLoader> for Site {
     fn from_yaml(
         value: Value,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut res = List::new();
@@ -840,7 +850,7 @@ impl Codes {
 impl Codes {
     fn from_yaml(
         value: &mut Mapping,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut err = false;

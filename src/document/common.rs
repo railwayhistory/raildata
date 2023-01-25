@@ -2,9 +2,9 @@
 
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use crate::library::LibraryBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
+use crate::store::StoreLoader;
 use crate::types::{
     EventDate, IntoMarked, Key, LanguageText, List, Location, Marked, Set
 };
@@ -43,7 +43,7 @@ impl Common {
     pub fn from_yaml(
         key: Marked<Key>,
         doc: &mut Mapping,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         Ok(Common {
@@ -99,10 +99,10 @@ pub struct Alternative {
 }
 
 
-impl FromYaml<LibraryBuilder> for Alternative {
+impl FromYaml<StoreLoader> for Alternative {
     fn from_yaml(
         value: Value,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -130,10 +130,10 @@ pub struct Basis {
     pub note: Option<LanguageText>,
 }
 
-impl FromYaml<LibraryBuilder> for Basis {
+impl FromYaml<StoreLoader> for Basis {
     fn from_yaml(
         value: Value,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -196,10 +196,10 @@ pub struct Agreement {
     pub parties: List<Marked<OrganizationLink>>,
 }
 
-impl FromYaml<LibraryBuilder> for Agreement {
+impl FromYaml<StoreLoader> for Agreement {
     fn from_yaml(
         value: Value,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -243,10 +243,10 @@ impl Contract {
     }
 }
 
-impl FromYaml<LibraryBuilder> for Contract {
+impl FromYaml<StoreLoader> for Contract {
     fn from_yaml(
         value: Value,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let pos = value.location();

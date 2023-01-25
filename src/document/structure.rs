@@ -1,26 +1,26 @@
 
 use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
-use crate::library::{LibraryBuilder, LibraryMut};
-use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
+use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
+use crate::store::{StoreEnricher, StoreLoader};
 use crate::types::{
     EventDate, Key, LanguageCode, LanguageText, List, LocalText, Marked
 };
 use super::{DocumentLink, SourceLink, StructureLink};
 use super::common::{Common, Progress};
 
-//------------ Structure -----------------------------------------------------
+//------------ Data ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Structure {
+pub struct Data {
     pub link: StructureLink,
     pub common: Common,
     pub subtype: Marked<Subtype>,
     pub events: EventList,
 }
 
-impl Structure {
+impl Data {
     pub fn key(&self) -> &Key {
         &self.common.key
     }
@@ -46,19 +46,19 @@ impl Structure {
     }
 }
 
-impl Structure {
+impl Data {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
         link: DocumentLink,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
         let subtype = doc.take("subtype", context, report);
         let events = doc.take("events", context, report);
         doc.exhausted(report)?;
-        Ok(Structure {
+        Ok(Data {
             link: link.into(),
             common: common?,
             subtype: subtype?,
@@ -66,17 +66,9 @@ impl Structure {
         })
     }
 
-    pub fn crosslink(
-        _link: StructureLink,
-        _library: &LibraryMut,
-        _report: &mut StageReporter
-    ) {
+    pub(super) fn generate_meta(&self, _store: &StoreEnricher) -> Meta {
+        Meta
     }
-
-    /*
-    pub fn verify(&self, _report: &mut StageReporter) {
-    }
-    */
 
     pub fn process_names<F: FnMut(String)>(&self, mut process: F) {
         let mut names = HashSet::new();
@@ -92,6 +84,12 @@ impl Structure {
         }
     }
 }
+
+
+//------------ Meta ----------------------------------------------------------
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Meta;
 
 
 //------------ Subtype -------------------------------------------------------
@@ -123,10 +121,10 @@ pub struct Event {
     pub name: Option<LocalText>,
 }
 
-impl FromYaml<LibraryBuilder> for Event {
+impl FromYaml<StoreLoader> for Event {
     fn from_yaml(
         value: Value,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;

@@ -3,19 +3,19 @@ use std::str::FromStr;
 use derive_more::Display;
 use osmxml::elements::{MemberType, Osm, Relation};
 use serde::{Deserialize, Serialize};
-use crate::library::{LibraryBuilder, LibraryMut};
 use crate::load::report;
-use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
+use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::Mapping;
+use crate::store::{StoreEnricher, StoreLoader};
 use crate::types::{IntoMarked, LanguageCode, Location, Key, Marked};
 use crate::types::key::InvalidKey;
-use super::{DocumentLink, PathLink, SourceLink};
+use super::{DocumentLink, SourceLink};
 use super::common::{Common, Progress};
 
-//------------ Path ----------------------------------------------------------
+//------------ Data ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Path {
+pub struct Data {
     pub common: Common,
 
     pub name: Option<String>,
@@ -26,7 +26,7 @@ pub struct Path {
     pub node_descr: Vec<(usize, String)>,
 }
 
-impl Path {
+impl Data {
     pub fn key(&self) -> &Key {
         &self.common.key
     }
@@ -54,9 +54,9 @@ impl Path {
     }
 }
 
-impl Path {
+impl Data {
     fn new(key: Key, path: report::Path) -> Self {
-        Path {
+        Data {
             common: Common::new(
                 key.marked(Location::NONE),
                 Progress::InProgress.marked(Location::NONE),
@@ -74,17 +74,21 @@ impl Path {
         _key: Marked<Key>,
         doc: Mapping,
         _link: DocumentLink,
-        _context: &LibraryBuilder,
+        _context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         report.error(PathInYaml.marked(doc.location()));
         Err(Failed)
     }
 
+    pub(super) fn generate_meta(&self, _store: &StoreEnricher) -> Meta {
+        Meta
+    }
+
     pub fn from_osm(
         mut relation: Relation,
         osm: &Osm,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Option<Key>> {
         if relation.tags().get("type") != Some("path") {
@@ -108,7 +112,7 @@ impl Path {
                 return Err(None);
             }
         };
-        let mut path = Path::new(key.clone(), report.path());
+        let mut path = Data::new(key.clone(), report.path());
         if let Err(_) = path.load_nodes(&mut relation, osm, report) {
             return Err(Some(key))
         }
@@ -256,7 +260,7 @@ impl Path {
     fn load_source(
         &mut self,
         relation: &mut Relation,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<(), Failed> {
         let source = match relation.tags_mut().remove("source") {
@@ -278,21 +282,15 @@ impl Path {
         Ok(())
     }
 
-    pub fn crosslink(
-        _link: PathLink,
-        _library: &LibraryMut,
-        _report: &mut StageReporter
-    ) {
-    }
-
-    /*
-    pub fn verify(&self, _report: &mut StageReporter) {
-    }
-    */
-
     pub fn process_names<F: FnMut(String)>(&self, _process: F) {
     }
 }
+
+
+//------------ Meta ----------------------------------------------------------
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Meta;
 
 
 //------------ Node ----------------------------------------------------------

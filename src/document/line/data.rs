@@ -5,27 +5,28 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use crate::library::LibraryBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
+use crate::store::{StoreEnricher, StoreLoader};
 use crate::types::list;
 use crate::types::{
     CountryCode, Date, EventDate, IntoMarked, Key, LanguageCode, LanguageText,
     List, LocalText, Location, Marked, Set
 };
-use super::{
+use crate::document::combined::{
     DocumentLink, LineLink, OrganizationLink, PathLink, PointLink,
     SourceLink
 };
-use super::common::{
+use crate::document::common::{
     Agreement, AgreementType, Alternative, Basis, Common, Contract, Progress
 };
+use super::Meta;
 
 
-//------------ Line ----------------------------------------------------------
+//------------ Data ----------------------------------------------------------
 
 #[derive(Clone, Deserialize, Debug, Serialize)]
-pub struct Line {
+pub struct Data {
     link: LineLink,
     pub common: Common,
     pub label: Set<Label>,
@@ -38,7 +39,7 @@ pub struct Line {
     code: String
 }
 
-impl Line {
+impl Data {
     pub fn link(&self) -> LineLink {
         self.link
     }
@@ -135,12 +136,12 @@ impl Line {
     */
 }
 
-impl Line {
+impl Data {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
         link: DocumentLink,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -155,7 +156,7 @@ impl Line {
 
         let common = common?;
 
-        Ok(Line {
+        Ok(Data {
             link: link.into(),
             code: Self::make_code(common.key.as_value()),
             common,
@@ -185,6 +186,10 @@ impl Line {
                 format!("{}", &key[5..])
             }
         }
+    }
+
+    pub(crate) fn generate_meta(&self, store: &StoreEnricher) -> Meta {
+        Meta::generate(self, store)
     }
 
 /*
@@ -251,7 +256,7 @@ pub struct Points {
 }
 
 impl Points {
-    fn context<'s>(&'s self, context: &'s LibraryBuilder) -> PointsContext<'s> {
+    fn context<'s>(&'s self, context: &'s StoreLoader) -> PointsContext<'s> {
         PointsContext {
             map: {
                 self.points.iter().enumerate()
@@ -264,10 +269,10 @@ impl Points {
     }
 }
 
-impl FromYaml<LibraryBuilder> for Points {
+impl FromYaml<StoreLoader> for Points {
     fn from_yaml(
         value: Value,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let pos = value.location();
@@ -315,7 +320,7 @@ impl<I: std::slice::SliceIndex<[Marked<PointLink>]>> ops::Index<I> for Points {
 struct PointsContext<'a> {
     map: HashMap<PointLink, usize>,
     len: usize,
-    context: &'a LibraryBuilder,
+    context: &'a StoreLoader,
 }
 
 impl PointsContext<'_> {
@@ -325,7 +330,7 @@ impl PointsContext<'_> {
 }
 
 impl<'a> ops::Deref for PointsContext<'a> {
-    type Target = LibraryBuilder;
+    type Target = StoreLoader;
 
     fn deref(&self) -> &Self::Target {
         &self.context
@@ -434,7 +439,7 @@ impl<T> Default for CurrentValue<T> {
 }
 
 impl<T> FromYaml<PointsContext<'_>> for CurrentValue<T>
-where T: FromYaml<LibraryBuilder> {
+where T: FromYaml<StoreLoader> {
     fn from_yaml(
         value: Value,
         context: &PointsContext,
@@ -837,7 +842,7 @@ impl Properties {
 impl Properties {
     fn from_yaml(
         value: &mut Mapping,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let category = value.take_opt("category", context, report);
@@ -1113,10 +1118,10 @@ pub struct Concession {
 }
 
 
-impl FromYaml<LibraryBuilder> for Concession {
+impl FromYaml<StoreLoader> for Concession {
     fn from_yaml(
         value: Value,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let pos = value.location();
@@ -1157,10 +1162,10 @@ pub struct CourseSegment {
     pub end: Marked<String>,
 }
 
-impl FromYaml<LibraryBuilder> for CourseSegment {
+impl FromYaml<StoreLoader> for CourseSegment {
     fn from_yaml(
         value: Value,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let (value, location) = value.into_string(report)?.unwrap();

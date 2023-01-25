@@ -2,12 +2,13 @@
 use std::{io, mem, path};
 use std::collections::HashSet;
 use std::fs::File;
+use std::sync::Arc;
 use ignore::{WalkBuilder, WalkState};
 use ignore::types::TypesBuilder;
 use osmxml::read::read_xml;
 use crate::document::Path;
 use crate::document::common::DocumentType;
-use crate::library::{LibraryBuilder, Library};
+use crate::store::{FullStore, StoreLoader};
 use crate::types::{IntoMarked, Location};
 use super::read::Utf8Chars;
 use super::report::{self, PathReporter, Report, Reporter, Stage};
@@ -16,26 +17,27 @@ use super::yaml::Loader;
 
 //------------ load_tree -----------------------------------------------------
 
-pub fn load_tree(path: &path::Path) -> Result<Library, Report> {
+pub fn load_tree(path: &path::Path) -> Result<FullStore, Report> {
     let report = Reporter::new();
 
     // Phase 1: Construct all documents and check that they are all present
     //          and accounted for.
     let store = {
-        let builder = LibraryBuilder::new();
+        let builder = Arc::new(StoreLoader::new());
         load_facts(path, builder.clone(), report.clone());
         load_paths(path, builder.clone(), report.clone());
-        builder.into_library_mut(&mut report.clone().stage(Stage::Translate))
+        let builder = Arc::try_unwrap(builder).unwrap();
+        builder.into_data_store(&mut report.clone().stage(Stage::Translate))
     };
     let store = match store {
         Ok(store) => store,
         Err(_) => return Err(report.unwrap())
     };
 
-    // Phase 2:  Verify
+    // Phase 2: Build meta data.
 
     // Phase 3: Profit
-    Ok(store.into_library())
+    Ok(store.into_full_store())
 }
 
 
@@ -43,7 +45,7 @@ pub fn load_tree(path: &path::Path) -> Result<Library, Report> {
 
 fn load_facts(
     base: &path::Path,
-    docs: LibraryBuilder,
+    docs: Arc<StoreLoader>,
     report: Reporter
 ) {
     let walk = WalkBuilder::new(base.join("facts"))
@@ -96,7 +98,7 @@ fn load_facts(
 
 pub fn load_paths(
     base: &path::Path,
-    docs: LibraryBuilder,
+    docs: Arc<StoreLoader>,
     report: Reporter
 ) {
     let mut types = TypesBuilder::new();
@@ -138,7 +140,7 @@ pub fn load_paths(
 
 fn load_osm_file<R: io::Read>(
     read: &mut R,
-    docs: &LibraryBuilder,
+    docs: &StoreLoader,
     report: &mut PathReporter
 ) {
     let mut osm = match read_xml(read) {

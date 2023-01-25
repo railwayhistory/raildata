@@ -2,20 +2,21 @@
 use std::ops;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use crate::library::{Library, LibraryBuilder};
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
+use crate::store::{LinkTarget, StoreEnricher, StoreLoader};
 use crate::types::{
     EventDate, Key, IntoMarked, LanguageCode, LanguageText, List, Marked, Url
 };
 use super::{DocumentLink, OrganizationLink, SourceLink};
+use super::combined;
 use super::common::{Common, Progress};
 
 
-//------------ Source --------------------------------------------------------
+//------------ Data ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Source {
+pub struct Data {
     link: SourceLink,
     pub common: Common,
     pub subtype: Marked<Subtype>,
@@ -47,7 +48,7 @@ pub struct Source {
     pub regards: List<Marked<DocumentLink>>,
 }
 
-impl Source {
+impl Data {
     pub fn key(&self) -> &Key {
         &self.common.key
     }
@@ -68,12 +69,14 @@ impl Source {
         self.key().as_ref()
     }
 
-    pub fn date<'s>(&'s self, library: &'s Library) -> Option<&'s EventDate> {
+    pub fn date<'s>(
+        &'s self, library: &'s impl LinkTarget<combined::Data>
+    ) -> Option<&'s EventDate> {
         if !self.date.is_empty() {
             Some(&self.date)
         }
         else if let Some(collection) = self.collection {
-            collection.follow(library).date(library)
+            collection.data(library).date(library)
         }
         else {
             None
@@ -81,12 +84,12 @@ impl Source {
     }
 }
 
-impl Source {
+impl Data {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
         link: DocumentLink,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -114,7 +117,7 @@ impl Source {
         let note = doc.take_opt("note", context, report);
         let regards = doc.take_default("regards", context, report);
         doc.exhausted(report)?;
-        let source = Source {
+        let source = Data {
             link: link.into(),
             common: common?,
             subtype: subtype?,
@@ -145,9 +148,19 @@ impl Source {
         Ok(source)
     }
 
+    pub(super) fn generate_meta(&self, _store: &StoreEnricher) -> Meta {
+        Meta
+    }
+
     pub fn process_names<F: FnMut(String)>(&self, _process: F) {
     }
 }
+
+
+//------------ Meta ----------------------------------------------------------
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Meta;
 
 
 //------------ Subtype -------------------------------------------------------
@@ -241,7 +254,7 @@ impl ops::Deref for Isbn {
 
 //------------ check_attributes ----------------------------------------------
 
-impl Source {
+impl Data {
     fn check_attributes(
         &self, report: &mut PathReporter
     ) -> Result<(), Failed> {

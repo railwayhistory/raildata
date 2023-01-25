@@ -2,9 +2,9 @@
 use std::cmp;
 use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
-use crate::library::LibraryBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
+use crate::store::{StoreEnricher, StoreLoader};
 use crate::types::{
     EventDate, Key, LanguageText, LanguageCode, LocalText, List, Marked, Set
 };
@@ -12,10 +12,10 @@ use super::common::{Basis, Common, Progress};
 use super::{DocumentLink, LineLink, OrganizationLink, SourceLink};
 
 
-//------------ Organization --------------------------------------------------
+//------------ Data ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Organization {
+pub struct Data {
     pub link: OrganizationLink,
 
     // Attributes
@@ -31,7 +31,7 @@ pub struct Organization {
     pub source_publisher: Set<SourceLink>,
 }
 
-impl Organization {
+impl Data {
     pub fn key(&self) -> &Key {
         &self.common.key
     }
@@ -159,12 +159,12 @@ impl Organization {
     }
 }
 
-impl Organization {
+impl Data {
     pub fn from_yaml(
         key: Marked<Key>,
         mut doc: Mapping,
         link: DocumentLink,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
@@ -172,7 +172,7 @@ impl Organization {
         let events = doc.take("events", context, report);
         doc.exhausted(report)?;
 
-        let mut res = Organization {
+        let mut res = Data {
             link: link.into(),
 
             common: common?,
@@ -187,6 +187,10 @@ impl Organization {
         };
         res.events.sort_by(|left, right| left.date.sort_cmp(&right.date));
         Ok(res)
+    }
+
+    pub(super) fn generate_meta(&self, _store: &StoreEnricher) -> Meta {
+        Meta
     }
 
     pub fn process_names<F: FnMut(String)>(&self, mut process: F) {
@@ -208,6 +212,12 @@ impl Organization {
         }
     }
 }
+
+
+//------------ Meta ----------------------------------------------------------
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Meta;
 
 
 //------------ Subtype -------------------------------------------------------
@@ -267,10 +277,10 @@ pub struct Event {
     pub superior: Option<Marked<OrganizationLink>>,
 }
 
-impl FromYaml<LibraryBuilder> for Event {
+impl FromYaml<StoreLoader> for Event {
     fn from_yaml(
         value: Value,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
@@ -318,10 +328,10 @@ pub struct Property {
     pub owner: List<Marked<OrganizationLink>>,
 }
 
-impl FromYaml<LibraryBuilder> for Property {
+impl FromYaml<StoreLoader> for Property {
     fn from_yaml(
         value: Value,
-        context: &LibraryBuilder,
+        context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
