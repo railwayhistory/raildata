@@ -8,7 +8,7 @@ use crate::store::StoreLoader;
 use crate::types::{
     EventDate, IntoMarked, Key, LanguageText, List, Location, Marked, Set
 };
-use super::{OrganizationLink, SourceLink};
+use super::{EntityLink, SourceLink};
 
 
 //------------ Common --------------------------------------------------------
@@ -61,7 +61,7 @@ impl Common {
 data_enum! {
     pub enum DocumentType {
         { Line: "line" }
-        { Organization: "organization" }
+        { Entity: "entity" }
         { Path: "path" }
         { Point: "point" }
         { Source: "source" }
@@ -193,7 +193,7 @@ impl FromYaml<StoreLoader> for Basis {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Agreement {
     pub agreement_type: AgreementType,
-    pub parties: List<Marked<OrganizationLink>>,
+    pub parties: List<Marked<EntityLink>>,
 }
 
 impl FromYaml<StoreLoader> for Agreement {
@@ -230,7 +230,7 @@ data_enum! {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Contract {
-    pub parties: List<Marked<OrganizationLink>>,
+    pub parties: List<Marked<EntityLink>>,
     pub pos: Location,
 }
 

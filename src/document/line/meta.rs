@@ -1,7 +1,9 @@
 
 use serde::{Deserialize, Serialize};
 use crate::store::StoreEnricher;
-use super::Data;
+use crate::document::combined::EntityLink;
+use crate::types::EventDate;
+use super::data::{Data, Section};
 
 
 //------------ Meta ----------------------------------------------------------
@@ -21,7 +23,8 @@ impl Meta {
 //------------ OrgList -------------------------------------------------------
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)] // XXX
 struct OrgList {
-    items: (EventDate, Section, OrganizationLink),
+    items: (EventDate, Section, EntityLink),
 }
 

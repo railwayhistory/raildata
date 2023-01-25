@@ -9,14 +9,14 @@ use crate::types::{
     EventDate, Key, LanguageText, LanguageCode, LocalText, List, Marked, Set
 };
 use super::common::{Basis, Common, Progress};
-use super::{DocumentLink, LineLink, OrganizationLink, SourceLink};
+use super::{DocumentLink, LineLink, EntityLink, SourceLink};
 
 
 //------------ Data ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Data {
-    pub link: OrganizationLink,
+    pub link: EntityLink,
 
     // Attributes
     pub common: Common,
@@ -265,16 +265,16 @@ pub struct Event {
     /// The place of domicile of an organization.
     ///
     /// For geographic organizations, this is their capital.
-    pub domicile: List<Marked<OrganizationLink>>,
+    pub domicile: List<Marked<EntityLink>>,
     pub name: Option<LocalText>,
-    pub owner: Option<List<Marked<OrganizationLink>>>,
+    pub owner: Option<List<Marked<EntityLink>>>,
     pub property: Option<Property>,
     pub short_name: Option<LocalText>,
     pub status: Option<Marked<Status>>,
-    pub successor: Option<Marked<OrganizationLink>>,
+    pub successor: Option<Marked<EntityLink>>,
 
     /// An organization this organization is a unit of.
-    pub superior: Option<Marked<OrganizationLink>>,
+    pub superior: Option<Marked<EntityLink>>,
 }
 
 impl FromYaml<StoreLoader> for Event {
@@ -322,10 +322,10 @@ impl FromYaml<StoreLoader> for Event {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Property {
     pub role: Marked<PropertyRole>,
-    pub region: List<Marked<OrganizationLink>>,
-    pub constructor: List<Marked<OrganizationLink>>,
-    pub operator: List<Marked<OrganizationLink>>,
-    pub owner: List<Marked<OrganizationLink>>,
+    pub region: List<Marked<EntityLink>>,
+    pub constructor: List<Marked<EntityLink>>,
+    pub operator: List<Marked<EntityLink>>,
+    pub owner: List<Marked<EntityLink>>,
 }
 
 impl FromYaml<StoreLoader> for Property {

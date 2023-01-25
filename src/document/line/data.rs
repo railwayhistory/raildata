@@ -14,7 +14,7 @@ use crate::types::{
     List, LocalText, Location, Marked, Set
 };
 use crate::document::combined::{
-    DocumentLink, LineLink, OrganizationLink, PathLink, PointLink,
+    DocumentLink, LineLink, EntityLink, PathLink, PointLink,
     SourceLink
 };
 use crate::document::common::{
@@ -349,11 +349,11 @@ pub struct Current {
     pub goods: CurrentValue<Goods>,
     pub jurisdiction: CurrentValue<Marked<CountryCode>>,
     pub name: CurrentValue<LocalText>,
-    pub operator: CurrentValue<Option<List<Marked<OrganizationLink>>>>,
-    pub owner: CurrentValue<Option<List<Marked<OrganizationLink>>>>,
+    pub operator: CurrentValue<Option<List<Marked<EntityLink>>>>,
+    pub owner: CurrentValue<Option<List<Marked<EntityLink>>>>,
     pub passenger: CurrentValue<Passenger>,
     pub rails: CurrentValue<Marked<u8>>,
-    pub region: CurrentValue<List<Marked<OrganizationLink>>>,
+    pub region: CurrentValue<List<Marked<EntityLink>>>,
     pub reused: CurrentValue<Option<List<Marked<LineLink>>>>,
     pub status: CurrentValue<Status>,
     pub tracks: CurrentValue<Marked<u8>>,
@@ -804,13 +804,13 @@ pub struct Properties {
     pub goods: Option<Goods>,
     pub passenger: Option<Passenger>,
 
-    pub constructor: Option<List<Marked<OrganizationLink>>>,
-    pub operator: Option<List<Marked<OrganizationLink>>>,
-    pub owner: Option<List<Marked<OrganizationLink>>>,
+    pub constructor: Option<List<Marked<EntityLink>>>,
+    pub operator: Option<List<Marked<EntityLink>>>,
+    pub owner: Option<List<Marked<EntityLink>>>,
     pub jurisdiction: Option<Marked<CountryCode>>,
 
     pub course: Option<List<CourseSegment>>,
-    pub region: Option<List<Marked<OrganizationLink>>>,
+    pub region: Option<List<Marked<EntityLink>>>,
 
     pub de_vzg: Option<DeVzg>,
     pub fr_rfn: Option<FrRfn>,
@@ -1110,8 +1110,8 @@ data_enum! {
 
 #[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Concession {
-    pub by: List<Marked<OrganizationLink>>,
-    pub to: List<Marked<OrganizationLink>>,
+    pub by: List<Marked<EntityLink>>,
+    pub to: List<Marked<EntityLink>>,
     pub rights: Set<Marked<ConcessionRight>>,
     pub until: Option<Marked<Date>>,
     pub pos: Location,

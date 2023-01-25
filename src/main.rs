@@ -34,7 +34,7 @@ fn main() {
     };
 
     let mut lines = 0;
-    let mut organizations = 0;
+    let mut entities = 0;
     let mut paths = 0;
     let mut points = 0;
     let mut sources = 0;
@@ -43,7 +43,7 @@ fn main() {
     for (doc, _meta) in library.iter() {
         match *doc {
             Data::Line(_) => lines += 1,
-            Data::Organization(_) => organizations += 1,
+            Data::Entity (_) => entities += 1,
             Data::Path(_) => paths += 1,
             Data::Point(_) => points += 1,
             Data::Source(_) => sources += 1,
@@ -55,10 +55,10 @@ fn main() {
     println!("Ok ({}.{:03} seconds)", time.as_secs(), time.as_millis());
     println!(
         "{} documents:",
-        lines + organizations + paths + points + sources + structures
+        lines + entities + paths + points + sources + structures
     );
     println!("   {} lines", lines);
-    println!("   {} organizations", organizations);
+    println!("   {} entities", entities);
     println!("   {} paths", paths);
     println!("   {} points", points);
     println!("   {} sources", sources);

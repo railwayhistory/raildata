@@ -5,7 +5,7 @@ use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 pub use crate::store::{LinkTarget, DocumentLink, StoreLoader};
 use crate::types::{Key, LanguageCode, Location, Marked};
-use super::{Line, Organization, Path, Point, Source, Structure};
+use super::{Line, Entity, Path, Point, Source, Structure};
 use super::common::{Common, DocumentType};
 
 macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
@@ -200,7 +200,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
 
 document! (
     ( line, Line, LineLink),
-    ( organization, Organization, OrganizationLink),
+    ( entity, Entity, EntityLink),
     ( path, Path, PathLink),
     ( point, Point, PointLink),
     ( source, Source, SourceLink),

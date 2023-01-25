@@ -8,7 +8,7 @@ use crate::store::{LinkTarget, StoreEnricher, StoreLoader};
 use crate::types::{
     EventDate, Key, IntoMarked, LanguageCode, LanguageText, List, Marked, Url
 };
-use super::{DocumentLink, OrganizationLink, SourceLink};
+use super::{DocumentLink, EntityLink, SourceLink};
 use super::combined;
 use super::common::{Common, Progress};
 
@@ -22,18 +22,18 @@ pub struct Data {
     pub subtype: Marked<Subtype>,
     
     // Type-dependent attributes
-    pub author: List<Marked<OrganizationLink>>,
+    pub author: List<Marked<EntityLink>>,
     pub collection: Option<Marked<SourceLink>>,
     pub date: EventDate,
     pub designation: Option<Marked<String>>,
     pub digital: List<Marked<Url>>,
     pub edition: Option<Marked<String>>,
-    pub editor: List<Marked<OrganizationLink>>,
+    pub editor: List<Marked<EntityLink>>,
     pub isbn: Option<Isbn>,
     pub number: Option<Marked<String>>,
-    pub organization: List<Marked<OrganizationLink>>,
+    pub organization: List<Marked<EntityLink>>,
     pub pages: Option<Pages>,
-    pub publisher: List<Marked<OrganizationLink>>,
+    pub publisher: List<Marked<EntityLink>>,
     pub revision: Option<Marked<String>>,
     pub short_title: Option<Marked<String>>,
     pub title: Option<Marked<String>>,
