@@ -153,10 +153,6 @@ impl Data {
         Ok(source)
     }
 
-    pub(super) fn generate_meta(&self, _store: &StoreEnricher) -> Meta {
-        Meta
-    }
-
     pub fn process_names<F: FnMut(String)>(&self, _process: F) {
     }
 }
@@ -166,6 +162,14 @@ impl Data {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Meta;
+
+impl Meta {
+    pub fn generate(
+        _data: &Data, _store: &StoreEnricher, _report: &mut PathReporter,
+    ) -> Result<Self, Failed> {
+        Ok(Meta)
+    }
+}
 
 
 //------------ Subtype -------------------------------------------------------

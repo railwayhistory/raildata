@@ -65,18 +65,6 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
             }
         }
 
-        pub fn generate_meta(
-            &self, store: &crate::store::StoreEnricher
-        ) -> Meta {
-            match *self {
-                $(
-                    Data::$vtype(ref inner) => {
-                        Meta::$vtype(inner.generate_meta(store))
-                    }
-                )*
-            }
-        }
-
         paste! {
             $(
                 pub fn [<try_as_ $vtype:lower>](
@@ -129,6 +117,27 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
         $(
             $vtype(super::$vattr::Meta),
         )*
+    }
+
+    impl Meta {
+        pub fn generate(
+            data: &Data,
+            store: &crate::store::StoreEnricher,
+            report: &mut crate::load::report::StageReporter,
+        ) -> Result<Self, crate::load::report::Failed> {
+            match *data {
+                $(
+                    Data::$vtype(ref inner) => {
+                        super::$vattr::Meta::generate(
+                            inner, store,
+                            &mut report.clone().with_path(
+                                inner.origin().path().clone()
+                            ),
+                        ).map(Meta::$vtype)
+                    }
+                )*
+            }
+        }
     }
 
 

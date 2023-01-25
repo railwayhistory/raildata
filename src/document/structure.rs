@@ -72,10 +72,6 @@ impl Data {
         })
     }
 
-    pub(super) fn generate_meta(&self, _store: &StoreEnricher) -> Meta {
-        Meta
-    }
-
     pub fn process_names<F: FnMut(String)>(&self, mut process: F) {
         let mut names = HashSet::new();
         for event in &self.events {
@@ -96,6 +92,14 @@ impl Data {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Meta;
+
+impl Meta {
+    pub fn generate(
+        _data: &Data, _store: &StoreEnricher, _report: &mut PathReporter,
+    ) -> Result<Self, Failed> {
+        Ok(Meta)
+    }
+}
 
 
 //------------ Subtype -------------------------------------------------------

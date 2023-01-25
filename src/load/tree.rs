@@ -30,14 +30,18 @@ pub fn load_tree(path: &path::Path) -> Result<FullStore, Report> {
         builder.into_data_store(&mut report.clone().stage(Stage::Translate))
     };
     let store = match store {
-        Ok(store) => store,
+        Ok(store) => store.into_enricher(),
         Err(_) => return Err(report.unwrap())
     };
 
     // Phase 2: Build meta data.
+    let store = match store.process(report.clone().stage(Stage::Catalogue)) {
+        Ok(store) => store,
+        Err(_) => return Err(report.unwrap())
+    };
 
     // Phase 3: Profit
-    Ok(store.into_full_store())
+    Ok(store)
 }
 
 

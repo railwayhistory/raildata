@@ -87,10 +87,6 @@ impl Data {
         Err(Failed)
     }
 
-    pub(super) fn generate_meta(&self, _store: &StoreEnricher) -> Meta {
-        Meta
-    }
-
     pub fn from_osm(
         mut relation: Relation,
         osm: &Osm,
@@ -297,6 +293,14 @@ impl Data {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Meta;
+
+impl Meta {
+    pub fn generate(
+        _data: &Data, _store: &StoreEnricher, _report: &mut PathReporter,
+    ) -> Result<Self, Failed> {
+        Ok(Meta)
+    }
+}
 
 
 //------------ Node ----------------------------------------------------------

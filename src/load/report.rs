@@ -37,14 +37,8 @@ pub enum Stage {
     /// Translation of parsed data into its structural components.
     Translate = 1,
 
-    /// Cross-linking between documents.
-    Crosslink = 2,
-
-    /// Verify document sanity.
-    Verify = 3,
-
     /// Catalogue meta-data.
-    Catalogue = 4,
+    Catalogue = 2,
 }
 
 
@@ -337,6 +331,10 @@ pub struct StageReporter {
 impl StageReporter {
     pub fn new(reporter: Reporter, stage: Stage) -> Self {
         StageReporter { reporter, stage }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.reporter.is_empty()
     }
 
     pub fn unwrap(self) -> Reporter {

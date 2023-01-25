@@ -7,7 +7,7 @@ use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-use crate::store::{StoreEnricher, StoreLoader};
+use crate::store::StoreLoader;
 use crate::types::list;
 use crate::types::{
     CountryCode, Date, EventDate, IntoMarked, Key, LanguageCode, LanguageText,
@@ -20,7 +20,6 @@ use crate::document::combined::{
 use crate::document::common::{
     Agreement, AgreementType, Alternative, Basis, Common, Contract, Progress
 };
-use super::Meta;
 
 
 //------------ Data ----------------------------------------------------------
@@ -186,10 +185,6 @@ impl Data {
                 format!("{}", &key[5..])
             }
         }
-    }
-
-    pub(crate) fn generate_meta(&self, store: &StoreEnricher) -> Meta {
-        Meta::generate(self, store)
     }
 
 /*

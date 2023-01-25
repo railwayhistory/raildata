@@ -1,6 +1,6 @@
 //! The date type.
 
-use std::{cmp, fmt, ops, str};
+use std::{cmp, fmt, str};
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use crate::load::yaml::{FromYaml, Value};
@@ -323,6 +323,11 @@ impl EventDate {
         EventDate(List::new())
     }
 
+    /// Returns whether the date is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// Returns the sort order of two event dates.
     ///
     /// This is not the same as the ordering of those dates.
@@ -333,14 +338,6 @@ impl EventDate {
             (Some(_), None) => cmp::Ordering::Greater,
             (Some(left), Some(right)) => left.cmp(right)
         }
-    }
-}
-
-impl ops::Deref for EventDate {
-    type Target = List<Marked<Date>>;
-
-    fn deref(&self) -> &List<Marked<Date>> {
-        &self.0
     }
 }
 

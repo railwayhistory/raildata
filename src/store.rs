@@ -290,9 +290,8 @@ impl DataStore {
         DataStore { data, keys }
     }
 
-    pub fn into_full_store(self) -> FullStore {
-        let enricher = StoreEnricher::new(self);
-        enricher.process()
+    pub fn into_enricher(self) -> StoreEnricher {
+        StoreEnricher::new(self)
     }
 
     pub fn len(&self) -> usize {
@@ -340,7 +339,7 @@ impl LinkTarget<Data> for Arc<DataStore> {
 /// The store during enriching data with meta data.
 pub struct StoreEnricher {
     data: DataStore,
-    meta: Vec<Arc<Mutex<Option<Arc<Meta>>>>>,
+    meta: Vec<Arc<Mutex<Option<Result<Arc<Meta>, Failed>>>>>,
     next_meta: AtomicUsize,
 }
 
@@ -355,26 +354,34 @@ impl StoreEnricher {
         }
     }
 
-    pub fn process(self) -> FullStore {
+    pub fn process(self, report: StageReporter) -> Result<FullStore, Failed> {
         thread::scope(|scope| {
             for _ in 0..8 {
-                scope.spawn(|| { self.process_one(); });
+                scope.spawn(|| {
+                    self.process_one(&mut report.clone());
+                });
             }
         });
 
-        FullStore::new(
-            self.data,
-            self.meta.into_iter().map(|item| {
-                Arc::try_unwrap(
+        let mut items = Vec::new();
+        for (data, meta) in
+            self.data.data.into_iter().zip(self.meta.into_iter())
+        {
+            items.push(
+                (
+                    data,
                     Arc::try_unwrap(
-                        item
-                    ).unwrap().into_inner().unwrap().unwrap()
-                ).unwrap()
-            })
-        )
+                        Arc::try_unwrap(
+                            meta
+                        ).unwrap().into_inner().unwrap().unwrap()?
+                    ).unwrap()
+                )
+            )
+        }
+        Ok(FullStore::new(items, self.data.keys))
     }
 
-    fn process_one(&self) {
+    fn process_one(&self, report: &mut StageReporter) {
         while self.next_meta.load(atomic::Ordering::Relaxed) < self.data.len() {
             let idx = self.next_meta.fetch_add(1, atomic::Ordering::SeqCst);
             let item = self.meta[idx].clone();
@@ -382,9 +389,11 @@ impl StoreEnricher {
             if item.is_some() {
                 continue
             }
-            *item = Some(Arc::new(
-                self.data.data[idx].generate_meta(self)
-            ));
+            *item = Some(
+                Meta::generate(
+                    &self.data.data[idx], self, report
+                ).map(Arc::new)
+            );
         }
     }
 
@@ -392,6 +401,7 @@ impl StoreEnricher {
         self.data.resolve(link)
     }
 
+    /*
     pub fn meta(&self, link: DocumentLink) -> Arc<Meta> {
         let item = self.meta[link.index].clone();
         let mut item = item.lock().unwrap();
@@ -404,6 +414,7 @@ impl StoreEnricher {
         *item = Some(meta.clone());
         meta
     }
+    */
 }
 
 
@@ -417,11 +428,11 @@ pub struct FullStore {
 }
 
 impl FullStore {
-    fn new(data: DataStore, meta: impl Iterator<Item = Meta>) -> Self {
-        FullStore {
-            items: data.data.into_iter().zip(meta).collect(),
-            keys: data.keys,
-        }
+    fn new(
+        items: Vec<(Data, Meta)>,
+        keys: BTreeMap<Key, DocumentLink>,
+    ) -> Self {
+        FullStore { items, keys }
     }
 
     pub fn len(&self) -> usize {
