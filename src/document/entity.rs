@@ -12,6 +12,10 @@ use super::common::{Basis, Common, Progress};
 use super::{DocumentLink, LineLink, EntityLink, SourceLink};
 
 
+//------------ Link ----------------------------------------------------------
+
+pub use super::combined::EntityLink as Link;
+
 //------------ Data ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -10,6 +10,12 @@ use crate::types::{
 use super::{DocumentLink, SourceLink, StructureLink};
 use super::common::{Common, Progress};
 
+
+//------------ Link ----------------------------------------------------------
+
+pub use super::combined::StructureLink as Link;
+
+
 //------------ Data ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

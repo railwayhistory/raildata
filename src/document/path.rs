@@ -12,6 +12,12 @@ use crate::types::key::InvalidKey;
 use super::{DocumentLink, SourceLink};
 use super::common::{Common, Progress};
 
+
+//------------ Link ----------------------------------------------------------
+
+pub use super::combined::PathLink as Link;
+
+
 //------------ Data ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

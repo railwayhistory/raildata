@@ -13,6 +13,11 @@ use super::combined;
 use super::common::{Common, Progress};
 
 
+//------------ Link ----------------------------------------------------------
+
+pub use super::combined::SourceLink as Link;
+
+
 //------------ Data ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

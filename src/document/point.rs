@@ -13,6 +13,11 @@ use super::{DocumentLink, LineLink, PathLink, PointLink, SourceLink};
 use super::common::{Basis, Common, Progress};
 
 
+//------------ Link ----------------------------------------------------------
+
+pub use super::combined::PointLink as Link;
+
+
 //------------ Data ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
