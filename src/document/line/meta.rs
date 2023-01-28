@@ -34,7 +34,9 @@ struct PropertyList {
 }
 
 impl PropertyList {
-    fn generate(data: &Data, _store: &XrefsStore) -> Self {
+    fn generate(_data: &Data, _store: &XrefsStore) -> Self {
+        Self::default()
+        /*
         let res = Self::default();
         let (_date, _events) = match property::find_first(data) {
             Some(some) => some,
@@ -44,6 +46,7 @@ impl PropertyList {
         
 
         unimplemented!()
+        */
     }
 }
 
