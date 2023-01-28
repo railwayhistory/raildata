@@ -528,10 +528,14 @@ data_enum! {
         { DeLGr: "de.LGr" }
         { DeRBGr: "de.RBGr" }
 
-        { DkSt: "dk.St" }
-        { DkT: "dk.T" }
-        { DkSmd: "dk.Smd" }
-        { DkGr: "dk.Gr" }
+        { DkB: "dk.B" }         // Billetssalgssted
+        { DkGr: "dk.Gr" }       // Grænse
+        { DkSmd: "dk.Smd" }     // Sidespor med dækningssignal
+        { DkSud: "dk.Sud" }     // Sidespor uden dækningssignal
+        { DkSt: "dk.St" }       // Station
+        { DkT: "dk.T" }         // Trinbræt
+        { DkTs: "dk.Ts" }       // Teknisk station
+        { DkVm: "dk.VM" }       // VM-station
 
         { NlAansl: "nl.Aansl" }
         { NlGem: "nl.Gem" }
@@ -581,16 +585,23 @@ impl Category {
             DeGp => "Gp",
             DeLGr => "LGr",
             DeRBGr => "RBGr",
+
+            DkB => "B",
+            DkGr => "Gr",
+            DkSmd => "Smd",
+            DkSud => "Sud",
             DkSt => "St",
             DkT => "T",
-            DkSmd => "Smd",
-            DkGr => "Gr",
+            DkTs => "Ts",
+            DkVm => "VM",
+
             NlAansl => "Aansluiting",
             NlGem => "Goederen Emplacement",
             NlH => "Halte",
             NlKnp => "Knooppunt",
             NlOlp => "Overloop",
             NlSt => "Station",
+
             NoS => "S",
             NoSp => "Sp",
             NoHp => "Hp",
