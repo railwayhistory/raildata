@@ -2,6 +2,8 @@ use std::{borrow, mem};
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Bound;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic;
+use std::sync::atomic::AtomicBool;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use crate::document::combined::{Data, Meta, Xrefs};
@@ -20,6 +22,7 @@ use crate::types::{IntoMarked, Key, Location, Marked};
 pub struct StoreLoader {
     data: Mutex<Vec<Option<Data>>>,
     keys: Mutex<HashMap<Key, DocumentInfo>>,
+    failed: AtomicBool,
 }
 
 
@@ -52,6 +55,7 @@ impl StoreLoader {
         StoreLoader {
             data: Mutex::new(Vec::new()),
             keys: Mutex::new(HashMap::new()),
+            failed: AtomicBool::new(false),
         }
     }
 
@@ -147,6 +151,7 @@ impl StoreLoader {
                     info.origin.clone().unwrap()
                 ).marked(document.origin().location())
             );
+            self.failed.store(true, atomic::Ordering::Relaxed);
             return Err(Failed);
         }
 
@@ -179,6 +184,7 @@ impl StoreLoader {
                     info.origin.clone().unwrap()
                 ).marked(location)
             );
+            self.failed.store(true, atomic::Ordering::Relaxed);
             return Err(Failed);
         }
             
@@ -224,7 +230,7 @@ impl StoreLoader {
         let data = self.data.into_inner().unwrap();
         let docinfo = self.keys.into_inner().unwrap();
 
-        let mut failed = false;
+        let mut failed = self.failed.load(atomic::Ordering::Relaxed);
         let mut keys = BTreeMap::new();
         for (key, info) in docinfo {
             // If the document is broken, there was an error before and we
