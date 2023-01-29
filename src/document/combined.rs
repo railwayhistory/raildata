@@ -280,6 +280,82 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
             }
         }
     )*
+
+    //------------ Documents -------------------------------------------------
+
+    paste! {
+        #[derive(Clone, Copy, Debug)]
+        pub enum Document<'a> {
+            $(
+                $vtype([<$vtype Document>]<'a>),
+            )*
+        }
+
+        impl<'a> Document<'a> {
+            pub fn new(
+                data: &'a Data, xrefs: &'a Xrefs, meta: &'a Meta
+            ) -> Self {
+                match *data {
+                    $(
+                        Data::$vtype(ref data) => {
+                            let xrefs = match *xrefs {
+                                Xrefs::$vtype(ref xrefs) => xrefs,
+                                _ => panic!("document type mismatch"),
+                            };
+                            let meta = match *meta {
+                                Meta::$vtype(ref meta) => meta,
+                                _ => panic!("document type mismatch"),
+                            };
+                            Document::$vtype(
+                                [<$vtype Document>]::new(data, xrefs, meta)
+                            )
+                        }
+                    )*
+                }
+            }
+
+            pub fn json(self, store: &FullStore) -> String {
+                match self {
+                    $(
+                        Document::$vtype(inner) => inner.json(store),
+                    )*
+                }
+            }
+        }
+    }
+
+    $(
+        paste! {
+            #[derive(Clone, Copy, Debug)]
+            pub struct [<$vtype Document>] <'a> {
+                data: &'a super::$vattr::Data,
+                xrefs: &'a super::$vattr::Xrefs,
+                meta: &'a super::$vattr::Meta,
+            }
+
+            impl<'a> [<$vtype Document>] <'a> {
+                pub fn new(
+                    data: &'a super::$vattr::Data,
+                    xrefs: &'a super::$vattr::Xrefs,
+                    meta: &'a super::$vattr::Meta,
+                ) -> Self {
+                    [<$vtype Document>] { data, xrefs, meta }
+                }
+
+                pub fn data(&self) -> &super::$vattr::Data {
+                    self.data
+                }
+
+                pub fn xrefs(&self) -> &super::$vattr::Xrefs {
+                    self.xrefs
+                }
+
+                pub fn meta(&self) -> &super::$vattr::Meta {
+                    self.meta
+                }
+            }
+        }
+    )*
 }}
 
 document! (

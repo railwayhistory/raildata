@@ -2,5 +2,6 @@
 pub mod catalogue;
 pub mod document;
 pub mod load;
+pub mod server;
 pub mod store;
 

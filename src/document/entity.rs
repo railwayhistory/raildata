@@ -1,6 +1,7 @@
 
 use std::cmp;
 use std::collections::HashSet;
+use httools::json::JsonBuilder;
 use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
@@ -16,6 +17,21 @@ use super::{DocumentLink, LineLink, EntityLink, SourceLink};
 //------------ Link ----------------------------------------------------------
 
 pub use super::combined::EntityLink as Link;
+
+
+//------------ Document ------------------------------------------------------
+
+pub use super::combined::EntityDocument as Document;
+
+impl<'a> Document<'a> {
+    pub fn json(self, store: &FullStore) -> String {
+        self.data().common.json(|json| {
+            json.member_str("type", "entity");
+            json.member_object("data", |json| self.data().json(json, store));
+        })
+    }
+}
+
 
 //------------ Data ----------------------------------------------------------
 
@@ -230,6 +246,15 @@ impl Data {
             process(name.into())
         }
     }
+
+    pub fn json(&self, json: &mut JsonBuilder, store: &FullStore) {
+        json.member_str("subtype", &self.subtype);
+        json.member_array("events", |json| {
+            for event in &self.events {
+                json.array_object(|json| event.json(json, store));
+            }
+        });
+    }
 }
 
 
@@ -346,6 +371,11 @@ impl FromYaml<StoreLoader> for Event {
             successor: successor?,
             superior: superior?,
         })
+    }
+}
+
+impl Event {
+    pub fn json(&self, _json: &mut JsonBuilder, _store: &FullStore) {
     }
 }
 

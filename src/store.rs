@@ -6,7 +6,7 @@ use std::sync::atomic;
 use std::sync::atomic::AtomicBool;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use crate::document::combined::{Data, Meta, Xrefs};
+use crate::document::combined::{Data, Document, Meta, Xrefs};
 use crate::document::common::DocumentType;
 use crate::load::report::{
     Failed, Origin, PathReporter, Report, Reporter, Stage, StageReporter
@@ -382,9 +382,8 @@ impl LinkTargetMut<Xrefs> for XrefsBuilder {
 /// A store holding the data and cross references of documents.
 #[derive(Debug)]
 pub struct XrefsStore {
-    data: Vec<Data>,
+    data: DataStore,
     xrefs: Vec<Xrefs>,
-    keys: BTreeMap<Key, DocumentLink>,
 }
 
 impl XrefsStore {
@@ -400,9 +399,8 @@ impl XrefsStore {
         }
         if ok {
             Ok(XrefsStore {
-                data: data.data,
+                data,
                 xrefs: xrefs.xrefs,
-                keys: data.keys,
             })
         }
         else {
@@ -417,13 +415,13 @@ impl XrefsStore {
     }
 
     pub fn links(&self) -> impl Iterator<Item = DocumentLink> + '_ {
-        self.keys.values().copied()
+        self.data.links()
     }
 }
 
 impl LinkTarget<Data> for XrefsStore {
     fn resolve(&self, link: DocumentLink) -> &Data {
-        &self.data[link.index]
+        self.data.resolve(link)
     }
 }
 
@@ -433,16 +431,20 @@ impl LinkTarget<Xrefs> for XrefsStore {
     }
 }
 
+impl AsRef<DataStore> for XrefsStore {
+    fn as_ref(&self) -> &DataStore {
+        &self.data
+    }
+}
+
 
 //------------ FullStore -----------------------------------------------------
 
 /// The store with both the data and the meta data.
 #[derive(Debug)]
 pub struct FullStore {
-    data: Vec<Data>,
-    xrefs: Vec<Xrefs>,
+    xrefs: XrefsStore,
     meta: Vec<Meta>,
-    keys: BTreeMap<Key, DocumentLink>,
 }
 
 impl FullStore {
@@ -451,7 +453,7 @@ impl FullStore {
     ) -> Result<Self, Failed> {
         let mut meta = Vec::with_capacity(store.data.len());
         let mut ok = true;
-        for data in &store.data {
+        for data in &store.data.data {
             match Meta::generate(data, &store, &mut report) {
                 Ok(res) => {
                     if ok {
@@ -463,10 +465,8 @@ impl FullStore {
         }
         if ok {
             Ok(FullStore {
-                data: store.data,
-                xrefs: store.xrefs,
+                xrefs: store,
                 meta,
-                keys: store.keys,
             })
         }
         else {
@@ -475,16 +475,16 @@ impl FullStore {
     }
 
     pub fn len(&self) -> usize {
-        self.data.len()
+        self.xrefs.data.len()
     }
 
     pub fn get<Q>(&self, key: &Q) -> Option<DocumentLink>
     where Key: borrow::Borrow<Q>, Q: Ord + ?Sized {
-        self.keys.get(key).cloned()
+        self.xrefs.data.keys.get(key).cloned()
     }
 
     pub fn links(&self) -> impl Iterator<Item = DocumentLink> + '_ {
-        self.keys.values().copied()
+        self.xrefs.links()
     }
 
     pub fn iter_from<T>(
@@ -492,7 +492,7 @@ impl FullStore {
         start: &T
     ) -> impl Iterator<Item = DocumentLink> + '_
     where T: Ord + ?Sized, Key: borrow::Borrow<T> {
-        self.keys.range(
+        self.xrefs.data.keys.range(
             (Bound::Included(start), Bound::Unbounded)
         ).map(|item| *item.1)
     }
@@ -500,19 +500,31 @@ impl FullStore {
 
 impl LinkTarget<Data> for FullStore {
     fn resolve(&self, link: DocumentLink) -> &Data {
-        &self.data[link.index]
+        self.xrefs.resolve(link)
     }
 }
 
 impl LinkTarget<Xrefs> for FullStore {
     fn resolve(&self, link: DocumentLink) -> &Xrefs {
-        &self.xrefs[link.index]
+        self.xrefs.resolve(link)
     }
 }
 
 impl LinkTarget<Meta> for FullStore {
     fn resolve(&self, link: DocumentLink) -> &Meta {
         &self.meta[link.index]
+    }
+}
+
+impl AsRef<DataStore> for FullStore {
+    fn as_ref(&self) -> &DataStore {
+        self.xrefs.as_ref()
+    }
+}
+
+impl AsRef<XrefsStore> for FullStore {
+    fn as_ref(&self) -> &XrefsStore {
+        &self.xrefs
     }
 }
 
@@ -534,6 +546,10 @@ pub struct DocumentLink {
 impl DocumentLink {
     fn from_index(index: usize) -> Self {
         DocumentLink { index }
+    }
+
+    pub fn document(self, store: &FullStore) -> Document {
+        Document::new(self.data(store), self.xrefs(store), self.meta(store))
     }
 
     pub fn data(self, store: &impl LinkTarget<Data>) -> &Data {

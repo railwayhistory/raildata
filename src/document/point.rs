@@ -19,6 +19,19 @@ use super::common::{Basis, Common, Progress};
 pub use super::combined::PointLink as Link;
 
 
+//------------ Document ------------------------------------------------------
+
+pub use super::combined::PointDocument as Document;
+
+impl<'a> Document<'a> {
+    pub fn json(self, _store: &FullStore) -> String {
+        self.data().common.json(|json| {
+            json.member_str("type", "point");
+        })
+    }
+}
+
+
 //------------ Data ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

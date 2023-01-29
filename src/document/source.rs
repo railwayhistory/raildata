@@ -21,6 +21,19 @@ use super::common::{Common, Progress};
 pub use super::combined::SourceLink as Link;
 
 
+//------------ Document ------------------------------------------------------
+
+pub use super::combined::SourceDocument as Document;
+
+impl<'a> Document<'a> {
+    pub fn json(self, _store: &FullStore) -> String {
+        self.data().common.json(|json| {
+            json.member_str("type", "source");
+        })
+    }
+}
+
+
 //------------ Data ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

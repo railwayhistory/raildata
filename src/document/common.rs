@@ -1,6 +1,7 @@
 //! Attributes and attribute types common to all documents.
 
 use derive_more::Display;
+use httools::json::JsonBuilder;
 use serde::{Deserialize, Serialize};
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
@@ -51,6 +52,14 @@ impl Common {
             progress: doc.take_default("progress", context, report)?,
             origin: Origin::new(report.path().clone(), doc.location()),
             sources: Set::new(),
+        })
+    }
+
+    pub fn json(&self, other: impl FnOnce(&mut JsonBuilder)) -> String {
+        JsonBuilder::build(|json| {
+            json.member_str("key", &self.key);
+            json.member_str("progress", &self.progress);
+            other(json)
         })
     }
 }
