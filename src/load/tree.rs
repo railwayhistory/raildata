@@ -2,6 +2,7 @@
 use std::{io, mem, path};
 use std::collections::HashSet;
 use std::fs::File;
+use std::io::BufReader;
 use std::sync::Arc;
 use ignore::{WalkBuilder, WalkState};
 use ignore::types::TypesBuilder;
@@ -61,6 +62,7 @@ fn load_facts(
                 let path = report::Path::new(path.path());
                 match File::open(&path) {
                     Ok(file) => {
+                        let file = BufReader::new(file);
                         let mut report = report.clone()
                             .stage(Stage::Translate)
                             .with_path(path);
@@ -111,7 +113,8 @@ pub fn load_paths(
                 }
                 let path = report::Path::new(path.path());
                 match File::open(&path) {
-                    Ok(mut file) => {
+                    Ok(file) => {
+                        let mut file = BufReader::new(file);
                         let mut report = report.clone()
                             .stage(Stage::Translate)
                             .with_path(path);
