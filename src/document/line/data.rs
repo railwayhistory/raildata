@@ -204,10 +204,13 @@ impl Data {
 
     pub fn xrefs(
         &self, 
-        _builder: &mut XrefsBuilder,
+        builder: &mut XrefsBuilder,
         _store: &crate::store::DataStore,
         _report: &mut crate::load::report::PathReporter,
     ) -> Result<(), Failed> {
+        for point in self.points.iter() {
+            point.xrefs_mut(builder).lines.push(self.link);
+        }
         Ok(())
     }
 

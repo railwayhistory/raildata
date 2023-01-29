@@ -63,14 +63,18 @@ impl Data {
         self.key().as_str()
     }
 
-    pub fn node(&self, pos: usize) -> Option<&Node> {
-        self.nodes.get(pos)
+    pub fn node(&self, pos: usize) -> Option<Node> {
+        self.nodes.get(pos).copied()
     }
 
     pub fn get_pos(&self, name: &str) -> Option<usize> {
         self.node_names.binary_search_by(|item|
             AsRef::<str>::as_ref(&item.0).cmp(name)
         ).ok()
+    }
+
+    pub fn get_coord(&self, name: &str) -> Option<Coord> {
+        self.get_pos(name).and_then(|pos| self.node(pos)).map(Into::into)
     }
 }
 
@@ -340,7 +344,7 @@ impl Meta {
 
 //------------ Node ----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Node {
     pub lon: f64,
     pub lat: f64,
@@ -351,6 +355,21 @@ pub struct Node {
 impl Node {
     pub fn new(lon: f64, lat: f64, pre: f64, post: f64) -> Self {
         Node { lon, lat, pre, post }
+    }
+}
+
+
+//------------ Coord ---------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub struct Coord {
+    pub lon: f64,
+    pub lat: f64,
+}
+
+impl From<Node> for Coord {
+    fn from(node: Node) -> Self {
+        Coord { lon: node.lon, lat: node.lat }
     }
 }
 

@@ -7,8 +7,9 @@ use httools::json::JsonBuilder;
 use httools::response::ContentType;
 use httools::server::serve;
 use tokio::runtime::Runtime;
-use crate::store::FullStore;
 use crate::catalogue::Catalogue;
+use crate::document::Meta;
+use crate::store::FullStore;
 use crate::types::local::LanguageCode;
 
 pub struct State {
@@ -69,13 +70,14 @@ fn search(
     state: Arc<State>, request: Request, mut path: RequestPath
 ) -> Result<Response, Response> {
     match path.next_and_last() {
-        Ok(Some("names")) => search_names(state, request),
+        Ok(Some("names")) => search_names(state, request, false),
+        Ok(Some("coords")) => search_names(state, request, true),
         _ => Ok(Response::not_found())
     }
 }
 
 fn search_names(
-    state: Arc<State>, request: Request
+    state: Arc<State>, request: Request, coord: bool
 ) -> Result<Response, Response> {
     let query = request.query();
 
@@ -96,18 +98,50 @@ fn search_names(
         usize::from_str(num).ok()
     }).map(|count| cmp::min(count, 100)).unwrap_or(20);
 
-    Ok(JsonBuilder::ok(|json| {
-        json.member_array("items", |json| {
-            for (name, link) in state.catalogue.search_name(q, count) {
-                let doc = link.data(&state.store);
-                json.array_object(|json| {
-                    json.member_str("name", name);
-                    json.member_str("type", doc.doctype());
-                    json.member_str("title", doc.name(lang.into()));
-                    json.member_str("key", doc.key());
-                })
-            }
-        })
-    }))
+    if coord {
+        Ok(JsonBuilder::ok(|json| {
+            json.member_array("items", |json| {
+                let found = state.catalogue.search_name(
+                    q
+                ).filter_map(|(name, link)| {
+                    let doc = link.data(&state.store);
+                    let meta = link.meta(&state.store);
+                    let coord = match meta {
+                        Meta::Point(ref meta) => meta.coord?,
+                        _ => return None
+                    };
+                    Some((name, coord, doc))
+                }).take(count);
+                for (name, coord, doc) in found {
+                    json.array_object(|json| {
+                        json.member_str("name", name);
+                        json.member_str("type", doc.doctype());
+                        json.member_str("title", doc.name(lang.into()));
+                        json.member_str("key", doc.key());
+                        json.member_object("coords", |json| {
+                            json.member_raw("lat", coord.lat);
+                            json.member_raw("lon", coord.lon);
+                        });
+                    })
+                }
+            })
+        }))
+    }
+    else {
+        Ok(JsonBuilder::ok(|json| {
+            json.member_array("items", |json| {
+                let found = state.catalogue.search_name(q).take(count);
+                for (name, link) in found {
+                    let doc = link.data(&state.store);
+                    json.array_object(|json| {
+                        json.member_str("name", name);
+                        json.member_str("type", doc.doctype());
+                        json.member_str("title", doc.name(lang.into()));
+                        json.member_str("key", doc.key());
+                    })
+                }
+            })
+        }))
+    }
 }
 

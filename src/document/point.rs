@@ -3,6 +3,7 @@ use std::collections::{HashSet, HashMap};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
+use crate::document::path::Coord;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::store::{FullStore, StoreLoader, XrefsBuilder, XrefsStore};
@@ -266,19 +267,47 @@ impl Data {
 //------------ Xrefs ---------------------------------------------------------
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Xrefs;
+pub struct Xrefs {
+    pub lines: List<LineLink>,
+}
 
 
 //------------ Meta ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Meta;
+pub struct Meta {
+    pub junction: bool,
+    pub coord: Option<Coord>,
+}
 
 impl Meta {
     pub fn generate(
-        _data: &Data, _store: &XrefsStore, _report: &mut PathReporter,
+        data: &Data, store: &XrefsStore, _report: &mut PathReporter,
     ) -> Result<Self, Failed> {
-        Ok(Meta)
+        let xrefs = data.link.xrefs(store);
+
+        // coord: Find the newest event that has a site attribute and take the
+        // first entry.
+        let mut coord = None;
+        for event in data.events.iter().rev() {
+            if let Some(site) = event.site.as_ref() {
+                for item in site.0.iter() {
+                    coord = item.0.data(store).get_coord(item.1.as_value());
+                    if coord.is_some() {
+                        break
+                    }
+                }
+            }
+        }
+
+        Ok(Meta {
+            junction: {
+                data.junction.map(Marked::into_value).unwrap_or_else(|| {
+                    xrefs.lines.len() > 1
+                })
+            },
+            coord,
+        })
     }
 }
 

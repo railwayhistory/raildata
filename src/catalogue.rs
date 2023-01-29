@@ -56,14 +56,13 @@ impl Catalogue {
     }
 
     pub fn search_name(
-        &self, prefix: &str, count: usize
+        &self, prefix: &str
     ) -> impl Iterator<Item = (&str, DocumentLink)> {
         let prefix = Self::normalize_name(prefix);
         self.names.get_raw_ancestor(&prefix).iter()
             .filter(move |(key, _)| key.starts_with(&prefix))
             .flat_map(|(_, value)| value)
             .map(|(name, link)| (name.as_str(), *link))
-            .take(count)
     }
 
     fn normalize_name(name: &str) -> String {
