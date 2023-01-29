@@ -6,10 +6,11 @@ use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::store::{
-    FullStore, LinkTarget, StoreLoader, XrefsBuilder, XrefsStore
+    DataStore, FullStore, LinkTarget, StoreLoader, XrefsBuilder, XrefsStore
 };
 use crate::types::{
-    EventDate, Key, IntoMarked, LanguageCode, LanguageText, List, Marked, Url
+    EventDate, Key, IntoMarked, LanguageCode, LanguageText, List, Marked,
+    Set, Url,
 };
 use super::{DocumentLink, EntityLink, SourceLink};
 use super::combined;
@@ -171,10 +172,34 @@ impl Data {
 
     pub fn xrefs(
         &self, 
-        _builder: &mut XrefsBuilder,
+        builder: &mut XrefsBuilder,
         _store: &crate::store::DataStore,
         _report: &mut PathReporter,
     ) -> Result<(), Failed> {
+        self.author.iter().for_each(|link| {
+            link.xrefs_mut(builder).source_author.insert(self.link);
+        });
+        if let Some(link) = self.collection {
+            link.xrefs_mut(builder).source_collection.push(self.link);
+        }
+        self.editor.iter().for_each(|link| {
+            link.xrefs_mut(builder).source_editor.insert(self.link);
+        });
+        self.organization.iter().for_each(|link| {
+            link.xrefs_mut(builder).source_organization.insert(self.link);
+        });
+        self.publisher.iter().for_each(|link| {
+            link.xrefs_mut(builder).source_publisher.insert(self.link);
+        });
+        self.also.iter().for_each(|link| {
+            link.xrefs_mut(builder).source_also.insert(self.link);
+        });
+        self.crossref.iter().for_each(|link| {
+            link.xrefs_mut(builder).source_crossref.insert(self.link);
+        });
+        self.regards.iter().for_each(|link| {
+            link.xrefs_mut(builder).source_regards_mut().insert(self.link);
+        });
         Ok(())
     }
 
@@ -192,7 +217,28 @@ impl Data {
 //------------ Xrefs ---------------------------------------------------------
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Xrefs;
+pub struct Xrefs {
+    source_also: Set<Link>,
+    source_collection: List<Link>,
+    source_crossref: Set<Link>,
+    source_regards: Set<Link>,
+}
+
+impl Xrefs {
+    pub fn source_regards_mut(&mut self) -> &mut Set<Link> {
+        &mut self.source_regards
+    }
+
+    pub fn finalize(&mut self, store: &DataStore) {
+        self.source_collection.sort_by(|left, right| {
+            let left = left.data(store);
+            let right = right.data(store);
+            (left.number.as_ref(), left.volume.as_ref()).cmp(
+                &(right.number.as_ref(), right.volume.as_ref())
+            )
+        });
+    }
+}
 
 
 //------------ Meta ----------------------------------------------------------

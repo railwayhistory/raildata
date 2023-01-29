@@ -1,4 +1,4 @@
-pub use self::data::Data;
+pub use self::data::*;
 pub use self::xrefs::Xrefs;
 pub use self::meta::Meta;
 pub use super::combined::LineLink as Link;

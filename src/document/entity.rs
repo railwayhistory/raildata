@@ -6,10 +6,13 @@ use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-use crate::store::{FullStore, StoreLoader, XrefsBuilder, XrefsStore};
+use crate::store::{
+    DataStore, FullStore, StoreLoader, XrefsBuilder, XrefsStore
+};
 use crate::types::{
     EventDate, Key, LanguageText, LanguageCode, LocalText, List, Marked, Set
 };
+use super::{line, source};
 use super::common::{Basis, Common, Progress};
 use super::{DocumentLink, LineLink, EntityLink, SourceLink};
 
@@ -37,19 +40,11 @@ impl<'a> Document<'a> {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Data {
-    pub link: EntityLink,
+    link: EntityLink,
 
-    // Attributes
     pub common: Common,
     pub subtype: Marked<Subtype>,
     pub events: EventList,
-
-    // Crosslinks
-    pub line_region: List<LineLink>,
-    pub source_author: Set<SourceLink>,
-    pub source_editor: Set<SourceLink>,
-    pub source_organization: Set<SourceLink>,
-    pub source_publisher: Set<SourceLink>,
 }
 
 impl Data {
@@ -199,12 +194,6 @@ impl Data {
             common: common?,
             subtype: subtype?,
             events: events?,
-
-            line_region: List::new(),
-            source_author: Set::new(),
-            source_editor: Set::new(),
-            source_organization: Set::new(),
-            source_publisher: Set::new(),
         };
         res.events.sort_by(|left, right| left.date.sort_cmp(&right.date));
         Ok(res)
@@ -259,7 +248,37 @@ impl Data {
 //------------ Xrefs ---------------------------------------------------------
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Xrefs;
+pub struct Xrefs {
+    pub line_regions: List<(line::Link, line::Section)>,
+
+    /// All the sources that refer to this entity.
+    pub source_regards: Set<source::Link>,
+
+    /// All the sources that this entity has authored.
+    pub source_author: Set<SourceLink>,
+
+    /// All the sources that this entity has edited.
+    pub source_editor: Set<SourceLink>,
+
+    /// All the sources that this entity was responsible for as an organization.
+    pub source_organization: Set<SourceLink>,
+
+    /// All the sources that this entity has published.
+    pub source_publisher: Set<SourceLink>,
+}
+
+impl Xrefs {
+    pub fn source_regards_mut(&mut self) -> &mut Set<source::Link> {
+        &mut self.source_regards
+    }
+
+    pub fn finalize(&mut self, store: &DataStore) {
+        self.line_regions.sort_by(|left, right| {
+            left.0.data(store).code().cmp(&right.0.data(store).code())
+        })
+    }
+}
+
 
 
 //------------ Meta ----------------------------------------------------------

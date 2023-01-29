@@ -14,6 +14,7 @@ use crate::types::{
     CountryCode, Date, EventDate, IntoMarked, Key, LanguageCode, LanguageText,
     List, LocalText, Location, Marked, Set
 };
+use crate::document::entity;
 use crate::document::combined::{
     DocumentLink, LineLink, EntityLink, PathLink, PointLink,
     SourceLink
@@ -28,6 +29,7 @@ use crate::document::common::{
 #[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Data {
     link: LineLink,
+
     pub common: Common,
     pub label: Set<Label>,
     pub note: Option<LanguageText>,
@@ -188,20 +190,6 @@ impl Data {
         }
     }
 
-/*
-    pub fn verify(&self, report: &mut StageReporter) {
-        verify::verify(self, report)
-    }
-
-    pub fn catalogue(
-        &self,
-        link: LineLink,
-        catalogue: &mut Catalogue,
-        _report: &mut StageReporter
-    ) {
-        let link = DocumentLink::from(link);
-*/
-
     pub fn xrefs(
         &self, 
         builder: &mut XrefsBuilder,
@@ -210,6 +198,25 @@ impl Data {
     ) -> Result<(), Failed> {
         for point in self.points.iter() {
             point.xrefs_mut(builder).lines.push(self.link);
+        }
+
+        // Collect the line regions: Go over the events, find all the
+        // regions and the longest section they apply to.
+        let mut regions = HashMap::<entity::Link, Section>::new();
+        for event in &self.events {
+            if let Some(region_list) = event.properties.region.as_ref() {
+                let new_section = event.sections.overall(self.points.len());
+                for region in region_list {
+                    regions.entry(
+                        region.into_value()
+                    ).and_modify(|section| {
+                        section.grow(&new_section)
+                    }).or_insert(new_section.clone());
+                }
+            }
+        }
+        for (line, section) in regions {
+            line.xrefs_mut(builder).line_regions.push((self.link, section));
         }
         Ok(())
     }
@@ -950,6 +957,20 @@ impl SectionList {
 
         Ok(SectionList { sections })
     }
+
+    /// Returns the maximum section covered by this event.
+    fn overall(&self, len: usize) -> Section {
+        if self.sections.is_empty() {
+            return Section::all(len)
+        }
+
+        let mut iter = self.sections.iter();
+        let mut res = iter.next().unwrap().clone();
+        for section in iter {
+            res.grow(section)
+        }
+        res
+    }
 }
 
 impl ops::Deref for SectionList {
@@ -1063,6 +1084,17 @@ impl Section {
             end: None,
             start_idx: 0,
             end_idx: len - 1,
+        }
+    }
+
+    fn grow(&mut self, other: &Section) {
+        if other.start_idx < self.start_idx {
+            self.start = other.start;
+            self.start_idx = other.start_idx;
+        }
+        if other.end_idx > self.end_idx {
+            self.end = other.end;
+            self.end_idx = other.end_idx;
         }
     }
 }

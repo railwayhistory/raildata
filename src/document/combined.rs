@@ -5,10 +5,11 @@ use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 pub use crate::store::{
-    FullStore, LinkTarget, LinkTargetMut, DocumentLink, StoreLoader,
-    XrefsBuilder,
+    DataStore, FullStore, LinkTarget, LinkTargetMut, DocumentLink,
+    StoreLoader, XrefsBuilder,
 };
-use crate::types::{Key, LanguageCode, Location, Marked};
+use crate::types::{Key, LanguageCode, Location, Marked, Set};
+use super::source;
 use super::{Line, Entity, Path, Point, Source, Structure};
 use super::common::{Common, DocumentType};
 
@@ -164,6 +165,23 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
     }
 
     impl Xrefs {
+        pub fn source_regards_mut(&mut self) -> &mut Set<source::Link> {
+            match *self {
+                $(
+                    Xrefs::$vtype(ref mut inner) => {
+                        inner.source_regards_mut()
+                    }
+                )*
+            }
+        }
+
+        pub fn finalize(&mut self, store: &DataStore) {
+            match *self {
+                $(
+                    Xrefs::$vtype(ref mut inner) => inner.finalize(store),
+                )*
+            }
+        }
     }
 
 

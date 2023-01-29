@@ -368,6 +368,11 @@ impl XrefsBuilder {
             xrefs: store.data.iter().map(Data::default_xrefs).collect()
         }
     }
+
+    fn finalize(&mut self, store: &DataStore) {
+        self.xrefs.iter_mut().for_each(|item| item.finalize(&store));
+    }
+
 }
 
 impl LinkTargetMut<Xrefs> for XrefsBuilder {
@@ -398,6 +403,7 @@ impl XrefsStore {
             }
         }
         if ok {
+            xrefs.finalize(&data);
             Ok(XrefsStore {
                 data,
                 xrefs: xrefs.xrefs,

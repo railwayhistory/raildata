@@ -6,11 +6,14 @@ use crate::catalogue::CatalogueBuilder;
 use crate::document::path::Coord;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-use crate::store::{FullStore, StoreLoader, XrefsBuilder, XrefsStore};
+use crate::store::{
+    DataStore, FullStore, StoreLoader, XrefsBuilder, XrefsStore
+};
 use crate::types::{
     CountryCode, EventDate, IntoMarked, Key, LanguageCode, LanguageText, List,
-    LocalText, Marked, Set
+    LocalText, Marked, Set,
 };
+use super::source;
 use super::{DocumentLink, LineLink, PathLink, PointLink, SourceLink};
 use super::common::{Basis, Common, Progress};
 
@@ -269,6 +272,16 @@ impl Data {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Xrefs {
     pub lines: List<LineLink>,
+    pub source_regards: Set<source::Link>,
+}
+
+impl Xrefs {
+    pub fn source_regards_mut(&mut self) -> &mut Set<source::Link> {
+        &mut self.source_regards
+    }
+
+    pub fn finalize(&mut self, _store: &DataStore) {
+    }
 }
 
 

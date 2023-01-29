@@ -7,7 +7,7 @@ use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::store::StoreLoader;
 use crate::types::{
-    EventDate, IntoMarked, Key, LanguageText, List, Location, Marked, Set
+    EventDate, IntoMarked, Key, LanguageText, List, Location, Marked,
 };
 use super::{EntityLink, SourceLink};
 
@@ -20,11 +20,6 @@ pub struct Common {
     pub key: Marked<Key>,
     pub progress: Marked<Progress>,
     pub origin: Origin,
-
-    //--- Cross-links
-
-    /// Sources that have `regards` entries for this document.
-    pub sources: Set<SourceLink>,
 }
 
 impl Common {
@@ -37,7 +32,6 @@ impl Common {
             key,
             progress,
             origin,
-            sources: Set::new(),
         }
     }
 
@@ -51,7 +45,6 @@ impl Common {
             key: key,
             progress: doc.take_default("progress", context, report)?,
             origin: Origin::new(report.path().clone(), doc.location()),
-            sources: Set::new(),
         })
     }
 

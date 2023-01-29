@@ -4,10 +4,13 @@ use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
-use crate::store::{FullStore, StoreLoader, XrefsBuilder, XrefsStore};
-use crate::types::{
-    EventDate, Key, LanguageCode, LanguageText, List, LocalText, Marked
+use crate::store::{
+    DataStore, FullStore, StoreLoader, XrefsBuilder, XrefsStore
 };
+use crate::types::{
+    EventDate, Key, LanguageCode, LanguageText, List, LocalText, Marked, Set,
+};
+use super::source;
 use super::{DocumentLink, SourceLink, StructureLink};
 use super::common::{Common, Progress};
 
@@ -120,7 +123,18 @@ impl Data {
 //------------ Xrefs ---------------------------------------------------------
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Xrefs;
+pub struct Xrefs {
+    source_regards: Set<source::Link>,
+}
+
+impl Xrefs {
+    pub fn source_regards_mut(&mut self) -> &mut Set<source::Link> {
+        &mut self.source_regards
+    }
+
+    pub fn finalize(&mut self, _store: &DataStore) {
+    }
+}
 
 
 //------------ Meta ----------------------------------------------------------
