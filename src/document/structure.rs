@@ -97,14 +97,10 @@ impl Data {
 
     pub fn catalogue(
         &self,
-        _builder: &mut CatalogueBuilder,
+        builder: &mut CatalogueBuilder,
         _store: &FullStore,
         _report: &mut PathReporter,
     ) -> Result<(), Failed> {
-        Ok(())
-    }
-
-    pub fn process_names<F: FnMut(String)>(&self, mut process: F) {
         let mut names = HashSet::new();
         for event in &self.events {
             if let Some(some) = event.name.as_ref() {
@@ -114,8 +110,9 @@ impl Data {
             }
         }
         for name in names {
-            process(name.into())
+            builder.insert_name(name.into(), self.link.into())
         }
+        Ok(())
     }
 }
 

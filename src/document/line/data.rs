@@ -213,17 +213,13 @@ impl Data {
 
     pub fn catalogue(
         &self,
-        _builder: &mut CatalogueBuilder,
+        builder: &mut CatalogueBuilder,
         _store: &FullStore,
         _report: &mut PathReporter,
     ) -> Result<(), Failed> {
-        Ok(())
-    }
-
-    pub fn process_names<F: FnMut(String)>(&self, mut process: F) {
         let mut key = &self.key().as_str()[5..];
         while !key.is_empty() {
-            process(key.into());
+            builder.insert_name(key.into(), self.link.into());
             match key.find('.') {
                 Some(idx) => {
                     let (_, right) = key.split_at(idx);
@@ -244,8 +240,9 @@ impl Data {
             }
         }
         for name in names {
-            process(name.into())
+            builder.insert_name(name.into(), self.link.into());
         }
+        Ok(())
     }
 }
 
