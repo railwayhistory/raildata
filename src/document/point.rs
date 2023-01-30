@@ -42,7 +42,6 @@ impl<'a> Document<'a> {
 pub struct Data {
     link: PointLink,
 
-    // Attributes
     pub common: Common,
     pub events: EventList,
     pub records: RecordList,
@@ -299,6 +298,27 @@ impl Meta {
     ) -> Result<Self, Failed> {
         let xrefs = data.link.xrefs(store);
 
+        // junction: Either explicitely set or if we are part of more than
+        // one line or if we are the first or last point on the line.
+        let junction = if let Some(value) = data.junction {
+            value.into_value()
+        }
+        else if xrefs.lines.len() > 1 {
+            true
+        }
+        else {
+            match xrefs.lines.first() {
+                Some(line) => {
+                    let line = line.data(store);
+                    line.points.first().map(|x| x.into_value())
+                        == Some(data.link)
+                    || line.points.last().map(|x| x.into_value())
+                        == Some(data.link)
+                }
+                None => false
+            }
+        };
+
         // coord: Find the newest event that has a site attribute and take the
         // first entry.
         let mut coord = None;
@@ -314,11 +334,7 @@ impl Meta {
         }
 
         Ok(Meta {
-            junction: {
-                data.junction.map(Marked::into_value).unwrap_or_else(|| {
-                    xrefs.lines.len() > 1
-                })
-            },
+            junction,
             coord,
         })
     }

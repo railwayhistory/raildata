@@ -270,6 +270,15 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                     _ => panic!("link to wrong document type")
                 }
             }
+
+            pub fn document(
+                self, store: &FullStore,
+            ) -> super::$vattr::Document {
+                match self.0.document(store) {
+                    Document::$vtype(inner) => inner,
+                    _ => panic!("link to wrong document type")
+                }
+            }
         }
 
         impl From<DocumentLink> for $vlink {
@@ -360,15 +369,15 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                     [<$vtype Document>] { data, xrefs, meta }
                 }
 
-                pub fn data(&self) -> &super::$vattr::Data {
+                pub fn data(self) -> &'a super::$vattr::Data {
                     self.data
                 }
 
-                pub fn xrefs(&self) -> &super::$vattr::Xrefs {
+                pub fn xrefs(self) -> &'a super::$vattr::Xrefs {
                     self.xrefs
                 }
 
-                pub fn meta(&self) -> &super::$vattr::Meta {
+                pub fn meta(self) -> &'a super::$vattr::Meta {
                     self.meta
                 }
             }

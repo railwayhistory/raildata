@@ -14,7 +14,7 @@ use crate::types::{
     CountryCode, Date, EventDate, IntoMarked, Key, LanguageCode, LanguageText,
     List, LocalText, Location, Marked, Set
 };
-use crate::document::entity;
+use crate::document::{entity, point};
 use crate::document::combined::{
     DocumentLink, LineLink, EntityLink, PathLink, PointLink,
     SourceLink
@@ -22,6 +22,21 @@ use crate::document::combined::{
 use crate::document::common::{
     Agreement, AgreementType, Alternative, Basis, Common, Contract, Progress
 };
+
+
+//------------ Document ------------------------------------------------------
+
+pub use crate::document::combined::LineDocument as Document;
+
+impl<'a> Document<'a> {
+    pub fn junctions(
+        self, store: &'a FullStore
+    ) -> impl Iterator<Item = point::Document<'a>> + 'a {
+        self.data().points.iter_documents(store).filter(|doc| {
+            doc.meta().junction
+        })
+    }
+}
 
 
 //------------ Data ----------------------------------------------------------
@@ -90,52 +105,6 @@ impl Data {
     pub fn code(&self) -> &str {
         &self.code
     }
-
-    /*
-    fn last_junction_index(&self, library: &Library) -> usize {
-        self.points.iter().enumerate().rev().map(|(idx, point)| {
-            (idx, point.follow(library))
-        }).find_map(|(idx, point)| {
-            if !point.is_never_junction() {
-                Some(idx)
-            }
-            else {
-                None
-            }
-        }).unwrap_or_else(|| self.points.len() - 1)
-    }
-
-    pub fn junctions<'a>(
-        &'a self, library: &'a Library
-    ) -> impl Iterator<Item=&'a Point> + 'a {
-        let mut first = true;
-        let last = self.last_junction_index(library);
-        self.points.iter().enumerate().filter_map(move |(idx, point)| {
-            let point = point.follow(library);
-            if first {
-                if !point.is_never_junction() {
-                    first = false;
-                    Some(point)
-                }
-                else {
-                    None
-                }
-            }
-            else if idx == last {
-                Some(point)
-            }
-            else if idx > last {
-                None
-            }
-            else if point.is_junction() {
-                Some(point)
-            }
-            else {
-                None
-            }
-        })
-    }
-    */
 }
 
 impl Data {
@@ -196,13 +165,23 @@ impl Data {
         _store: &crate::store::DataStore,
         _report: &mut crate::load::report::PathReporter,
     ) -> Result<(), Failed> {
+        // points: line points
         for point in self.points.iter() {
             point.xrefs_mut(builder).lines.push(self.link);
         }
 
-        // Collect the line regions: Go over the events, find all the
+        // entity: line regions: Go over current and the events, find all the
         // regions and the longest section they apply to.
         let mut regions = HashMap::<entity::Link, Section>::new();
+        for section in &self.current.region.sections {
+            for region in &section.1 {
+                regions.entry(
+                    region.into_value()
+                ).and_modify(|current| {
+                    current.grow(&section.0)
+                }).or_insert(section.0.clone());
+            }
+        }
         for event in &self.events {
             if let Some(region_list) = event.properties.region.as_ref() {
                 let new_section = event.sections.overall(self.points.len());
@@ -227,6 +206,10 @@ impl Data {
         _store: &FullStore,
         _report: &mut PathReporter,
     ) -> Result<(), Failed> {
+        // Insert line.
+        builder.catalogue_mut().lines.push(self.link);
+
+        // Insert names.
         let mut key = &self.key().as_str()[5..];
         while !key.is_empty() {
             builder.insert_name(key.into(), self.link.into());
@@ -252,6 +235,7 @@ impl Data {
         for name in names {
             builder.insert_name(name.into(), self.link.into());
         }
+
         Ok(())
     }
 }
@@ -277,6 +261,12 @@ pub struct Points {
 }
 
 impl Points {
+    pub fn iter_documents<'s>(
+        &'s self, store: &'s FullStore
+    ) -> impl Iterator<Item = point::Document<'s>> + 's {
+        self.points.iter().map(move |link| link.document(store))
+    }
+
     fn context<'s>(&'s self, context: &'s StoreLoader) -> PointsContext<'s> {
         PointsContext {
             map: {

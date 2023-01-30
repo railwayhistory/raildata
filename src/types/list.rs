@@ -251,11 +251,12 @@ impl<T: PartialEq> PartialEq for List<T> {
 
 impl<T: Eq> Eq for List<T> { }
 
-impl<T> ops::Index<usize> for List<T> {
-    type Output = T;
+impl<T, I: slice::SliceIndex<[T]>> ops::Index<I> for List<T> {
+    type Output = I::Output;
 
-    fn index(&self, index: usize) -> &Self::Output {
-        self.as_slice().index(index)
+    #[inline]
+    fn index(&self, index: I) -> &Self::Output {
+        ops::Index::index(self.as_slice(), index)
     }
 }
 

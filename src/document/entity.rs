@@ -1,6 +1,7 @@
 
 use std::cmp;
 use std::collections::HashSet;
+use std::str::FromStr;
 use httools::json::JsonBuilder;
 use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
@@ -10,7 +11,8 @@ use crate::store::{
     DataStore, FullStore, StoreLoader, XrefsBuilder, XrefsStore
 };
 use crate::types::{
-    EventDate, Key, LanguageText, LanguageCode, LocalText, List, Marked, Set
+    CountryCode, EventDate, Key, LanguageText, LanguageCode, LocalText, List,
+    Marked, Set,
 };
 use super::{line, source};
 use super::common::{Basis, Common, Progress};
@@ -231,6 +233,16 @@ impl Data {
         for name in names {
             builder.insert_name(name.into(), self.link.into())
         }
+
+        // Insert countries
+        if matches!(self.subtype.into_value(), Subtype::Country) {
+            if let Ok(code) = CountryCode::from_str(
+                &self.key().as_str()[4..]
+            ) {
+                builder.insert_country(code, self.link);
+            }
+        }
+
         Ok(())
     }
 
