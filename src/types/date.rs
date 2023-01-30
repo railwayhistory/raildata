@@ -2,6 +2,7 @@
 
 use std::{cmp, fmt, str};
 use std::str::FromStr;
+use httools::json::JsonBuilder;
 use serde::{Deserialize, Serialize};
 use crate::load::yaml::{FromYaml, Value};
 use crate::load::report::{Failed, PathReporter};
@@ -145,6 +146,25 @@ impl Date {
 
     pub fn is_leap(&self) -> bool {
         (self.year % 4 == 0 && self.year % 100 != 0) || self.year % 400 == 0
+    }
+
+    pub fn json(&self, json: &mut JsonBuilder) {
+        json.member_raw("year", self.year);
+        if let Some(month) = self.month {
+            json.member_raw("month", month);
+            if let Some(day) = self.day {
+                json.member_raw("day", day)
+            }
+        }
+        if self.doubt {
+            json.member_raw("doubt", "true")
+        }
+        match self.precision {
+            Precision::Exact => {}
+            Precision::Circa => { json.member_str("precision", "circa") }
+            Precision::Before => { json.member_str("precision", "before") }
+            Precision::After => { json.member_str("precision", "after") }
+        }
     }
 }
 
@@ -337,6 +357,25 @@ impl EventDate {
             (None, Some(_)) => cmp::Ordering::Less,
             (Some(_), None) => cmp::Ordering::Greater,
             (Some(left), Some(right)) => left.cmp(right)
+        }
+    }
+
+    pub fn json(&self, json: &mut JsonBuilder) {
+        let mut iter = self.0.iter();
+        let first = match iter.next() {
+            Some(date) => date,
+            None => {
+                json.member_raw("date", "null");
+                return
+            }
+        };
+        json.member_object("date", |json| first.json(json));
+        if self.0.len() > 1 {
+            json.member_array("alternativeDates", |json| {
+                for date in iter {
+                    json.array_object(|json| date.json(json));
+                }
+            })
         }
     }
 }

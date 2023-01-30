@@ -16,6 +16,7 @@ struct Args {
     path: PathBuf,
 
     /// Start the HTTP server listening on given addr.
+    #[cfg(feature = "http")]
     #[arg(long, value_name = "ADDR")]
     http: Option<SocketAddr>,
 
@@ -131,10 +132,21 @@ fn main() {
         print_stats(store.as_ref());
     }
 
-    if let Some(addr) = args.http {
-        raildata::server::http(
-            addr,
-            raildata::server::State::new_arc(store, catalogue),
-        )
+    #[cfg(feature = "http")]
+    {
+        use tokio::runtime::Runtime;
+        use raildata::http::state::State;
+        use raildata::http::api;
+
+        if let Some(addr) = args.http {
+            let rt = Runtime::new().unwrap();
+
+            rt.block_on(
+                api::serve(
+                    addr,
+                    State::new_arc(store, catalogue),
+                )
+            );
+        }
     }
 }

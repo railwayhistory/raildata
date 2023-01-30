@@ -403,7 +403,9 @@ impl FromYaml<StoreLoader> for Event {
 }
 
 impl Event {
-    pub fn json(&self, _json: &mut JsonBuilder, _store: &FullStore) {
+    pub fn json(&self, json: &mut JsonBuilder, _store: &FullStore) {
+        self.date.json(json);
+        
     }
 }
 
