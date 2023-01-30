@@ -28,24 +28,24 @@ fn index_lines(
         start: usize, end: usize, len: usize,
         lang: LanguageCode, store: &FullStore
     ) -> Result<Response, Response> {
-        Ok(JsonBuilder::ok(|json| {
-            json.member_raw("start", start);
-            json.member_raw("num", end - start);
-            json.member_raw("len", len);
-            json.member_array("items", |json| {
+        Ok(JsonBuilder::ok(|json| json.object(|json| {
+            json.raw("start", start);
+            json.raw("num", end - start);
+            json.raw("len", len);
+            json.array("items", |json| {
                 for line in iter {
                     let line = line.document(store);
-                    json.array_object(|json| {
-                        json.member_str("key", line.data().key());
-                        json.member_str("code", line.data().code());
-                        json.member_str(
+                    json.object(|json| {
+                        json.string("key", line.data().key());
+                        json.string("code", line.data().code());
+                        json.string(
                             "title", line.data().name(lang.into())
                         );
-                        json.member_array("junctions", |json| {
+                        json.array("junctions", |json| {
                             for point in line.junctions(store) {
-                                json.array_object(|json| {
-                                    json.member_str("key", point.data().key());
-                                    json.member_str(
+                                json.object(|json| {
+                                    json.string("key", point.data().key());
+                                    json.string(
                                         "title", point.data().name(lang)
                                     );
                                 })
@@ -54,7 +54,7 @@ fn index_lines(
                     })
                 }
             })
-        }))
+        })))
     }
 
     let query = request.query();

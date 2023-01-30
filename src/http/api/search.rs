@@ -28,9 +28,9 @@ fn search_names(
     let q = match query.get_first("q") {
         Some(q) => q,
         _ => {
-            return Ok(JsonBuilder::ok(|json| {
-                json.member_array("items", |_| { })
-            }))
+            return Ok(JsonBuilder::ok(|json| json.object(|json| {
+                json.array("items", |_| { })
+            })))
         }
     };
 
@@ -43,8 +43,8 @@ fn search_names(
     }).map(|count| cmp::min(count, 100)).unwrap_or(20);
 
     if coord {
-        Ok(JsonBuilder::ok(|json| {
-            json.member_array("items", |json| {
+        Ok(JsonBuilder::ok_object(|json| {
+            json.array("items", |json| {
                 let found = state.catalogue().search_name(
                     q
                 ).filter_map(|(name, link)| {
@@ -57,14 +57,14 @@ fn search_names(
                     Some((name, coord, doc))
                 }).take(count);
                 for (name, coord, doc) in found {
-                    json.array_object(|json| {
-                        json.member_str("name", name);
-                        json.member_str("type", doc.doctype());
-                        json.member_str("title", doc.name(lang.into()));
-                        json.member_str("key", doc.key());
-                        json.member_object("coords", |json| {
-                            json.member_raw("lat", coord.lat);
-                            json.member_raw("lon", coord.lon);
+                    json.object(|json| {
+                        json.string("name", name);
+                        json.string("type", doc.doctype());
+                        json.string("title", doc.name(lang.into()));
+                        json.string("key", doc.key());
+                        json.object("coords", |json| {
+                            json.raw("lat", coord.lat);
+                            json.raw("lon", coord.lon);
                         });
                     })
                 }
@@ -72,16 +72,16 @@ fn search_names(
         }))
     }
     else {
-        Ok(JsonBuilder::ok(|json| {
-            json.member_array("items", |json| {
+        Ok(JsonBuilder::ok_object(|json| {
+            json.array("items", |json| {
                 let found = state.catalogue().search_name(q).take(count);
                 for (name, link) in found {
                     let doc = link.data(state.store());
-                    json.array_object(|json| {
-                        json.member_str("name", name);
-                        json.member_str("type", doc.doctype());
-                        json.member_str("title", doc.name(lang.into()));
-                        json.member_str("key", doc.key());
+                    json.object(|json| {
+                        json.string("name", name);
+                        json.string("type", doc.doctype());
+                        json.string("title", doc.name(lang.into()));
+                        json.string("key", doc.key());
                     })
                 }
             })

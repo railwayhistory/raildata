@@ -25,14 +25,6 @@ pub use super::combined::PathLink as Link;
 
 pub use super::combined::PathDocument as Document;
 
-impl<'a> Document<'a> {
-    pub fn json(self, _store: &FullStore) -> String {
-        self.data().common.json(|json| {
-            json.member_str("type", "path");
-        })
-    }
-}
-
 
 //------------ Data ----------------------------------------------------------
 

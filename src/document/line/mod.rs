@@ -5,6 +5,5 @@ pub use super::combined::LineLink as Link;
 
 pub mod data;
 pub mod meta;
-pub mod json;
 pub mod xrefs;
 

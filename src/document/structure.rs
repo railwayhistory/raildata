@@ -23,14 +23,6 @@ pub use super::combined::StructureLink as Link;
 
 pub use super::combined::StructureDocument as Document;
 
-impl<'a> Document<'a> {
-    pub fn json(self, _store: &FullStore) -> String {
-        self.data().common.json(|json| {
-            json.member_str("type", "structure");
-        })
-    }
-}
-
 
 //------------ Data ----------------------------------------------------------
 

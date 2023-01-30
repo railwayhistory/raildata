@@ -340,14 +340,6 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                     )*
                 }
             }
-
-            pub fn json(self, store: &FullStore) -> String {
-                match self {
-                    $(
-                        Document::$vtype(inner) => inner.json(store),
-                    )*
-                }
-            }
         }
     }
 
@@ -367,6 +359,14 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                     meta: &'a super::$vattr::Meta,
                 ) -> Self {
                     [<$vtype Document>] { data, xrefs, meta }
+                }
+
+                pub fn key(self) -> &'a Key {
+                    self.data().key()
+                }
+
+                pub fn doctype(self) -> DocumentType {
+                    DocumentType::$vtype
                 }
 
                 pub fn data(self) -> &'a super::$vattr::Data {
