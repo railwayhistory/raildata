@@ -6,14 +6,14 @@ use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::store::{
-    DataStore, FullStore, LinkTarget, StoreLoader, XrefsBuilder, XrefsStore
+    DataStore, DocumentLink, FullStore, LinkTarget, StoreLoader,
+    XrefsBuilder, XrefsStore,
 };
 use crate::types::{
     EventDate, Key, IntoMarked, LanguageCode, LanguageText, List, Marked,
     Set, Url,
 };
-use super::{DocumentLink, EntityLink, SourceLink};
-use super::combined;
+use super::{combined, entity, source};
 use super::common::{Common, Progress};
 
 
@@ -39,23 +39,23 @@ impl<'a> Document<'a> {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Data {
-    link: SourceLink,
+    link: source::Link,
     pub common: Common,
     pub subtype: Marked<Subtype>,
     
     // Type-dependent attributes
-    pub author: List<Marked<EntityLink>>,
-    pub collection: Option<Marked<SourceLink>>,
+    pub author: List<Marked<entity::Link>>,
+    pub collection: Option<Marked<source::Link>>,
     pub date: EventDate,
     pub designation: Option<Marked<String>>,
     pub digital: List<Marked<Url>>,
     pub edition: Option<Marked<String>>,
-    pub editor: List<Marked<EntityLink>>,
+    pub editor: List<Marked<entity::Link>>,
     pub isbn: Option<Isbn>,
     pub number: Option<Marked<String>>,
-    pub organization: List<Marked<EntityLink>>,
+    pub organization: List<Marked<entity::Link>>,
     pub pages: Option<Pages>,
-    pub publisher: List<Marked<EntityLink>>,
+    pub publisher: List<Marked<entity::Link>>,
     pub revision: Option<Marked<String>>,
     pub short_title: Option<Marked<String>>,
     pub title: Option<Marked<String>>,
@@ -63,9 +63,9 @@ pub struct Data {
     pub volume: Option<Marked<String>>,
 
     // Additional attributes
-    pub also: List<Marked<SourceLink>>,
+    pub also: List<Marked<source::Link>>,
     pub attribution: Option<Marked<String>>,
-    pub crossref: List<Marked<SourceLink>>,
+    pub crossref: List<Marked<source::Link>>,
     pub note: Option<LanguageText>,
     pub regards: List<Marked<DocumentLink>>,
 }
@@ -83,7 +83,7 @@ impl Data {
         &self.common.origin
     }
 
-    pub fn link(&self) -> SourceLink {
+    pub fn link(&self) -> source::Link {
         self.link
     }
 

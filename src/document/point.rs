@@ -7,14 +7,13 @@ use crate::document::path::Coord;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::store::{
-    DataStore, FullStore, StoreLoader, XrefsBuilder, XrefsStore
+    DataStore, DocumentLink, FullStore, StoreLoader, XrefsBuilder, XrefsStore,
 };
 use crate::types::{
     CountryCode, EventDate, IntoMarked, Key, LanguageCode, LanguageText, List,
     LocalText, Marked, Set,
 };
-use super::source;
-use super::{DocumentLink, LineLink, PathLink, PointLink, SourceLink};
+use super::{line, path, point, source};
 use super::common::{Basis, Common, Progress};
 
 
@@ -40,7 +39,7 @@ impl<'a> Document<'a> {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Data {
-    link: PointLink,
+    link: point::Link,
 
     pub common: Common,
     pub events: EventList,
@@ -64,7 +63,7 @@ impl Data {
         &self.common.origin
     }
 
-    pub fn link(&self) -> PointLink {
+    pub fn link(&self) -> point::Link {
         self.link
     }
 
@@ -133,7 +132,7 @@ impl Data {
     ///
     /// If the point has a location on this line, returns the location as well
     /// as whether it has changed.
-    pub fn location(&self, line: LineLink) -> Option<(Option<&str>, bool)> {
+    pub fn location(&self, line: line::Link) -> Option<(Option<&str>, bool)> {
         self.events_then_records(|properties| {
             if properties.location.is_empty() {
                 return None
@@ -270,7 +269,7 @@ impl Data {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Xrefs {
-    pub lines: List<LineLink>,
+    pub lines: List<line::Link>,
     pub source_regards: Set<source::Link>,
 }
 
@@ -371,15 +370,15 @@ pub type EventList = List<Event>;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Event {
     pub date: EventDate,
-    pub document: List<Marked<SourceLink>>,
-    pub source: List<Marked<SourceLink>>,
+    pub document: List<Marked<source::Link>>,
+    pub source: List<Marked<source::Link>>,
     pub basis: List<Basis>,
     pub note: Option<LanguageText>,
 
-    pub split_from: Option<Marked<PointLink>>,
-    pub merged: Option<Marked<PointLink>>,
+    pub split_from: Option<Marked<point::Link>>,
+    pub merged: Option<Marked<point::Link>>,
 
-    pub connection: Option<List<Marked<PointLink>>>,
+    pub connection: Option<List<Marked<point::Link>>>,
     pub site: Option<Site>,
 
     pub properties: Properties,
@@ -437,7 +436,7 @@ pub type RecordList = List<Record>;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Record {
-    pub document: List<Marked<SourceLink>>,
+    pub document: List<Marked<source::Link>>,
     pub note: Option<LanguageText>,
 
     pub properties: Properties,
@@ -482,7 +481,7 @@ pub struct Properties {
 
     pub category: Option<Set<Marked<Category>>>,
     pub de_rang: Option<Marked<DeRang>>,
-    pub superior: Option<Option<List<Marked<PointLink>>>>,
+    pub superior: Option<Option<List<Marked<point::Link>>>>,
     pub codes: Codes,
 
     pub location: Location,
@@ -681,7 +680,7 @@ impl Category {
 //------------ Location ------------------------------------------------------
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Location(List<(Marked<LineLink>, Option<Marked<String>>)>);
+pub struct Location(List<(Marked<line::Link>, Option<Marked<String>>)>);
 
 impl Location {
     pub fn is_empty(&self) -> bool {
@@ -692,13 +691,13 @@ impl Location {
         self.0.len()
     }
 
-    pub fn first(&self) -> Option<(LineLink, Option<&str>)> {
+    pub fn first(&self) -> Option<(line::Link, Option<&str>)> {
         self.0.first().map(|(link, value)| {
             (link.into_value(), value.as_ref().map(|value| value.as_str()))
         })
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (LineLink, Option<&str>)> {
+    pub fn iter(&self) -> impl Iterator<Item = (line::Link, Option<&str>)> {
         self.0.iter().map(|item| {
             (item.0.into_value(), item.1.as_ref().map(|s| s.as_str()))
         })
@@ -721,7 +720,7 @@ impl FromYaml<StoreLoader> for Location {
                     continue;
                 }
             };
-            let key = LineLink:: build(key, context, report);
+            let key = line::Link:: build(key, context, report);
             if value.is_null() {
                 res.push((key, None))
             }
@@ -861,7 +860,7 @@ data_enum! {
 //------------ Site ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Site(pub List<(Marked<PathLink>, Marked<String>)>);
+pub struct Site(pub List<(Marked<path::Link>, Marked<String>)>);
 
 impl FromYaml<StoreLoader> for Site {
     fn from_yaml(
@@ -879,7 +878,7 @@ impl FromYaml<StoreLoader> for Site {
                     continue;
                 }
             };
-            let key = PathLink::build(key, context, report);
+            let key = path::Link::build(key, context, report);
             match value.into_string(report) {
                 Ok(value) => res.push((key, value)),
                 Err(_) => { err = true }

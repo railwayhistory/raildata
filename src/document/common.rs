@@ -9,7 +9,7 @@ use crate::store::StoreLoader;
 use crate::types::{
     EventDate, IntoMarked, Key, LanguageText, List, Location, Marked,
 };
-use super::{EntityLink, SourceLink};
+use super::{entity, source};
 
 
 //------------ Common --------------------------------------------------------
@@ -96,8 +96,8 @@ impl Progress {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Alternative {
     pub date: EventDate,
-    pub document: List<Marked<SourceLink>>,
-    pub source: List<Marked<SourceLink>>,
+    pub document: List<Marked<source::Link>>,
+    pub source: List<Marked<source::Link>>,
 }
 
 
@@ -126,8 +126,8 @@ impl FromYaml<StoreLoader> for Alternative {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Basis {
     pub date: EventDate,
-    pub document: List<Marked<SourceLink>>,
-    pub source: List<Marked<SourceLink>>,
+    pub document: List<Marked<source::Link>>,
+    pub source: List<Marked<source::Link>>,
     pub agreement: Option<Agreement>,
     pub note: Option<LanguageText>,
 }
@@ -195,7 +195,7 @@ impl FromYaml<StoreLoader> for Basis {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Agreement {
     pub agreement_type: AgreementType,
-    pub parties: List<Marked<EntityLink>>,
+    pub parties: List<Marked<entity::Link>>,
 }
 
 impl FromYaml<StoreLoader> for Agreement {
@@ -232,7 +232,7 @@ data_enum! {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Contract {
-    pub parties: List<Marked<EntityLink>>,
+    pub parties: List<Marked<entity::Link>>,
     pub pos: Location,
 }
 

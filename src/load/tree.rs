@@ -1,13 +1,14 @@
 
-use std::{io, mem, path};
+use std::{io, mem};
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufReader;
+use std::path::Path;
 use std::sync::Arc;
 use ignore::{WalkBuilder, WalkState};
 use ignore::types::TypesBuilder;
 use osmxml::read::read_xml;
-use crate::document::Path;
+use crate::document::path;
 use crate::document::common::DocumentType;
 use crate::store::{DataStore, StoreLoader};
 use crate::types::{IntoMarked, Location};
@@ -18,7 +19,7 @@ use super::yaml::Loader;
 
 //------------ load_tree -----------------------------------------------------
 
-pub fn load_tree(path: &path::Path) -> Result<DataStore, Report> {
+pub fn load_tree(path: &Path) -> Result<DataStore, Report> {
     let report = Reporter::new();
 
     let store = {
@@ -38,7 +39,7 @@ pub fn load_tree(path: &path::Path) -> Result<DataStore, Report> {
 //------------ load_facts ----------------------------------------------------
 
 fn load_facts(
-    base: &path::Path,
+    base: &Path,
     docs: Arc<StoreLoader>,
     report: Reporter
 ) {
@@ -92,7 +93,7 @@ fn load_facts(
 //------------ load_paths ----------------------------------------------------
 
 pub fn load_paths(
-    base: &path::Path,
+    base: &Path,
     docs: Arc<StoreLoader>,
     report: Reporter
 ) {
@@ -152,7 +153,7 @@ fn load_osm_file<R: io::Read>(
     let mut relations = HashSet::new();
     mem::swap(osm.relations_mut(), &mut relations);
     for relation in relations.drain() {
-        match Path::from_osm(relation, &osm, docs, report) {
+        match path::Data::from_osm(relation, &osm, docs, report) {
             Ok(path) => {
                 let _ = docs.insert(path.into(), report);
             }

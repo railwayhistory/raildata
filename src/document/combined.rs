@@ -10,7 +10,6 @@ pub use crate::store::{
 };
 use crate::types::{Key, LanguageCode, Location, Marked, Set};
 use super::source;
-use super::{Line, Entity, Path, Point, Source, Structure};
 use super::common::{Common, DocumentType};
 
 macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
@@ -96,8 +95,9 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
             match doctype {
                 $(
                     DocumentType::$vtype => {
-                        $vtype::from_yaml(key, doc, link, context, report)
-                            .map(Data::$vtype)
+                        super::$vattr::Data::from_yaml(
+                            key, doc, link, context, report
+                        ).map(Data::$vtype)
                     }
                 )*
             }

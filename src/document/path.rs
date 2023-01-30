@@ -8,12 +8,11 @@ use crate::load::report;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::Mapping;
 use crate::store::{
-    DataStore, FullStore, StoreLoader, XrefsBuilder, XrefsStore
+    DataStore, DocumentLink, FullStore, StoreLoader, XrefsBuilder, XrefsStore,
 };
 use crate::types::{IntoMarked, LanguageCode, Location, Key, Marked, Set};
 use crate::types::key::InvalidKey;
 use super::source;
-use super::{DocumentLink, SourceLink};
 use super::common::{Common, Progress};
 
 
@@ -43,7 +42,7 @@ pub struct Data {
 
     pub name: Option<String>,
     pub nodes: Vec<Node>,
-    pub source: Vec<SourceLink>,
+    pub source: Vec<source::Link>,
 
     pub node_names: Vec<(String, usize)>,
     pub node_descr: Vec<(usize, String)>,
@@ -298,7 +297,7 @@ impl Data {
                     return Err(Failed)
                 }
             };
-            self.source.push(SourceLink::build(
+            self.source.push(source::Link::build(
                 key.marked(Location::NONE), context, report
             ).into_value());
         }

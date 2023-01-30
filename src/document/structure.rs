@@ -5,13 +5,12 @@ use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::store::{
-    DataStore, FullStore, StoreLoader, XrefsBuilder, XrefsStore
+    DataStore, DocumentLink, FullStore, StoreLoader, XrefsBuilder, XrefsStore,
 };
 use crate::types::{
     EventDate, Key, LanguageCode, LanguageText, List, LocalText, Marked, Set,
 };
 use super::source;
-use super::{DocumentLink, SourceLink, StructureLink};
 use super::common::{Common, Progress};
 
 
@@ -37,7 +36,7 @@ impl<'a> Document<'a> {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Data {
-    pub link: StructureLink,
+    pub link: Link,
     pub common: Common,
     pub subtype: Marked<Subtype>,
     pub events: EventList,
@@ -172,8 +171,8 @@ pub type EventList = List<Event>;
 pub struct Event {
     // Meta attributes
     pub date: EventDate,
-    pub document: List<Marked<SourceLink>>,
-    pub source: List<Marked<SourceLink>>,
+    pub document: List<Marked<source::Link>>,
+    pub source: List<Marked<source::Link>>,
     pub note: Option<LanguageText>,
 
     pub length: Option<Marked<f64>>,

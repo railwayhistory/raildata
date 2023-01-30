@@ -8,15 +8,14 @@ use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::store::{
-    DataStore, FullStore, StoreLoader, XrefsBuilder, XrefsStore
+    DataStore, DocumentLink, FullStore, StoreLoader, XrefsBuilder, XrefsStore
 };
 use crate::types::{
     CountryCode, EventDate, Key, LanguageText, LanguageCode, LocalText, List,
     Marked, Set,
 };
-use super::{line, source};
+use super::{entity, line, source};
 use super::common::{Basis, Common, Progress};
-use super::{DocumentLink, LineLink, EntityLink, SourceLink};
 
 
 //------------ Link ----------------------------------------------------------
@@ -42,7 +41,7 @@ impl<'a> Document<'a> {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Data {
-    link: EntityLink,
+    link: entity::Link,
 
     pub common: Common,
     pub subtype: Marked<Subtype>,
@@ -267,16 +266,16 @@ pub struct Xrefs {
     pub source_regards: Set<source::Link>,
 
     /// All the sources that this entity has authored.
-    pub source_author: Set<SourceLink>,
+    pub source_author: Set<source::Link>,
 
     /// All the sources that this entity has edited.
-    pub source_editor: Set<SourceLink>,
+    pub source_editor: Set<source::Link>,
 
     /// All the sources that this entity was responsible for as an organization.
-    pub source_organization: Set<SourceLink>,
+    pub source_organization: Set<source::Link>,
 
     /// All the sources that this entity has published.
-    pub source_publisher: Set<SourceLink>,
+    pub source_publisher: Set<source::Link>,
 }
 
 impl Xrefs {
@@ -342,8 +341,8 @@ pub type EventList = List<Event>;
 pub struct Event {
     // Meta attributes
     pub date: EventDate,
-    pub document: List<Marked<SourceLink>>,
-    pub source: List<Marked<SourceLink>>,
+    pub document: List<Marked<source::Link>>,
+    pub source: List<Marked<source::Link>>,
     pub basis: List<Basis>,
     pub note: Option<LanguageText>,
 
@@ -352,16 +351,16 @@ pub struct Event {
     /// The place of domicile of an organization.
     ///
     /// For geographic organizations, this is their capital.
-    pub domicile: List<Marked<EntityLink>>,
+    pub domicile: List<Marked<entity::Link>>,
     pub name: Option<LocalText>,
-    pub owner: Option<List<Marked<EntityLink>>>,
+    pub owner: Option<List<Marked<entity::Link>>>,
     pub property: Option<Property>,
     pub short_name: Option<LocalText>,
     pub status: Option<Marked<Status>>,
-    pub successor: Option<Marked<EntityLink>>,
+    pub successor: Option<Marked<entity::Link>>,
 
     /// An organization this organization is a unit of.
-    pub superior: Option<Marked<EntityLink>>,
+    pub superior: Option<Marked<entity::Link>>,
 }
 
 impl FromYaml<StoreLoader> for Event {
@@ -414,10 +413,10 @@ impl Event {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Property {
     pub role: Marked<PropertyRole>,
-    pub region: List<Marked<EntityLink>>,
-    pub constructor: List<Marked<EntityLink>>,
-    pub operator: List<Marked<EntityLink>>,
-    pub owner: List<Marked<EntityLink>>,
+    pub region: List<Marked<entity::Link>>,
+    pub constructor: List<Marked<entity::Link>>,
+    pub operator: List<Marked<entity::Link>>,
+    pub owner: List<Marked<entity::Link>>,
 }
 
 impl FromYaml<StoreLoader> for Property {
@@ -481,7 +480,7 @@ pub struct Crosslink {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LineCrossref {
-    pub line: LineLink,
+    pub line: line::Link,
     pub region: bool,
     pub owned: bool,
     pub operated: bool,
