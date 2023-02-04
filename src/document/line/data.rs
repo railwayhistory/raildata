@@ -93,7 +93,7 @@ impl Data {
 
     pub fn name(&self, lang: LanguageCode) -> &str {
         for event in &self.events {
-            if let Some(name) = event.name.as_ref() {
+            if let Some(name) = event.properties.name.as_ref() {
                 if let Some(name) = name.for_language(lang) {
                     return name
                 }
@@ -226,7 +226,7 @@ impl Data {
 
         let mut names = HashSet::new();
         for event in self.events.iter() {
-            if let Some(some) = event.name.as_ref() {
+            if let Some(some) = event.properties.name.as_ref() {
                 for (_, name) in some {
                     names.insert(name.as_value());
                 }
@@ -601,7 +601,7 @@ pub struct Event {
     pub concession: Option<Concession>,
     pub agreement: Option<Agreement>,
 
-    properties: Properties,
+    pub properties: Properties,
 }
 
 impl Event {
@@ -705,14 +705,6 @@ impl FromYaml<PointsContext<'_>> for Event {
     }
 }
 
-impl ops::Deref for Event {
-    type Target = Properties;
-
-    fn deref(&self) -> &Self::Target {
-        &self.properties
-    }
-}
-
 
 //------------ RecordList ----------------------------------------------------
 
@@ -760,7 +752,7 @@ pub struct Record {
     pub document: Marked<SourceLink>,
     pub note: Option<LanguageText>,
 
-    properties: Properties
+    pub properties: Properties
 }
 
 impl FromYaml<PointsContext<'_>> for Record {
@@ -790,21 +782,13 @@ impl FromYaml<PointsContext<'_>> for Record {
     }
 }
 
-impl ops::Deref for Record {
-    type Target = Properties;
-
-    fn deref(&self) -> &Self::Target {
-        &self.properties
-    }
-}
-
 
 //------------ Properties ----------------------------------------------------
 
 #[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Properties {
     pub category: Option<Set<Category>>,
-    pub electrified: Option<Option<Set<Electrified>>>,
+    pub electrified: Option<Set<Electrified>>,
     pub gauge: Option<Set<Gauge>>,
     pub name: Option<LocalText>,
     pub rails: Option<Marked<u8>>,
@@ -1259,17 +1243,6 @@ impl PartialEq for CourseSegment {
 pub type Electrified = Marked<String>;
 
 
-//------------ Goods ---------------------------------------------------------
-
-data_enum! {
-    pub enum Goods {
-        { None: "none" }
-        { Limited: "limited" }
-        { Full: "full" }
-    }
-}
-
-
 //------------ Gauge ---------------------------------------------------------
 
 #[derive(
@@ -1318,6 +1291,17 @@ impl<C> FromYaml<C> for Gauge {
 impl fmt::Display for Gauge {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}\u{202f}mm", self.0)
+    }
+}
+
+
+//------------ Goods ---------------------------------------------------------
+
+data_enum! {
+    pub enum Goods {
+        { None: "none" }
+        { Limited: "limited" }
+        { Full: "full" }
     }
 }
 

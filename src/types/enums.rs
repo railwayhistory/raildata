@@ -103,6 +103,17 @@ macro_rules! data_enum {
                 })
             }
         }
+
+        #[cfg(feature = "http")]
+        impl crate::http::json::StateBuildJson for $name {
+            fn json(
+                &self,
+                json: &mut httools::json::JsonValue,
+                _state: &crate::http::state::State,
+            ) {
+                json.string(self)
+            }
+        }
     };
 }
 

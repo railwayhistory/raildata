@@ -1,4 +1,5 @@
 use std::process;
+#[cfg(feature = "http")]
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -113,6 +114,7 @@ fn main() {
         }
     };
 
+    #[allow(unused_variables)]
     let catalogue = match Catalogue::generate(&store) {
         Ok(catalogue) => catalogue,
         Err(mut err) => {

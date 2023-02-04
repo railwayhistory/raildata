@@ -34,10 +34,11 @@ pub struct Data {
     link: point::Link,
 
     pub common: Common,
+    pub subtype: Marked<Subtype>,
+    pub junction: Option<Marked<bool>>,
+
     pub events: EventList,
     pub records: RecordList,
-    pub junction: Option<Marked<bool>>,
-    pub subtype: Marked<Subtype>,
 }
 
 /// # Data Access

@@ -146,6 +146,24 @@ impl<T> List<T> {
             Inner::Many(ref mut vec) => vec.last_mut(),
         }
     }
+
+    /// Returns an item if it is the sole item in the list.
+    pub fn single(&self) -> Option<&T> {
+        match self.inner {
+            Inner::One(ref item) => Some(item),
+            _ => None
+        }
+    }
+
+    /// Returns an iterator if there are at least two items in the list.
+    pub fn many(&self) -> Option<Iter<T>> {
+        if matches!(self.inner, Inner::Many(_)) {
+            Some(self.iter())
+        }
+        else {
+            None
+        }
+    }
 }
 
 impl<T> Default for List<T> {

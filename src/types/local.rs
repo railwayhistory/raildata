@@ -256,6 +256,12 @@ impl FromStr for LocalCode {
     }
 }
 
+impl fmt::Display for LocalCode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 
 //------------ CodedText and friends -----------------------------------------
 
@@ -282,6 +288,13 @@ impl<C: Ord> CodedText<C> {
         CodedTextIter {
             text: self,
             pos: 0
+        }
+    }
+
+    pub fn as_plain(&self) -> Option<&str> {
+        match self.0 {
+            CTInner::Plain(ref inner) => Some(inner.as_str()),
+            CTInner::Map(_) => None,
         }
     }
 }
