@@ -15,7 +15,7 @@ crossbeam       = "0.8.0"
 derive_more     = "0.14.0"
 osmxml          = { git = "https://github.com/partim/osmxml.git" }
 url             = "1.2"
-httools         = { path = "../httools", optional = true, features = [ "json"] }
+httools         = { git = "https://github.com/nlnetlabs/httools", optional = true, features = [ "json"] }
 ignore          = "0.4"
 paste           = "1.0"
 radix_trie      = "0.2"
