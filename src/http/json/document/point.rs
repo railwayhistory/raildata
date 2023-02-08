@@ -38,6 +38,12 @@ impl Data {
         if let Some(junction) = self.junction {
             json.raw("junction", junction)
         }
+        if !self.events.is_empty() {
+            json.value("events", |json| self.events.json(json, state));
+        }
+        if !self.records.is_empty() {
+            json.value("records", |json| self.records.json(json, state));
+        }
     }
 }
 

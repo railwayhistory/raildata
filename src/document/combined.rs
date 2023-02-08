@@ -12,6 +12,8 @@ use crate::types::{Key, LanguageCode, Location, Marked, Set};
 use super::source;
 use super::common::{Common, DocumentType};
 
+pub use crate::store::DocumentLink as Link;
+
 macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                               $vlink:ident ), )* ) => {
 
@@ -337,6 +339,14 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                                 [<$vtype Document>]::new(data, xrefs, meta)
                             )
                         }
+                    )*
+                }
+            }
+
+            pub fn key(self) -> &'a Key {
+                match self {
+                    $(
+                        Document::$vtype(doc) => doc.key(),
                     )*
                 }
             }

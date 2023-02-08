@@ -1,3 +1,4 @@
+use std::fmt;
 use derive_more::Display;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error as _;
@@ -37,6 +38,12 @@ impl<C> FromYaml<C> for Marked<Url> {
                 Err(Failed)
             }
         }
+    }
+}
+
+impl fmt::Display for Url {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.0.as_str())
     }
 }
 

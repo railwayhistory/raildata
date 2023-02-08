@@ -4,7 +4,7 @@ use crate::http::json::StateBuildJson;
 use crate::http::state::State;
 use crate::types::date::{Date, EventDate, Precision};
 use crate::types::local::{CodedText, CountryCode};
-use crate::types::{List, Set};
+use crate::types::{List, Set, Url};
 
 impl Date {
     pub fn json(&self, json: &mut JsonValue) {
@@ -99,6 +99,16 @@ impl<T: StateBuildJson + Eq + hash::Hash> StateBuildJson for Set<T> {
                 json.value(|json| item.json(json, state))
             })
         })
+    }
+}
+
+impl StateBuildJson for Url {
+    fn json(
+        &self,
+        json: &mut httools::json::JsonValue,
+        _state: &crate::http::state::State,
+    ) {
+        json.string(self);
     }
 }
 

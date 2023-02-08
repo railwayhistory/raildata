@@ -1,5 +1,5 @@
 
-use std::ops;
+use std::{fmt, ops};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
@@ -302,6 +302,12 @@ impl ops::Deref for Pages {
 
     fn deref(&self) -> &str {
         self.0.as_value().as_ref()
+    }
+}
+
+impl fmt::Display for Pages {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
