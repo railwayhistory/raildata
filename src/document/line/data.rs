@@ -359,7 +359,7 @@ pub struct Current {
     pub gauge: CurrentValue<Set<Gauge>>,
     pub goods: CurrentValue<Goods>,
     pub jurisdiction: CurrentValue<Marked<CountryCode>>,
-    pub name: CurrentValue<LocalText>,
+    pub name: CurrentValue<Option<LocalText>>,
     pub operator: CurrentValue<Option<List<Marked<EntityLink>>>>,
     pub owner: CurrentValue<Option<List<Marked<EntityLink>>>>,
     pub passenger: CurrentValue<Passenger>,
@@ -369,6 +369,8 @@ pub struct Current {
     pub status: CurrentValue<Status>,
     pub tracks: CurrentValue<Marked<u8>>,
 
+    pub ch_bav: CurrentValue<Option<String>>,
+    pub at_vzg: CurrentValue<Option<AtVzg>>,
     pub de_vzg: CurrentValue<Option<DeVzg>>,
     pub fr_rfn: CurrentValue<Option<FrRfn>>,
 
@@ -400,6 +402,8 @@ impl FromYaml<PointsContext<'_>> for Current {
         let status = value.take_default("status", context, report);
         let tracks = value.take_default("tracks", context, report);
 
+        let at_vzg = value.take_default("at.VzG", context, report);
+        let ch_bav = value.take_default("ch.BAV", context, report);
         let de_vzg = value.take_default("de.VzG", context, report);
         let fr_rfn = value.take_default("fr.RFN", context, report);
 
@@ -425,6 +429,8 @@ impl FromYaml<PointsContext<'_>> for Current {
             status: status?,
             tracks: tracks?,
 
+            at_vzg: at_vzg?,
+            ch_bav: ch_bav?,
             de_vzg: de_vzg?,
             fr_rfn: fr_rfn?,
 
@@ -807,6 +813,7 @@ pub struct Properties {
     pub course: Option<List<CourseSegment>>,
     pub region: Option<List<Marked<EntityLink>>>,
 
+    pub at_vzg: Option<AtVzg>,
     pub de_vzg: Option<DeVzg>,
     pub fr_rfn: Option<FrRfn>,
 }
@@ -829,6 +836,7 @@ impl Properties {
       //|| self.reused.is_some()
         || self.status.is_some()
         || self.tracks.is_some()
+        || self.at_vzg.is_some()
         || self.de_vzg.is_some()
         || self.fr_rfn.is_some()
     }
@@ -857,6 +865,7 @@ impl Properties {
         let status = value.take_opt("status", context, report);
         let tracks = value.take_opt("tracks", context, report);
 
+        let at_vzg = value.take_opt("at.VzG", context, report);
         let de_vzg = value.take_opt("de.VzG", context, report);
         let fr_rfn = value.take_opt("fr.RFN", context, report);
         
@@ -878,6 +887,7 @@ impl Properties {
             status: status?,
             tracks: tracks?,
 
+            at_vzg: at_vzg?,
             de_vzg: de_vzg?,
             fr_rfn: fr_rfn?,
         })
@@ -1122,6 +1132,8 @@ data_enum! {
         { DeAnschl: "de.Anschl" }
         { DeBfgleis: "de.Bfgleis" }
         { DeStrab: "de.Strab" }
+
+        { GbLight: "gb.Light" }
     }
 }
 
@@ -1335,6 +1347,11 @@ data_enum! {
         { Released: "released" }
     }
 }
+
+
+//------------ AtVzg ---------------------------------------------------------
+
+pub type AtVzg = Marked<String>;
 
 
 //------------ DeVzg ---------------------------------------------------------
