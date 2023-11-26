@@ -597,6 +597,11 @@ data_enum! {
         { DkTs: "dk.Ts" }       // Teknisk station
         { DkVm: "dk.VM" }       // VM-station
 
+        { GbHalt: "gb.Halt" }
+        { GbJn: "gb.Jn" }
+        { GbSt: "gb.St" }
+        { GbTep: "gb.TEP" }
+
         { NlAansl: "nl.Aansl" }
         { NlGem: "nl.Gem" }
         { NlH: "nl.H" }
@@ -654,6 +659,11 @@ impl Category {
             DkT => "T",
             DkTs => "Ts",
             DkVm => "VM",
+
+            GbHalt => "Halt",
+            GbJn => "Jn",
+            GbSt => "St",
+            GbTep => "TEP",
 
             NlAansl => "Aansluiting",
             NlGem => "Goederen Emplacement",
