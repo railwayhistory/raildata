@@ -146,8 +146,8 @@ impl Meta {
 
 data_enum! {
     pub enum Subtype {
-        { Bridge: "bridge" }
         { Tunnel: "tunnel" }
+        { Viaduct: "viaduct" }
     }
 }
 
