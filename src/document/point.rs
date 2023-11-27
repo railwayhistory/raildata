@@ -126,16 +126,22 @@ impl Data {
     /// If the point has a location on this line, returns the location as well
     /// as whether it has changed.
     pub fn location(&self, line: line::Link) -> Option<(Option<&str>, bool)> {
-        self.events_then_records(|properties| {
-            if properties.location.is_empty() {
-                return None
-            }
-            for (link, loc) in properties.location.iter() {
-                if link == line {
-                    return Some(loc)
-                }
-            }
-            None
+        let mut iter = self.events.iter().filter_map(|event| {
+            event.properties.location.find(line)
+        });
+        let current = iter.next()?;
+        let changed = iter.next().is_some();
+        Some((current, changed))
+    }
+
+    /// Returns an iterator over the locations for the given line.
+    pub fn locations(
+        &self, line: line::Link
+    ) -> impl Iterator<Item = Option<&str>> + '_ {
+        self.events.iter().map(|event| {
+            event.properties.location.iter()
+        }).flatten().filter_map(move |(link, location)| {
+            (line == link).then(|| location)
         })
     }
 
@@ -143,11 +149,12 @@ impl Data {
     pub fn category(
         &self
     ) -> Option<(impl Iterator<Item = Category> + '_, bool)> {
-        self.events_then_records(
-            |properties| properties.category.as_ref()
-        ).map(|(res, changed)| {
-            (res.iter().map(|cat| cat.into_value()), changed)
-        })
+        let mut iter = self.events.iter().filter_map(|event| {
+            event.properties.category.as_ref()
+        });
+        let current = iter.next()?;
+        let changed = iter.next().is_some();
+        Some((current.iter().map(|val| val.to_value()), changed))
     }
 
     /// Returns the current status.
@@ -661,8 +668,8 @@ impl Category {
             DkVm => "VM",
 
             GbHalt => "Halt",
-            GbJn => "Jn",
-            GbSt => "St",
+            GbJn => "junction",
+            GbSt => "station",
             GbTep => "TEP",
 
             NlAansl => "Aansluiting",
@@ -703,6 +710,12 @@ impl Location {
     pub fn iter(&self) -> impl Iterator<Item = (line::Link, Option<&str>)> {
         self.0.iter().map(|item| {
             (item.0.into_value(), item.1.as_ref().map(|s| s.as_str()))
+        })
+    }
+
+    pub fn find(&self, line: line::Link) -> Option<Option<&str>> {
+        self.iter().find_map(|(link, value)| {
+            (link == line).then(|| value)
         })
     }
 }

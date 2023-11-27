@@ -51,6 +51,10 @@ impl Data {
         &self.common.origin
     }
 
+    pub fn link(&self) -> entity::Link {
+        self.link
+    }
+
     pub fn name(&self, lang: LanguageCode) -> &str {
         self.local_short_name(lang)
     }

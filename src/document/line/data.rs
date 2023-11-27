@@ -6,6 +6,7 @@ use std::str::FromStr;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
+#[cfg(feature = "http")] use crate::http::json::StateBuildJson;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::store::{FullStore, StoreLoader, XrefsBuilder};
@@ -263,8 +264,36 @@ pub struct Points {
 impl Points {
     pub fn iter_documents<'s>(
         &'s self, store: &'s FullStore
-    ) -> impl Iterator<Item = point::Document<'s>> + 's {
+    ) -> impl Iterator<Item = point::Document<'s>> + DoubleEndedIterator + 's {
         self.points.iter().map(move |link| link.document(store))
+    }
+
+    pub fn first_point<'s>(
+        &'s self, store: &'s FullStore
+    ) -> point::Document<'s> {
+        self.points.first().unwrap().document(store)
+    }
+
+    pub fn first_junction<'s>(
+        &'s self, store: &'s FullStore
+    ) -> point::Document<'s> {
+        self.iter_documents(store).find(|point| {
+            !point.data().is_never_junction()
+        }).unwrap_or_else(|| self.first_point(store))
+    }
+
+    pub fn last_point<'s>(
+        &'s self, store: &'s FullStore
+    ) -> point::Document<'s> {
+        self.points.last().unwrap().document(store)
+    }
+
+    pub fn last_junction<'s>(
+        &'s self, store: &'s FullStore
+    ) -> point::Document<'s> {
+        self.iter_documents(store).rev().find(|point| {
+            !point.data().is_never_junction()
+        }).unwrap_or_else(|| self.last_point(store))
     }
 
     fn context<'s>(&'s self, context: &'s StoreLoader) -> PointsContext<'s> {
@@ -355,7 +384,7 @@ impl<'a> ops::Deref for PointsContext<'a> {
 pub struct Current {
     pub category: CurrentValue<Set<Category>>,
     pub course: CurrentValue<List<CourseSegment>>,
-    pub electrified: CurrentValue<Option<Electrified>>,
+    pub electrified: CurrentValue<Option<Set<Marked<Electrified>>>>,
     pub gauge: CurrentValue<Set<Gauge>>,
     pub goods: CurrentValue<Goods>,
     pub jurisdiction: CurrentValue<Marked<CountryCode>>,
@@ -447,6 +476,25 @@ impl FromYaml<PointsContext<'_>> for Current {
 #[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct CurrentValue<T> {
     sections: List<(Section, T)>,
+}
+
+impl<T> CurrentValue<T> {
+    /// Returns a reference to itself if it isn’t empty.
+    pub fn and_then<'a, U, F>(&'a self, f: F) -> Option<U>
+    where
+        F: FnOnce(&'a Self) -> U
+    {
+        if self.sections.is_empty() {
+            None
+        }
+        else {
+            Some(f(self))
+        }
+    }
+
+    pub fn as_slice(&self) -> &[(Section, T)] {
+        self.sections.as_slice()
+    }
 }
 
 impl<T> Default for CurrentValue<T> {
@@ -546,7 +594,7 @@ impl<T> ops::Deref for CurrentValue<T> {
     type Target = [(Section, T)];
     
     fn deref(&self) -> &Self::Target {
-        self.sections.as_slice()
+        self.as_slice()
     }
 }
 
@@ -794,7 +842,7 @@ impl FromYaml<PointsContext<'_>> for Record {
 #[derive(Clone, Deserialize, Debug, Serialize)]
 pub struct Properties {
     pub category: Option<Set<Category>>,
-    pub electrified: Option<Set<Electrified>>,
+    pub electrified: Option<Set<Marked<Electrified>>>,
     pub gauge: Option<Set<Gauge>>,
     pub name: Option<LocalText>,
     pub rails: Option<Marked<u8>>,
@@ -998,6 +1046,26 @@ pub struct Section {
 }
 
 impl Section {
+    pub fn start_point<'s>(
+        &'s self, line: &'s Data, store: &'s FullStore
+    ) -> point::Document<'s> {
+        match self.start {
+            Some(link) => link.document(store),
+            None => line.points.first_point(store),
+        }
+    }
+
+    pub fn end_point<'s>(
+        &'s self, line: &'s Data, store: &'s FullStore
+    ) -> point::Document<'s> {
+        match self.end {
+            Some(link) => link.document(store),
+            None => line.points.last_point(store),
+        }
+    }
+}
+
+impl Section {
     fn new(
         start: Option<Marked<PointLink>>,
         end: Option<Marked<PointLink>>,
@@ -1125,6 +1193,7 @@ impl Ord for Section {
 //------------ Category ------------------------------------------------------
 
 data_enum! {
+    #[non_exhaustive]
     pub enum Category {
         { DeHauptbahn: "de.Hauptbahn" }
         { DeNebenbahn: "de.Nebenbahn" }
@@ -1134,6 +1203,17 @@ data_enum! {
         { DeStrab: "de.Strab" }
 
         { GbLight: "gb.Light" }
+    }
+}
+
+impl Category {
+    pub fn short_str(self) -> &'static str {
+        if let Some(pos) = self.as_str().find('.') {
+            &self.as_str()[pos + 1..]
+        }
+        else {
+            self.as_str()
+        }
     }
 }
 
@@ -1252,7 +1332,246 @@ impl PartialEq for CourseSegment {
 
 //------------ Electrified ---------------------------------------------------
 
-pub type Electrified = Marked<String>;
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Electrified {
+    named: Option<&'static str>,
+    generic: Option<GenericEl>,
+}
+
+impl Electrified {
+    fn from_name(s: &str) -> Option<Self> {
+        macro_rules! system {
+            (
+                $(
+                    $name:expr => $sys:ident, $volt:expr, $acdc:ident;
+                )*
+            ) => {
+                $(
+                    if s == $name {
+                        return Some(Electrified {
+                            named: Some($name),
+                            generic: Some(GenericEl::new(
+                                ElSystem::$sys, $volt, AcDc::$acdc
+                            )),
+                        })
+                    }
+                )*
+            }
+        }
+
+        system!(
+            "at"      => Ole, 15000, Ac16;
+            "be"      => Ole,  3000, Dc;
+            "be.25"   => Ole, 25000, Ac50;
+            "ch"      => Ole, 15000, Ac16;
+            "ch.11k"  => Ole, 11000, Ac16;
+            "de"      => Ole, 15000, Ac16;
+            "de.bln-1903"  => Rail,  550, Dc;
+            "de.bln"  => Rail,  800, Dc;
+            "de.hmb"  => Rail, 1200, Dc;
+            "de.hmb-alt" => Ole, 6300, Ac25;
+            "dk"      => Ole, 25000, Ac50;
+            "gb.25"   => Ole, 25000, Ac50;
+            "gb.rail" => Rail,  750, Dc;
+            "fr.15"   => Ole,  1500, Dc;
+            "fr.25"   => Ole, 25000, Ac50;
+            "fr.lgv"  => Ole, 25000, Ac50;
+            "hu"      => Ole, 25000, Ac50;
+            "it.3"    => Ole,  3000, Dc;
+            "it.25"   => Ole, 25000, Ac50;
+            "lu.25"   => Ole, 25000, Ac50;
+            "nl"      => Ole,  1500, Dc;
+            "nl.25"   => Ole, 25000, Ac50;
+            "pl"      => Ole,  3000, Dc;
+            "si"      => Ole,  3000, Dc;
+        );
+        None
+    }
+
+    pub fn named(&self) -> Option<&str> {
+        self.named
+    }
+
+    pub fn generic(&self) -> Option<GenericEl> {
+        self.generic
+    }
+}
+
+impl FromStr for Electrified {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "none" {
+            Ok(Self { named: None, generic: None })
+        }
+        else if let Some(res) = Self::from_name(s) {
+            Ok(res)
+        }
+        else if let Ok(generic) = GenericEl::from_str(s) {
+            Ok(Self {
+                named: None,
+                generic: Some(generic)
+            })
+        }
+        else {
+            Err(format!("unknown electrification system '{}'", s))
+        }
+    }
+}
+
+impl fmt::Display for Electrified {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(name) = self.named {
+            f.write_str(name)
+        }
+        else if let Some(generic) = self.generic {
+            generic.fmt(f)
+        }
+        else {
+            f.write_str("none")
+        }
+    }
+}
+
+impl FromYaml<StoreLoader> for Marked<Electrified> {
+    fn from_yaml(
+        value: Value,
+        _context: &StoreLoader,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let text = value.into_string(report)?;
+        let res = text.try_map(|plain| Electrified::from_str(&plain));
+        res.map_err(|err| {
+            report.error(err);
+            Failed
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for Electrified {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D
+    ) -> Result<Self, D::Error> {
+        Self::from_str(
+            Deserialize::deserialize(deserializer)?
+        ).map_err(|err| {
+            serde::de::Error::custom(err)
+        })
+    }
+}
+
+#[cfg(feature = "http")]
+impl StateBuildJson for Electrified {
+    fn json(
+        &self,
+        json: &mut httools::json::JsonValue,
+        _state: &crate::http::state::State,
+    ) {
+        json.string(self)
+    }
+}
+
+impl Serialize for Electrified {
+    fn serialize<S: serde::Serializer>(
+        &self, serializer: S
+    ) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+
+//------------ GenericEl -----------------------------------------------------
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct GenericEl {
+    pub system: ElSystem,
+    pub voltage: u16,
+    pub frequency: AcDc
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ElSystem {
+    Ole,
+    Rail,
+    Rail4,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum AcDc {
+    Ac16,
+    Ac25,
+    Ac50,
+    Tc50,
+    Dc,
+}
+
+impl GenericEl {
+    const fn new(system: ElSystem, voltage: u16, frequency: AcDc) -> Self {
+        Self { system, voltage, frequency }
+    }
+}
+
+impl FromStr for GenericEl {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (system, s) = if let Some(s) = s.strip_prefix("ole.") {
+            (ElSystem::Ole, s)
+        }
+        else if let Some(s) = s.strip_prefix("rail.") {
+            (ElSystem::Rail, s)
+        }
+        else if let Some(s) = s.strip_prefix("rail4.") {
+            (ElSystem::Rail4, s)
+        }
+        else {
+            return Err("invalid generic electrification string")
+        };
+
+        let (frequency, s) = if let Some(s) = s.strip_suffix("ac16") {
+            (AcDc::Ac16, s)
+        }
+        else if let Some(s) = s.strip_suffix("ac25") {
+            (AcDc::Ac25, s)
+        }
+        else if let Some(s) = s.strip_suffix("ac50") {
+            (AcDc::Ac50, s)
+        }
+        else if let Some(s) = s.strip_suffix("tc50") {
+            (AcDc::Tc50, s)
+        }
+        else if let Some(s) = s.strip_suffix("dc") {
+            (AcDc::Dc, s)
+        }
+        else {
+            return Err("invalid generic electrification string")
+        };
+
+        let voltage = u16::from_str(s).map_err(|_| {
+            "invalid generic electrification string"
+        })?;
+
+        Ok(Self { system, voltage, frequency })
+    }
+}
+
+impl fmt::Display for GenericEl {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.system {
+            ElSystem::Ole => f.write_str("ole.")?,
+            ElSystem::Rail => f.write_str("rail.")?,
+            ElSystem::Rail4 => f.write_str("rail4.")?,
+        }
+        self.voltage.fmt(f)?;
+        match self.frequency {
+            AcDc::Ac16 => f.write_str("ac16"),
+            AcDc::Ac25 => f.write_str("ac25"),
+            AcDc::Ac50 => f.write_str("ac50"),
+            AcDc::Tc50 => f.write_str("tc50"),
+            AcDc::Dc => f.write_str("dc"),
+        }
+    }
+}
 
 
 //------------ Gauge ---------------------------------------------------------

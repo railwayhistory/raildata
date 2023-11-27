@@ -28,7 +28,7 @@ pub use super::combined::StructureDocument as Document;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Data {
-    pub link: Link,
+    link: Link,
     pub common: Common,
     pub subtype: Marked<Subtype>,
     pub events: EventList,
@@ -45,6 +45,10 @@ impl Data {
 
     pub fn origin(&self) -> &Origin {
         &self.common.origin
+    }
+
+    pub fn link(&self) -> Link {
+        self.link
     }
 
     /// Returns the name for the given language.
