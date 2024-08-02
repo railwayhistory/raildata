@@ -398,10 +398,12 @@ pub struct Current {
     pub status: CurrentValue<Status>,
     pub tracks: CurrentValue<Marked<u8>>,
 
-    pub ch_bav: CurrentValue<Option<String>>,
     pub at_vzg: CurrentValue<Option<AtVzg>>,
+    pub ch_bav: CurrentValue<Option<String>>,
+    pub cz_sr72: CurrentValue<Option<String>>,
     pub de_vzg: CurrentValue<Option<DeVzg>>,
     pub fr_rfn: CurrentValue<Option<FrRfn>>,
+    pub pl_id12: CurrentValue<Option<String>>,
 
     pub source: List<Marked<SourceLink>>,
     pub note: Option<LanguageText>,
@@ -433,8 +435,10 @@ impl FromYaml<PointsContext<'_>> for Current {
 
         let at_vzg = value.take_default("at.VzG", context, report);
         let ch_bav = value.take_default("ch.BAV", context, report);
+        let cz_sr72 = value.take_default("cz.SR72", context, report);
         let de_vzg = value.take_default("de.VzG", context, report);
         let fr_rfn = value.take_default("fr.RFN", context, report);
+        let pl_id12 = value.take_default("pl.Id12", context, report);
 
         let source = value.take_default("source", context.context, report);
         let note = value.take_opt("note", context, report);
@@ -460,8 +464,10 @@ impl FromYaml<PointsContext<'_>> for Current {
 
             at_vzg: at_vzg?,
             ch_bav: ch_bav?,
+            cz_sr72: cz_sr72?,
             de_vzg: de_vzg?,
             fr_rfn: fr_rfn?,
+            pl_id12: pl_id12?,
 
             source: source?,
             note: note?,
@@ -1365,6 +1371,8 @@ impl Electrified {
             "be.25"   => Ole, 25000, Ac50;
             "ch"      => Ole, 15000, Ac16;
             "ch.11k"  => Ole, 11000, Ac16;
+            "cz.3"    => Ole,  3000, Dc;
+            "cz.25"   => Ole, 25000, Ac50;
             "de"      => Ole, 15000, Ac16;
             "de.bln-1903"  => Rail,  550, Dc;
             "de.bln"  => Rail,  800, Dc;
@@ -1383,6 +1391,7 @@ impl Electrified {
             "nl"      => Ole,  1500, Dc;
             "nl.25"   => Ole, 25000, Ac50;
             "pl"      => Ole,  3000, Dc;
+            "ru"      => Ole,  3000, Dc;
             "si"      => Ole,  3000, Dc;
         );
         None
