@@ -615,6 +615,7 @@ data_enum! {
         { NlKnp: "nl.Knp" }
         { NlOlp: "nl.Olp" }
         { NlSt: "nl.St" }
+        { NlBrug: "nl.Brug" }
 
         { NoS: "no.s" }
         { NoSp: "no.sp" }
@@ -678,6 +679,7 @@ impl Category {
             NlKnp => "Knooppunt",
             NlOlp => "Overloop",
             NlSt => "Station",
+            NlBrug => "Brug",
 
             NoS => "S",
             NoSp => "Sp",
