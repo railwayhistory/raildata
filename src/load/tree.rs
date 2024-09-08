@@ -29,10 +29,14 @@ pub fn load_tree(path: &Path) -> Result<DataStore, Report> {
         let builder = Arc::try_unwrap(builder).unwrap();
         builder.into_data_store(&mut report.clone().stage(Stage::Translate))
     };
-    match store {
-        Ok(store) => Ok(store),
-        Err(_) => Err(report.unwrap())
+    let store = match store {
+        Ok(store) => store,
+        Err(_) => return Err(report.unwrap())
+    };
+    if !report.is_empty() {
+        return Err(report.unwrap())
     }
+    Ok(store)
 }
 
 

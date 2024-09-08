@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::f64::INFINITY;
 use std::str::FromStr;
 use derive_more::Display;
@@ -36,8 +37,8 @@ pub struct Data {
     pub nodes: Vec<Node>,
     pub source: Vec<source::Link>,
 
-    pub node_names: Vec<(String, usize)>,
-    pub node_descr: Vec<(usize, String)>,
+    pub node_names: HashMap<String, usize>,
+    pub node_descr: HashMap<usize, String>,
 }
 
 impl Data {
@@ -62,9 +63,7 @@ impl Data {
     }
 
     pub fn get_pos(&self, name: &str) -> Option<usize> {
-        self.node_names.binary_search_by(|item|
-            AsRef::<str>::as_ref(&item.0).cmp(name)
-        ).ok()
+        self.node_names.get(name).copied()
     }
 
     pub fn get_coord(&self, name: &str) -> Option<Coord> {
@@ -83,8 +82,8 @@ impl Data {
             name: None,
             nodes: Vec::new(),
             source: Vec::new(),
-            node_names: Vec::new(),
-            node_descr: Vec::new(),
+            node_names: Default::default(),
+            node_descr: Default::default(),
         }
     }
 
@@ -199,28 +198,21 @@ impl Data {
                 let (node, name, descr, post_tension)
                     = Self::load_node(*id, osm, tension, report)?;
                 if let Some(name) = name {
-                    self.node_names.push((name, self.nodes.len()));
+                    if self.node_names.insert(
+                        name.clone(), self.nodes.len()
+                    ).is_some()
+                    {
+                        report.unmarked_error(DuplicateName(name));
+                    }
                 }
                 if let Some(descr) = descr {
-                    self.node_descr.push((self.nodes.len(), descr));
+                    self.node_descr.insert(self.nodes.len(), descr);
                 }
                 self.nodes.push(node);
                 last_tension = post_tension;
                 last_id = Some(id);
             }
         }
-        self.node_names.sort_by(|x, y| x.0.cmp(&y.0));
-
-        let mut remaining: &[_] = self.node_names.as_ref();
-        while remaining.len() > 1 {
-            if remaining[0].0 == remaining[1].0 {
-                report.unmarked_error(
-                    DuplicateName(remaining[0].0.clone())
-                );
-            }
-            remaining = &remaining[1..]
-        }
-
         Ok(())
     }
 
