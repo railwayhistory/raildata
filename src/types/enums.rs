@@ -40,7 +40,8 @@ macro_rules! data_enum {
     ) => {
         $(#[$attr])*
         #[derive(
-            Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize
+            Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq,
+            PartialOrd, Serialize
         )]
         pub enum $name {
             $( $(#[$variant_attr])* $variant ),*,
@@ -104,6 +105,7 @@ macro_rules! data_enum {
             }
         }
 
+        /* XXX Remove,
         #[cfg(feature = "http")]
         impl crate::http::json::StateBuildJson for $name {
             fn json(
@@ -114,6 +116,7 @@ macro_rules! data_enum {
                 json.string(self)
             }
         }
+        */
     };
 }
 

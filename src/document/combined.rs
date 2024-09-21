@@ -8,7 +8,7 @@ pub use crate::store::{
     DataStore, FullStore, LinkTarget, LinkTargetMut, DocumentLink,
     StoreLoader, XrefsBuilder,
 };
-use crate::types::{Key, LanguageCode, Location, Marked, Set};
+use crate::types::{Key, Location, Marked, Set};
 use super::source;
 use super::common::{Common, DocumentType};
 
@@ -61,14 +61,6 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
 
         pub fn location(&self) -> Location {
             self.origin().location()
-        }
-
-        pub fn name(&self, lang: LanguageCode) -> &str {
-            match *self {
-                $(
-                    Data::$vtype(ref inner) => inner.name(lang),
-                )*
-            }
         }
 
         paste! {
@@ -350,6 +342,19 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                     )*
                 }
             }
+
+            $(
+                paste! {
+                    pub fn [< try_as_ $vtype:lower >](
+                        self
+                    ) -> Option<[< $vtype Document >]<'a>> {
+                        match self {
+                            Document::$vtype(inner) => Some(inner),
+                            _ => None
+                        }
+                    }
+                }
+            )*
         }
     }
 

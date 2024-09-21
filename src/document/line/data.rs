@@ -1,12 +1,11 @@
 
-use std::{fmt, ops};
+use std::{cmp, fmt, ops};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
-#[cfg(feature = "http")] use crate::http::json::StateBuildJson;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::store::{FullStore, StoreLoader, XrefsBuilder};
@@ -21,7 +20,7 @@ use crate::document::combined::{
     SourceLink
 };
 use crate::document::common::{
-    Agreement, AgreementType, Alternative, Basis, Common, Contract, Progress
+    Agreement, AgreementType, Basis, Common, Contract, Progress
 };
 
 
@@ -36,6 +35,35 @@ impl<'a> Document<'a> {
         self.data().points.iter_documents(store).filter(|doc| {
             doc.meta().junction
         })
+    }
+
+    pub fn first_junction_name(
+        self, store: &'a FullStore, _lang: LanguageCode,
+    ) -> &'a str {
+        self.data().points.first_junction(store).data().name_in_jurisdiction(
+            self.data().jurisdiction()
+        )
+    }
+
+    pub fn last_junction_name(
+        self, store: &'a FullStore, _lang: LanguageCode,
+    ) -> &'a str {
+        self.data().points.last_junction(store).data().name_in_jurisdiction(
+            self.data().jurisdiction()
+        )
+    }
+
+    pub fn title(self, lang: LanguageCode) -> Option<&'a str> {
+        for event in &self.data().events {
+            for record in &event.records {
+                if let Some(name) = record.properties.name.as_ref() {
+                    if let Some(name) = name.for_language(lang) {
+                        return Some(name)
+                    }
+                }
+            }
+        }
+        None
     }
 }
 
@@ -54,7 +82,7 @@ pub struct Data {
     pub records: RecordList,
     pub points: Points,
 
-    code: String
+    code: LineCode,
 }
 
 impl Data {
@@ -92,19 +120,17 @@ impl Data {
         }
     }
 
-    pub fn name(&self, lang: LanguageCode) -> &str {
-        for event in &self.events {
-            if let Some(name) = event.properties.name.as_ref() {
-                if let Some(name) = name.for_language(lang) {
-                    return name
-                }
-            }
-        }
-        self.code()
+    pub fn code(&self) -> &LineCode {
+        &self.code
     }
 
-    pub fn code(&self) -> &str {
-        &self.code
+    pub fn current_status_at(&self, point: PointLink) -> Option<Status> {
+        self.points.index_of(point).and_then(|idx| {
+            match self.current.status.at_index(idx)? {
+                Ok(status) => Some(*status),
+                Err((left, right)) => Some(cmp::max(*left, *right)),
+            }
+        })
     }
 }
 
@@ -130,7 +156,7 @@ impl Data {
 
         Ok(Data {
             link: link.into(),
-            code: Self::make_code(common.key.as_value()),
+            code: LineCode::from_key(common.key.as_value()),
             common,
             label: label?,
             note: note?,
@@ -139,25 +165,6 @@ impl Data {
             records: records?,
             points,
         })
-    }
-
-    fn make_code(key: &Key) -> String {
-        match Self::country_from_key(key) {
-            Some(CountryCode::RU) => {
-                if key.starts_with("line.ru.kg.") {
-                    format!("RU КГ {}", &key[11..])
-                }
-                else {
-                    format!("RU {} {}", &key[8..10], &key[11..])
-                }
-            }
-            Some(country) => {
-                format!("{} {}", country, &key[8..])
-            }
-            None => {
-                format!("{}", &key[5..])
-            }
-        }
     }
 
     pub fn xrefs(
@@ -184,7 +191,7 @@ impl Data {
             }
         }
         for event in &self.events {
-            if let Some(region_list) = event.properties.region.as_ref() {
+            if let Some(region_list) = event.region() {
                 let new_section = event.sections.overall(self.points.len());
                 for region in region_list {
                     regions.entry(
@@ -210,24 +217,13 @@ impl Data {
         // Insert line.
         builder.catalogue_mut().lines.push(self.link);
 
-        // Insert names.
-        let mut key = &self.key().as_str()[5..];
-        while !key.is_empty() {
-            builder.insert_name(key.into(), self.link.into());
-            match key.find('.') {
-                Some(idx) => {
-                    let (_, right) = key.split_at(idx);
-                    key = &right[1..];
-                }
-                None => {
-                    key = &""
-                }
-            }
-        }
-
+        //--- Insert names.
+        builder.insert_name(self.key().as_str().into(), self.link.into());
+        builder.insert_name(self.code().as_str().into(), self.link.into());
+        builder.insert_name(self.code().line().into(), self.link.into());
         let mut names = HashSet::new();
         for event in self.events.iter() {
-            if let Some(some) = event.properties.name.as_ref() {
+            if let Some(some) = event.name() {
                 for (_, name) in some {
                     names.insert(name.as_value());
                 }
@@ -238,6 +234,100 @@ impl Data {
         }
 
         Ok(())
+    }
+}
+
+
+//------------ LineCode ------------------------------------------------------
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct LineCode {
+    code: String,
+    region_end: usize,
+    line_start: usize,
+}
+
+impl LineCode {
+    fn from_key(key: &Key) -> Self {
+        let key = key.as_str();
+
+        // Drop "line."
+        let key = if key.starts_with("line.") {
+            &key[5..]
+        }
+        else {
+            return Self {
+                code: key.into(),
+                region_end: 0,
+                line_start: 0,
+            }
+        };
+
+        // Take off country code.
+        let (country, mut key) = if key.as_bytes().get(2) == Some(&b'.') {
+            (&key[0..2], &key[3..])
+        }
+        else {
+            return Self {
+                code: key.into(),
+                region_end: 0,
+                line_start: 0,
+            }
+        };
+
+        let mut res = country.to_uppercase();
+        let mut region_end = res.len();
+
+        // Deal with countries that have regions. Currently, that’s only RU.
+        if res == "RU" {
+            if let Some((region, line)) = key.split_once('.') {
+                res.push(' ');
+                res.push_str(&region.to_uppercase());
+                region_end = res.len();
+                key = line;
+            }
+        }
+        
+        res.push(' ');
+        let line_start = res.len();
+        res.push_str(key);
+        Self {
+            code: res,
+            region_end,
+            line_start,
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.code.as_str()
+    }
+
+    pub fn region(&self) -> &str {
+        &self.code.as_str()[..self.region_end]
+    }
+
+    pub fn line(&self) -> &str {
+        &self.code.as_str()[self.line_start..]
+    }
+}
+
+impl PartialEq for LineCode {
+    fn eq(&self, other: &Self) -> bool {
+        self.code == other.code
+    }
+}
+
+impl Eq for LineCode { }
+
+impl PartialOrd for LineCode {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for LineCode {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.code.cmp(&other.code)
     }
 }
 
@@ -294,6 +384,12 @@ impl Points {
         self.iter_documents(store).rev().find(|point| {
             !point.data().is_never_junction()
         }).unwrap_or_else(|| self.last_point(store))
+    }
+
+    pub fn index_of(&self, point: PointLink) -> Option<usize> {
+        self.points.iter().enumerate().find_map(|(idx, val)| {
+            val.as_value().eq(&point).then(|| idx)
+        })
     }
 
     fn context<'s>(&'s self, context: &'s StoreLoader) -> PointsContext<'s> {
@@ -409,6 +505,9 @@ pub struct Current {
     pub note: Option<LanguageText>,
 }
 
+impl Current {
+}
+
 impl FromYaml<PointsContext<'_>> for Current {
     fn from_yaml(
         value: Value,
@@ -500,6 +599,37 @@ impl<T> CurrentValue<T> {
 
     pub fn as_slice(&self) -> &[(Section, T)] {
         self.sections.as_slice()
+    }
+
+    /// Returns the value at the given point index.
+    ///
+    /// If the index is a at section boundary, there may actually be two
+    /// different values. This is returned via the `Some(Err(_))` variant.
+    ///
+    fn at_index(&self, idx: usize) -> Option<Result<&T, (&T, &T)>> {
+        // Because we may need refs to two sections at the same time, we need
+        // to work with windows of two.
+        for window in self.sections.as_slice().windows(2) {
+            let (one, two) = (&window[0], &window[1]);
+            if one.0.start_idx > idx {
+                continue
+            }
+            if one.0.end_idx > idx {
+                return Some(Ok(&one.1))
+            }
+            else if one.0.end_idx == idx {
+                return Some(Err((&one.1, &two.1)))
+            }
+        }
+        // No window of two with the last item as the first element, so check
+        // that now.
+        let last = self.sections.last()?;
+        if last.0.end_idx < idx {
+            None
+        }
+        else {
+            Some(Ok(&last.1))
+        }
     }
 }
 
@@ -652,22 +782,41 @@ impl<'a> IntoIterator for &'a EventList {
 pub struct Event {
     pub date: EventDate,
     pub sections: SectionList,
-    pub document: List<Marked<SourceLink>>,
-    pub source: List<Marked<SourceLink>>,
-    pub alternative: List<Alternative>,
-    pub basis: List<Basis>,
-    pub note: Option<LanguageText>,
+    pub records: List<EventRecord>,
+}
 
-    pub concession: Option<Concession>,
-    pub agreement: Option<Agreement>,
+impl Event {
+    pub fn document(&self) -> Option<&List<Marked<SourceLink>>> {
+        self.prop(|record| record.document.as_ref())
+    }
 
-    pub properties: Properties,
+    pub fn name(&self) -> Option<&LocalText> {
+        self.prop(|prop| prop.properties.name.as_ref())
+    }
+
+    pub fn region(&self) -> Option<&List<Marked<EntityLink>>> {
+        self.prop(|prop| prop.properties.region.as_ref())
+    }
+
+    pub fn concession(&self) -> Option<&Concession> {
+        self.prop(|prop| prop.concession.as_ref())
+    }
+
+    pub fn agreement(&self) -> Option<&Agreement> {
+        self.prop(|prop| prop.agreement.as_ref())
+    }
+
+    fn prop<F: Fn(&EventRecord) -> Option<&T>, T>(
+        &self, op: F
+    ) -> Option<&T> {
+        self.records.iter().find_map(|record| op(&record))
+    }
 }
 
 impl Event {
     pub fn is_legal(&self) -> bool {
-        self.concession.is_some()
-        || self.agreement.is_some()
+        self.concession().is_some()
+        || self.agreement().is_some()
     }
 }
 
@@ -680,10 +829,58 @@ impl FromYaml<PointsContext<'_>> for Event {
         let context = point_context.context;
         let mut value = value.into_mapping(report)?;
         let date = value.take_default("date", context, report);
-        let document = value.take_default("document", context, report);
-        let source = value.take_default("source", context, report);
-        let alternative = value.take_default("alternative", context, report);
-        let basis = value.take_default("basis", context, report);
+        let sections = SectionList::from_yaml(
+            &mut value, point_context, report
+        );
+
+        let records = match value.take_opt("records", point_context, report) {
+            Ok(Some(records)) => Ok(records),
+            Ok(None) => {
+                EventRecord::from_mapping(
+                    &mut value, point_context, report
+                ).map(List::with_value)
+            }
+            Err(err) => Err(err), 
+        };
+
+        value.exhausted(report)?;
+
+        Ok(Event {
+            date: date?,
+            sections: sections?,
+            records: records?,
+        })
+    }
+}
+
+
+//------------ EventRecord ---------------------------------------------------
+
+#[derive(Clone, Deserialize, Debug, Serialize)]
+pub struct EventRecord {
+    pub date: Option<EventDate>,
+    pub document: Option<List<Marked<SourceLink>>>,
+    pub source: Option<List<Marked<SourceLink>>>,
+    pub basis: Option<List<Basis>>,
+    pub note: Option<LanguageText>,
+
+    pub concession: Option<Concession>,
+    pub agreement: Option<Agreement>,
+
+    pub properties: Properties,
+}
+
+impl EventRecord {
+    fn from_mapping(
+        value: &mut Mapping,
+        point_context: &PointsContext,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let context = point_context.context;
+        let date = value.take_opt("date", context, report);
+        let document = value.take_opt("document", context, report);
+        let source = value.take_opt("source", context, report);
+        let basis = value.take_opt("basis", context, report);
         let note = value.take_opt("note", context, report);
 
         let concession = value.take_opt("concession", context, report);
@@ -694,12 +891,7 @@ impl FromYaml<PointsContext<'_>> for Event {
         let treaty: Result<Option<Contract>, _>
             = value.take_opt("treaty", context, report);
 
-        let sections = SectionList::from_yaml(
-            &mut value, point_context, report
-        );
-        let properties = Properties::from_yaml(&mut value, context, report);
-
-        value.exhausted(report)?;
+        let properties = Properties::from_yaml(value, context, report);
 
         let concession = concession?;
         let expropriation = expropriation?;
@@ -748,20 +940,29 @@ impl FromYaml<PointsContext<'_>> for Event {
             None
         };
         
-        Ok(Event {
+        Ok(Self {
             date: date?,
-            sections: sections?,
             document: document?,
             source: source?,
-            alternative: alternative?,
             basis: basis?,
             note: note?,
-
             concession,
             agreement,
-
             properties: properties?,
         })
+    }
+}
+
+impl FromYaml<PointsContext<'_>> for EventRecord {
+    fn from_yaml(
+        value: Value,
+        point_context: &PointsContext,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let mut value = value.into_mapping(report)?;
+        let res = Self::from_mapping(&mut value, point_context, report);
+        value.exhausted(report)?;
+        res
     }
 }
 
@@ -1466,17 +1667,6 @@ impl<'de> Deserialize<'de> for Electrified {
         ).map_err(|err| {
             serde::de::Error::custom(err)
         })
-    }
-}
-
-#[cfg(feature = "http")]
-impl StateBuildJson for Electrified {
-    fn json(
-        &self,
-        json: &mut httools::json::JsonValue,
-        _state: &crate::http::state::State,
-    ) {
-        json.string(self)
     }
 }
 

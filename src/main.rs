@@ -1,6 +1,4 @@
 use std::process;
-#[cfg(feature = "http")]
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Instant;
 use clap::Parser;
@@ -16,13 +14,8 @@ struct Args {
     /// Path to the data directory.
     path: PathBuf,
 
-    /// Start the HTTP server listening on given addr.
-    #[cfg(feature = "http")]
-    #[arg(long, value_name = "ADDR")]
-    http: Option<SocketAddr>,
-
     /// Do a quick parse and exit.
-    #[arg(long, short, conflicts_with = "http")]
+    #[arg(long, short)]
     quick: bool,
 
     /// Verbose output.
@@ -132,23 +125,5 @@ fn main() {
         let time = Instant::now().duration_since(time);
         println!("Total: {:.3} s.", time.as_secs_f32());
         print_stats(store.as_ref());
-    }
-
-    #[cfg(feature = "http")]
-    {
-        use tokio::runtime::Runtime;
-        use raildata::http::state::State;
-        use raildata::http::api;
-
-        if let Some(addr) = args.http {
-            let rt = Runtime::new().unwrap();
-
-            rt.block_on(
-                api::serve(
-                    addr,
-                    State::new_arc(store, catalogue),
-                )
-            );
-        }
     }
 }

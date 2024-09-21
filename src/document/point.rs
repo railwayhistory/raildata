@@ -26,6 +26,9 @@ pub use super::combined::PointLink as Link;
 
 pub use super::combined::PointDocument as Document;
 
+impl<'a> Document<'a> {
+}
+
 
 //------------ Data ----------------------------------------------------------
 
@@ -60,32 +63,23 @@ impl Data {
         self.link
     }
 
+    pub fn events(&self) -> impl Iterator<Item = &Event> + '_ {
+        self.events.iter()
+    }
+
+    pub fn events_rev(&self) -> impl Iterator<Item = &Event> + '_ {
+        self.events.iter().rev()
+    }
+}
+
+/// # Convenience Methods
+///
+impl Data {
     /// Returns whether the point can’t be a junction.
     ///
     /// This happens if it has the `junction` attribute set to false.
     pub fn is_never_junction(&self) -> bool {
         !self.junction.map(Marked::into_value).unwrap_or(true)
-    }
-
-    /// Returns the preferred name for the given language.
-    pub fn name(&self, lang: LanguageCode) -> &str {
-        for properties in
-            self.events.iter().map(|item| &item.properties).rev().chain(
-                self.records.iter().map(|item| &item.properties).rev()
-            )
-        {
-            if let Some(ref name) = properties.name {
-                if let Some(name) = name.for_language(lang) {
-                    return name
-                }
-            }
-            if let Some(ref name) = properties.designation {
-                if let Some(name) = name.for_language(lang) {
-                    return name
-                }
-            }
-        }
-        self.key().as_str()
     }
 
     /// Returns the current name.
@@ -125,9 +119,11 @@ impl Data {
     ///
     /// If the point has a location on this line, returns the location as well
     /// as whether it has changed.
-    pub fn location(&self, line: line::Link) -> Option<(Option<&str>, bool)> {
-        let mut iter = self.events.iter().filter_map(|event| {
-            event.properties.location.find(line)
+    pub fn line_location(
+        &self, line: line::Link
+    ) -> Option<(Option<&str>, bool)> {
+        let mut iter = self.events.iter().rev().filter_map(|event| {
+            event.line_location(line)
         });
         let current = iter.next()?;
         let changed = iter.next().is_some();
@@ -135,13 +131,11 @@ impl Data {
     }
 
     /// Returns an iterator over the locations for the given line.
-    pub fn locations(
+    pub fn iter_line_locations(
         &self, line: line::Link
     ) -> impl Iterator<Item = Option<&str>> + '_ {
-        self.events.iter().map(|event| {
-            event.properties.location.iter()
-        }).flatten().filter_map(move |(link, location)| {
-            (line == link).then(|| location)
+        self.events.iter().rev().filter_map(move |event| {
+            event.line_location(line)
         })
     }
 
@@ -149,8 +143,8 @@ impl Data {
     pub fn category(
         &self
     ) -> Option<(impl Iterator<Item = Category> + '_, bool)> {
-        let mut iter = self.events.iter().filter_map(|event| {
-            event.properties.category.as_ref()
+        let mut iter = self.events.iter().rev().filter_map(|event| {
+            event.category()
         });
         let current = iter.next()?;
         let changed = iter.next().is_some();
@@ -159,9 +153,7 @@ impl Data {
 
     /// Returns the current status.
     pub fn status(&self) -> Status {
-        self.events_then_records(|properties| {
-            properties.status.as_ref()
-        }).map(|res| res.0.into_value()).unwrap_or(Status::Open)
+        self.events_rev().find_map(|ev| ev.status()).unwrap_or(Status::Open)
     }
 
     /// Returns whether the point is currently open.
@@ -169,16 +161,22 @@ impl Data {
         self.status() == Status::Open
     }
 
+    fn event_records_rev(&self) -> impl Iterator<Item = &EventRecord> + '_ {
+        self.events_rev().map(|ev| ev.records.iter()).flatten()
+    }
+
     fn events_then_records<'a, F, R>(&'a self, mut op: F) -> Option<(R, bool)>
     where F: FnMut(&'a Properties) -> Option<R> {
         let mut res = None;
         let mut changed = false;
         for event in &self.events {
-            if let Some(value) = op(&event.properties) {
-                if res.is_some() {
-                    changed = true
+            for record in &event.records {
+                if let Some(value) = op(&record.properties) {
+                    if res.is_some() {
+                        changed = true
+                    }
+                    res = Some(value)
                 }
-                res = Some(value)
             }
         }
         if let Some(res) = res.take() {
@@ -289,6 +287,7 @@ impl Xrefs {
 pub struct Meta {
     pub junction: bool,
     pub coord: Option<Coord>,
+    pub current: Properties,
 }
 
 impl Meta {
@@ -318,11 +317,13 @@ impl Meta {
             }
         };
 
-        // coord: Find the newest event that has a site attribute and take the
-        // first entry.
         let mut coord = None;
-        for event in data.events.iter().rev() {
-            if let Some(site) = event.site.as_ref() {
+        let mut current = Properties::default();
+
+        for record in data.event_records_rev() {
+            // coord: Find the newest event that has a site attribute and
+            // take the first entry.
+            if let Some(site) = record.site.as_ref() {
                 for item in site.0.iter() {
                     coord = item.0.data(store).get_coord(item.1.as_value());
                     if coord.is_some() {
@@ -330,12 +331,64 @@ impl Meta {
                     }
                 }
             }
+
+            current.merge(&record.properties);
         }
 
-        Ok(Meta {
+        let mut res = Self {
             junction,
             coord,
-        })
+            current,
+        };
+        res.fix_current_status(data, xrefs, store);
+        res.fix_current_location(xrefs, store);
+        Ok(res)
+    }
+
+    /// Fixes the status in the current properties.
+    ///
+    /// If there is no status, derives it from that of the lines the point
+    /// is part of. If there is a status, checks that it doesn’t contradict
+    /// the status of the lines and, if so, downgrades it accordingly.
+    fn fix_current_status(
+        &mut self, data: &Data, xrefs: &Xrefs, store: &XrefsStore
+    ) {
+        if let Some(status) = xrefs.lines.iter().map(|line| {
+                line.data(store).current_status_at(data.link)
+            }).filter_map(|x| x).max().map(Into::into)
+        {
+            match self.current.status {
+                Some(current) => {
+                    if current.into_value() > status {
+                        self.current.status = Some(status.into());
+                    }
+                }
+                None => {
+                    self.current.status = Some(status.into())
+                }
+            }
+        }
+    }
+
+    /// Fixes the list of locations.
+    ///
+    /// Adds an artifical location of "??" for each line that doesn’t have
+    /// an explicit location.
+    ///
+    /// Then sorts the list by code.
+    fn fix_current_location(
+        &mut self, xrefs: &Xrefs, store: &XrefsStore,
+    ) {
+        for line in xrefs.lines.iter().copied() {
+            if self.current.location.find(line).is_none() {
+                self.current.location.0.push((
+                    line.into(), Some(String::from("??").into())
+                ))
+            }
+        }
+        self.current.location.0.sort_by(|left, right| {
+            left.0.data(store).code().cmp(right.0.data(store).code())
+        });
     }
 }
 
@@ -370,6 +423,96 @@ pub type EventList = List<Event>;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Event {
     pub date: EventDate,
+    pub records: List<EventRecord>,
+}
+
+impl Event {
+    pub fn name(&self, lang: LanguageCode) -> Option<&str> {
+        LocalText::iter_for_language(
+            self.records.iter().filter_map(|record| {
+                record.properties.name.as_ref()
+            }),
+            lang
+        )
+    }
+
+    pub fn designation(&self, lang: LanguageCode) -> Option<&str> {
+        LocalText::iter_for_language(
+            self.records.iter().filter_map(|record| {
+                record.properties.designation.as_ref()
+            }),
+            lang
+        )
+    }
+
+    pub fn location(
+        &self
+    ) -> impl Iterator<Item = (line::Link, Option<&str>)> {
+        self.records.iter().map(|record| {
+            record.properties.location.iter()
+        }).flatten()
+    }
+
+    pub fn line_location(
+        &self,
+        line: line::Link,
+    ) -> Option<Option<&str>> {
+        self.location().find_map(|(link, location)| {
+            (link == line).then(|| location)
+        })
+    }
+
+    pub fn category(&self) -> Option<&Set<Marked<Category>>> {
+        self.prop(|record| record.properties.category.as_ref())
+    }
+
+    pub fn status(&self) -> Option<Status> {
+        self.prop(|record| {
+            record.properties.status.as_ref().map(|s| s.as_value())
+        }).copied()
+    }
+
+    fn prop<F: Fn(&EventRecord) -> Option<&T>, T: ?Sized>(
+        &self, op: F
+    ) -> Option<&T> {
+        self.records.iter().find_map(|record| op(&record))
+    }
+}
+
+impl FromYaml<StoreLoader> for Event {
+    fn from_yaml(
+        value: Value,
+        context: &StoreLoader,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let mut value = value.into_mapping(report)?;
+
+        let date = value.take_default("date", context, report);
+        let records = match value.take_opt("records", context, report) {
+            Ok(Some(records)) => Ok(records),
+            Ok(None) => {
+                EventRecord::from_mapping(
+                    &mut value, context, report
+                ).map(List::with_value)
+            }
+            Err(err) => Err(err), 
+        };
+
+        value.exhausted(report)?;
+
+        Ok(Event {
+            date: date?,
+            records: records?,
+        })
+    }
+}
+
+
+//------------ EventRecord ---------------------------------------------------
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct EventRecord {
+    pub date: Option<EventDate>,
     pub document: List<Marked<source::Link>>,
     pub source: List<Marked<source::Link>>,
     pub basis: List<Basis>,
@@ -384,15 +527,13 @@ pub struct Event {
     pub properties: Properties,
 }
 
-impl FromYaml<StoreLoader> for Event {
-    fn from_yaml(
-        value: Value,
+impl EventRecord {
+    fn from_mapping(
+        value: &mut Mapping,
         context: &StoreLoader,
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
-        let mut value = value.into_mapping(report)?;
-
-        let date = value.take_default("date", context, report);
+        let date = value.take_opt("date", context, report);
         let document = value.take_default("document", context, report);
         let source = value.take_default("source", context, report);
         let basis = value.take_default("basis", context, report);
@@ -404,11 +545,9 @@ impl FromYaml<StoreLoader> for Event {
         let connection = value.take_opt("connection", context, report);
         let site = value.take_opt("site", context, report);
 
-        let properties = Properties::from_yaml(&mut value, context, report);
+        let properties = Properties::from_yaml(value, context, report);
 
-        value.exhausted(report)?;
-
-        Ok(Event {
+        Ok(Self {
             date: date?,
             document: document?,
             source: source?,
@@ -423,6 +562,19 @@ impl FromYaml<StoreLoader> for Event {
 
             properties: properties?,
         })
+    }
+}
+
+impl FromYaml<StoreLoader> for EventRecord {
+    fn from_yaml(
+        value: Value,
+        context: &StoreLoader,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let mut value = value.into_mapping(report)?;
+        let res = Self::from_mapping(&mut value, context, report);
+        value.exhausted(report)?;
+        res
     }
 }
 
@@ -469,7 +621,7 @@ impl FromYaml<StoreLoader> for Record {
 
 //------------ Properties ----------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Default, Deserialize, Debug, Serialize)]
 pub struct Properties {
     pub status: Option<Marked<Status>>,
 
@@ -556,6 +708,60 @@ impl Properties {
             express: express?,
             goods: goods?,
         })
+    }
+
+    fn merge(&mut self, other: &Self) {
+        if let Some(status) = other.status {
+            self.status = Some(status)
+        }
+        if let Some(name) = other.name.as_ref() {
+            LocalText::merge(&mut self.name, name)
+        }
+        if let Some(name) = other.short_name.as_ref() {
+            LocalText::merge(&mut self.short_name, name)
+        }
+        /*
+        if let Some(name) = other.public_name.as_ref() {
+            LocalText::merge(&mut self.public_name, name)
+        }
+        */
+        if let Some(name) = other.designation.as_ref() {
+            LocalText::merge(&mut self.designation, name)
+        }
+        if let Some(name) = other.de_name16.as_ref() {
+            self.de_name16 = Some(name.clone())
+        }
+        if let Some(value) = other.category.as_ref() {
+            self.category = Some(value.clone())
+        }
+        if let Some(value) = other.de_rang.as_ref() {
+            self.de_rang = Some(value.clone())
+        }
+        if let Some(value) = other.superior.as_ref() {
+            self.superior = Some(value.clone())
+        }
+
+        self.codes.merge(&other.codes);
+        self.location.merge(&other.location);
+
+        if let Some(value) = other.staff.as_ref() {
+            self.staff = Some(value.clone())
+        }
+        if let Some(value) = other.service.as_ref() {
+            self.service = Some(value.clone())
+        }
+        if let Some(value) = other.passenger.as_ref() {
+            self.passenger = Some(value.clone())
+        }
+        if let Some(value) = other.luggage.as_ref() {
+            self.luggage = Some(value.clone())
+        }
+        if let Some(value) = other.express.as_ref() {
+            self.express = Some(value.clone())
+        }
+        if let Some(value) = other.goods.as_ref() {
+            self.goods = Some(value.clone())
+        }
     }
 }
 
@@ -719,6 +925,24 @@ impl Location {
         self.iter().find_map(|(link, value)| {
             (link == line).then(|| value)
         })
+    }
+
+    fn merge(&mut self, other: &Self) {
+        for item in other.0.iter() {
+            let other_link = item.0;
+            let other_location = &item.1;
+            let mut done = false;
+            for item in self.0.iter_mut() {
+                if item.0 == other_link {
+                    item.1 = other_location.clone();
+                    done = true;
+                    break;
+                }
+            }
+            if !done {
+                self.0.push((other_link, other_location.clone()));
+            }
+        }
     }
 }
 
@@ -936,6 +1160,22 @@ data_enum! {
     }
 }
 
+impl From<line::Status> for Status {
+    fn from(src: line::Status) -> Status {
+        match src {
+            line::Status::None => Status::Planned, // XXX
+            line::Status::Planned => Status::Planned,
+            line::Status::Construction => Status::Construction,
+            line::Status::Open | line::Status::Reopened => Status::Open,
+            line::Status::Suspended => Status::Suspended,
+            line::Status::Closed | line::Status::Removed
+                | line::Status::Released => {
+                    Status::Closed
+                }
+        }
+    }
+}
+
 
 //------------ DeRang --------------------------------------------------------
 
@@ -962,7 +1202,7 @@ pub type DeName16 = Marked<String>;
 
 //------------ Codes ---------------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Default, Deserialize, Debug, Serialize)]
 pub struct Codes {
     codes: HashMap<CodeType, List<Marked<String>>>,
 }
@@ -974,6 +1214,12 @@ impl Codes {
         self.codes.iter().map(|(key, value)| {
             (*key, value.iter().map(|item| item.as_str()))
         })
+    }
+
+    fn merge(&mut self, other: &Self) {
+        self.codes.extend(other.codes.iter().map(|item| {
+            (item.0.clone(), item.1.clone())
+        }));
     }
 }
 

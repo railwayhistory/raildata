@@ -26,6 +26,9 @@ pub use super::combined::EntityLink as Link;
 
 pub use super::combined::EntityDocument as Document;
 
+impl<'a> Document<'a> {
+}
+
 
 //------------ Data ----------------------------------------------------------
 
@@ -55,41 +58,29 @@ impl Data {
         self.link
     }
 
-    pub fn name(&self, lang: LanguageCode) -> &str {
-        self.local_short_name(lang)
-    }
-
     pub fn local_name(&self, lang: LanguageCode) -> &str {
-        for event in &self.events {
-            if let Some(ref name) = event.name {
-                if let Some(ref name) = name.for_language(lang) {
-                    return name
-                }
+        for event in self.events.iter().rev() {
+            if let Some(name) = event.name(lang) {
+                return name
             }
         }
-        for event in &self.events {
-            if let Some(ref name) = event.name {
-                if let Some(ref name) = name.for_language(LanguageCode::ENG) {
-                    return name
-                }
+        for event in self.events.iter().rev() {
+            if let Some(ref name) = event.name(LanguageCode::ENG) {
+                return name
             }
         }
         self.key()
     }
 
     pub fn local_short_name(&self, lang: LanguageCode) -> &str {
-        for event in &self.events {
-            if let Some(ref name) = event.short_name {
-                if let Some(ref name) = name.for_language(lang) {
-                    return name
-                }
+        for event in self.events.iter().rev() {
+            if let Some(ref name) = event.short_name(lang) {
+                return name
             }
         }
-        for event in &self.events {
-            if let Some(ref name) = event.short_name {
-                if let Some(ref name) = name.for_language(LanguageCode::ENG) {
-                    return name
-                }
+        for event in self.events.iter().rev() {
+            if let Some(ref name) = event.short_name(LanguageCode::ENG) {
+                return name
             }
         }
         self.local_name(lang)
@@ -102,7 +93,9 @@ impl Data {
         let mut default = None;
         for event in self.events.iter().rev() {
             if date.sort_cmp(&event.date) == cmp::Ordering::Greater {
-                if let Some(ref name) = event.name {
+                if let Some(ref name) = event.prop(|record| {
+                    record.properties.name.as_ref()
+                }) {
                     if let Some(name) = name.for_language(lang) {
                         local = Some(name)
                     }
@@ -112,7 +105,9 @@ impl Data {
                 }
                 continue
             }
-            if let Some(ref name) = event.name {
+            if let Some(ref name) = event.prop(|record| {
+                record.properties.name.as_ref()
+            }) {
                 if let Some(ref name) = name.for_language(lang) {
                     return name
                 }
@@ -139,7 +134,9 @@ impl Data {
         let mut default = None;
         for event in self.events.iter().rev() {
             if date.sort_cmp(&event.date) == cmp::Ordering::Greater {
-                if let Some(ref name) = event.short_name {
+                if let Some(ref name) = event.prop(|record| {
+                    record.properties.short_name.as_ref()
+                }) {
                     if let Some(name) = name.for_language(lang) {
                         local = Some(name)
                     }
@@ -149,7 +146,9 @@ impl Data {
                 }
                 continue
             }
-            if let Some(ref name) = event.short_name {
+            if let Some(ref name) = event.prop(|record| {
+                record.properties.short_name.as_ref()
+            }) {
                 if let Some(ref name) = name.for_language(lang) {
                     return name
                 }
@@ -168,6 +167,16 @@ impl Data {
             self.historic_name(lang, date)
         }
     }
+
+    fn event_records(&self) -> impl Iterator<Item = &EventRecord> + '_ {
+        self.events.iter().map(|ev| ev.records.iter()).flatten()
+    }
+
+    /*
+    fn event_records_rev(&self) -> impl Iterator<Item = &EventRecord> + '_ {
+        self.events.iter().rev().map(|ev| ev.records.iter()).flatten()
+    }
+    */
 }
 
 impl Data {
@@ -211,13 +220,13 @@ impl Data {
     ) -> Result<(), Failed> {
         // Insert names.
         let mut names = HashSet::new();
-        for event in &self.events {
-            if let Some(some) = event.name.as_ref() {
+        for event in self.event_records() {
+            if let Some(some) = event.properties.name.as_ref() {
                 for (_, name) in some {
                     names.insert(name.as_value());
                 }
             }
-            if let Some(some) = event.short_name.as_ref() {
+            if let Some(some) = event.properties.short_name.as_ref() {
                 for (_, name) in some {
                     names.insert(name.as_value());
                 }
@@ -280,13 +289,22 @@ impl Xrefs {
 //------------ Meta ----------------------------------------------------------
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Meta;
+pub struct Meta {
+    pub current: Properties,
+}
 
 impl Meta {
     pub fn generate(
-        _data: &Data, _store: &XrefsStore, _report: &mut PathReporter,
+        data: &Data, _store: &XrefsStore, _report: &mut PathReporter,
     ) -> Result<Self, Failed> {
-        Ok(Meta)
+        let mut current = Properties::default();
+        for record in data.event_records() {
+            current.merge(&record.properties);
+        }
+
+        Ok(Meta {
+            current
+        })
     }
 }
 
@@ -324,28 +342,34 @@ pub type EventList = List<Event>;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Event {
-    // Meta attributes
     pub date: EventDate,
-    pub document: List<Marked<source::Link>>,
-    pub source: List<Marked<source::Link>>,
-    pub basis: List<Basis>,
-    pub note: Option<LanguageText>,
+    pub records: List<EventRecord>,
+}
 
-    //--- Organization property attributes
-    //
-    /// The place of domicile of an organization.
-    ///
-    /// For geographic organizations, this is their capital.
-    pub domicile: List<Marked<entity::Link>>,
-    pub name: Option<LocalText>,
-    pub owner: Option<List<Marked<entity::Link>>>,
-    pub property: Option<Property>,
-    pub short_name: Option<LocalText>,
-    pub status: Option<Marked<Status>>,
-    pub successor: Option<Marked<entity::Link>>,
+impl Event {
+    pub fn name(&self, lang: LanguageCode) -> Option<&str> {
+        LocalText::iter_for_language(
+            self.records.iter().filter_map(|record| {
+                record.properties.name.as_ref()
+            }),
+            lang
+        )
+    }
 
-    /// An organization this organization is a unit of.
-    pub superior: Option<Marked<entity::Link>>,
+    pub fn short_name(&self, lang: LanguageCode) -> Option<&str> {
+        LocalText::iter_for_language(
+            self.records.iter().filter_map(|record| {
+                record.properties.short_name.as_ref()
+            }),
+            lang
+        )
+    }
+
+    fn prop<F: Fn(&EventRecord) -> Option<&T>, T: ?Sized>(
+        &self, op: F
+    ) -> Option<&T> {
+        self.records.iter().find_map(|record| op(&record))
+    }
 }
 
 impl FromYaml<StoreLoader> for Event {
@@ -355,35 +379,149 @@ impl FromYaml<StoreLoader> for Event {
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let mut value = value.into_mapping(report)?;
-       let date = value.take("date", context, report);
+
+        let date = value.take_default("date", context, report);
+        let records = match value.take_opt("records", context, report) {
+            Ok(Some(records)) => Ok(records),
+            Ok(None) => {
+                EventRecord::from_mapping(
+                    &mut value, context, report
+                ).map(List::with_value)
+            }
+            Err(err) => Err(err), 
+        };
+
+        value.exhausted(report)?;
+
+        Ok(Event {
+            date: date?,
+            records: records?,
+        })
+    }
+}
+
+
+//------------ EventRecord ---------------------------------------------------
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct EventRecord {
+    pub date: Option<EventDate>,
+    pub document: List<Marked<source::Link>>,
+    pub source: List<Marked<source::Link>>,
+    pub basis: List<Basis>,
+    pub note: Option<LanguageText>,
+
+    pub property: Option<Property>,
+
+    pub properties: Properties,
+}
+
+impl EventRecord {
+    fn from_mapping(
+        value: &mut Mapping,
+        context: &StoreLoader,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let date = value.take_opt("date", context, report);
         let document = value.take_default("document", context, report);
         let source = value.take_default("source", context, report);
         let basis = value.take_default("basis", context, report);
         let note = value.take_opt("note", context, report);
-        let domicile = value.take_default("domicile", context, report);
-        let name = value.take_opt("name", context, report);
-        let owner = value.take_default("owner", context, report);
         let property = value.take_opt("property", context, report);
-        let short_name = value.take_opt("short_name", context, report);
-        let status = value.take_opt("status", context, report);
-        let successor = value.take_opt("successor", context, report);
-        let superior = value.take_opt("superior", context, report);
-        value.exhausted(report)?;
-        Ok(Event {
+        let properties = Properties::from_mapping(value, context, report);
+
+        Ok(Self {
             date: date?,
             document: document?,
             source: source?,
             basis: basis?,
             note: note?,
+
+            property: property?,
+
+            properties: properties?,
+        })
+    }
+}
+
+impl FromYaml<StoreLoader> for EventRecord {
+    fn from_yaml(
+        value: Value,
+        context: &StoreLoader,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let mut value = value.into_mapping(report)?;
+        let res = Self::from_mapping(&mut value, context, report);
+        value.exhausted(report)?;
+        res
+    }
+}
+
+
+//------------ Properties ----------------------------------------------------
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Properties {
+    /// The place of domicile of an organization.
+    ///
+    /// For geographic organizations, this is their capital.
+    pub domicile: Option<List<Marked<entity::Link>>>,
+    pub name: Option<LocalText>,
+    pub owner: Option<List<Marked<entity::Link>>>,
+    pub short_name: Option<LocalText>,
+    pub status: Option<Marked<Status>>,
+    pub successor: Option<Marked<entity::Link>>,
+
+    /// An organization this organization is a unit of.
+    pub superior: Option<List<Marked<entity::Link>>>,
+}
+
+impl  Properties {
+    fn from_mapping(
+        value: &mut Mapping,
+        context: &StoreLoader,
+        report: &mut PathReporter
+    ) -> Result<Self, Failed> {
+        let domicile = value.take_opt("domicile", context, report);
+        let name = value.take_opt("name", context, report);
+        let owner = value.take_default("owner", context, report);
+        let short_name = value.take_opt("short_name", context, report);
+        let status = value.take_opt("status", context, report);
+        let successor = value.take_opt("successor", context, report);
+        let superior = value.take_opt("superior", context, report);
+        Ok(Properties {
             domicile: domicile?,
             name: name?,
             owner: owner?,
-            property: property?,
             short_name: short_name?,
             status: status?,
             successor: successor?,
             superior: superior?,
         })
+    }
+
+    fn merge(&mut self, other: &Self) {
+        if let Some(domicile) = other.domicile.as_ref() {
+            self.domicile = Some(domicile.clone())
+        }
+        if let Some(name) = other.name.as_ref() {
+            self.name = Some(name.clone())
+        }
+        if let Some(owner) = other.owner.as_ref() {
+            self.owner = Some(owner.clone())
+        }
+        if let Some(name) = other.short_name.as_ref() {
+            self.short_name = Some(name.clone())
+        }
+        if let Some(status) = other.status {
+            self.status = Some(status)
+        }
+        if let Some(successor) = other.successor {
+            self.successor = Some(successor)
+        }
+        if let Some(superior) = other.superior.as_ref() {
+            self.superior = Some(superior.clone())
+        }
     }
 }
 

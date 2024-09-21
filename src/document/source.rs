@@ -10,7 +10,7 @@ use crate::store::{
     XrefsBuilder, XrefsStore,
 };
 use crate::types::{
-    EventDate, Key, IntoMarked, LanguageCode, LanguageText, List, Marked,
+    EventDate, Key, IntoMarked, LanguageText, List, Marked,
     Set, Url,
 };
 use super::{combined, entity, source};
@@ -25,6 +25,9 @@ pub use super::combined::SourceLink as Link;
 //------------ Document ------------------------------------------------------
 
 pub use super::combined::SourceDocument as Document;
+
+impl<'a> Document<'a> {
+}
 
 
 //------------ Data ----------------------------------------------------------
@@ -77,10 +80,6 @@ impl Data {
 
     pub fn link(&self) -> source::Link {
         self.link
-    }
-
-    pub fn name(&self, _lang: LanguageCode) -> &str {
-        self.key().as_ref()
     }
 
     pub fn date<'s>(

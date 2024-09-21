@@ -26,5 +26,5 @@ unicode-normalization = "0.1.13"
 yaml-rust	= "0.4.4"
 
 [features]
-http = [ "httools", "tokio" ]
+#http = [ "httools", "tokio" ]
 

@@ -11,7 +11,7 @@ use crate::load::yaml::Mapping;
 use crate::store::{
     DataStore, DocumentLink, FullStore, StoreLoader, XrefsBuilder, XrefsStore,
 };
-use crate::types::{IntoMarked, LanguageCode, Location, Key, Marked, Set};
+use crate::types::{IntoMarked, Location, Key, Marked, Set};
 use crate::types::key::InvalidKey;
 use super::source;
 use super::common::{Common, Progress};
@@ -25,6 +25,9 @@ pub use super::combined::PathLink as Link;
 //------------ Document ------------------------------------------------------
 
 pub use super::combined::PathDocument as Document;
+
+impl<'a> Document<'a> {
+}
 
 
 //------------ Data ----------------------------------------------------------
@@ -52,10 +55,6 @@ impl Data {
 
     pub fn origin(&self) -> &Origin {
         &self.common.origin
-    }
-
-    pub fn name(&self, _lang: LanguageCode) -> &str {
-        self.key().as_str()
     }
 
     pub fn node(&self, pos: usize) -> Option<Node> {

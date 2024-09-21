@@ -1,6 +1,5 @@
 
-use std::{borrow, cmp, fmt, ops, str};
-use std::str::FromStr;
+use std::{borrow, fmt, ops, str};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use crate::load::report::{Failed, PathReporter};
@@ -10,7 +9,9 @@ use super::marked::Marked;
 
 //------------ Key -----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(
+    Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize
+)]
 pub struct Key(String);
 
 impl Key {
@@ -24,6 +25,10 @@ impl Key {
 
     pub fn to_string(&self) -> String {
         self.0.clone()
+    }
+
+    pub fn country(&self) -> Option<&str> {
+        self.0.split('.').nth(1)
     }
 }
 
@@ -75,40 +80,6 @@ impl<C> FromYaml<C> for Marked<Key> {
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         Ok(value.into_string(report)?.map(Key))
-    }
-}
-
-
-//--- PartialOrd and Ord
-
-impl PartialOrd for Key {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Key {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        let mut left = self.0.split('.');
-        let mut right = other.0.split('.');
-
-        loop {
-            match (left.next(), right.next()) {
-                (None, None) => return cmp::Ordering::Equal,
-                (None, Some(_)) => return cmp::Ordering::Less,
-                (Some(_), None) => return cmp::Ordering::Greater,
-                (Some(left), Some(right)) => {
-                    let cmp = match (usize::from_str(left),
-                                     usize::from_str(right)) {
-                        (Ok(left), Ok(right)) => left.cmp(&right),
-                        _ => left.cmp(right)
-                    };
-                    if cmp != cmp::Ordering::Equal {
-                        return cmp
-                    }
-                }
-            }
-        }
     }
 }
 

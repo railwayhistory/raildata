@@ -8,7 +8,7 @@ use crate::store::{
     DataStore, DocumentLink, FullStore, StoreLoader, XrefsBuilder, XrefsStore,
 };
 use crate::types::{
-    EventDate, Key, LanguageCode, LanguageText, List, LocalText, Marked, Set,
+    EventDate, Key, LanguageText, List, LocalText, Marked, Set,
 };
 use super::source;
 use super::common::{Common, Progress};
@@ -22,6 +22,9 @@ pub use super::combined::StructureLink as Link;
 //------------ Document ------------------------------------------------------
 
 pub use super::combined::StructureDocument as Document;
+
+impl<'a> Document<'a> {
+}
 
 
 //------------ Data ----------------------------------------------------------
@@ -49,18 +52,6 @@ impl Data {
 
     pub fn link(&self) -> Link {
         self.link
-    }
-
-    /// Returns the name for the given language.
-    pub fn name(&self, lang: LanguageCode) -> &str {
-        for event in self.events.iter().rev() {
-            if let Some(name) = event.name.as_ref() {
-                if let Some(name) = name.for_language(lang) {
-                    return name
-                }
-            }
-        }
-        self.key().as_str()
     }
 }
 

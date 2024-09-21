@@ -275,6 +275,10 @@ enum CTInner<C: Ord> {
 }
 
 impl<C: Ord> CodedText<C> {
+    pub fn new_plain(content: String) -> Self {
+        Self(CTInner::Plain(content.into()))
+    }
+
     pub fn first(&self) -> &str {
         match self.0 {
             CTInner::Plain(ref inner) => inner.as_str(),
@@ -296,6 +300,28 @@ impl<C: Ord> CodedText<C> {
             CTInner::Plain(ref inner) => Some(inner.as_str()),
             CTInner::Map(_) => None,
         }
+    }
+
+    pub fn merge(this: &mut Option<Self>, other: &Self)
+    where C: Clone {
+        if let Some(this) = this.as_mut() {
+            match other.0 {
+                CTInner::Plain(ref value) => {
+                    this.0 = CTInner::Plain(value.clone());
+                    return
+                }
+                CTInner::Map(ref value) => {
+                    if let CTInner::Map(ref mut map) = this.0 {
+                        map.extend(value.iter().map(|item| {
+                            (item.0.clone(), item.1.clone())
+                        }));
+                        return
+                    }
+                    *this = other.clone();
+                }
+            }
+        }
+        *this = Some(other.clone());
     }
 }
 
@@ -337,6 +363,34 @@ impl<C: Ord + From<LanguageCode>> CodedText<C> {
                 None
             }
         }
+    }
+
+    pub fn iter_for_language<'a>(
+        iter: impl Iterator<Item = &'a Self> + 'a,
+        language: LanguageCode
+    ) -> Option<&'a str>
+    where C: 'a {
+        let language = C::from(language);
+
+        let mut first = None;
+
+        for item in iter {
+            match item.0 {
+                CTInner::Plain(ref inner) => return Some(inner.as_ref()),
+                CTInner::Map(ref inner) => {
+                    for &(ref code, ref text) in inner.iter() {
+                        if *code.as_value() == language {
+                            return Some(text.as_str());
+                        }
+                        if first.is_none() {
+                            first = Some(text.as_str())
+                        }
+                    }
+                }
+            }
+        }
+
+        first
     }
 }
 
