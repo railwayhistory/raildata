@@ -4,7 +4,6 @@ use std::mem;
 use std::hash::Hash;
 use std::collections::hash_set;
 use std::collections::HashSet;
-use serde::{Deserialize, Serialize};
 use crate::load::yaml::{FromYaml, Value};
 use crate::load::report::{Failed, PathReporter};
 use super::marked::Location;
@@ -12,13 +11,13 @@ use super::marked::Location;
 
 //------------ Set -----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Set<T: Hash + Eq> {
     inner: Inner<T, HashSet<T>>,
     location: Location
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 enum Inner<O, M> {
     Empty,
     One(O),

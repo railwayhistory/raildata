@@ -2,14 +2,13 @@
 
 use std::{borrow, cmp, fmt, hash, ops};
 use std::cmp::min;
-use serde::{Deserialize, Serialize};
 use yaml_rust::scanner::Marker;
 
 
 //------------ Marked --------------------------------------------------------
 
 /// A value that optionally is marked by its source location.
-#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[derive(Clone, Copy, Default)]
 pub struct Marked<T> {
     value: T,
     location: Location,
@@ -200,9 +199,7 @@ impl<T> IntoMarked for T { }
 
 //------------ Location ------------------------------------------------------
 
-#[derive(
-    Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize
-)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Location(u32);
 
 impl Location {

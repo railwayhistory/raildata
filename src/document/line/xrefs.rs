@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use crate::document::source;
 use crate::store::DataStore;
 use crate::types::Set;
@@ -6,7 +5,7 @@ use crate::types::Set;
 
 //------------ Xrefs ---------------------------------------------------------
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct Xrefs {
     source_regards: Set<source::Link>,
 }

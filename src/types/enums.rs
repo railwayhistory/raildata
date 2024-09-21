@@ -39,10 +39,7 @@ macro_rules! data_enum {
         }
     ) => {
         $(#[$attr])*
-        #[derive(
-            Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq,
-            PartialOrd, Serialize
-        )]
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         pub enum $name {
             $( $(#[$variant_attr])* $variant ),*,
         }

@@ -1,6 +1,5 @@
 
 use std::collections::HashSet;
-use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
@@ -29,7 +28,7 @@ impl<'a> Document<'a> {
 
 //------------ Data ----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Data {
     link: Link,
     pub common: Common,
@@ -108,7 +107,7 @@ impl Data {
 
 //------------ Xrefs ---------------------------------------------------------
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct Xrefs {
     source_regards: Set<source::Link>,
 }
@@ -125,7 +124,7 @@ impl Xrefs {
 
 //------------ Meta ----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Meta;
 
 impl Meta {
@@ -154,7 +153,7 @@ pub type EventList = List<Event>;
 
 //------------ Event ---------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Event {
     // Meta attributes
     pub date: EventDate,

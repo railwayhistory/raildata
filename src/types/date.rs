@@ -2,7 +2,6 @@
 
 use std::{cmp, fmt, str};
 use std::str::FromStr;
-use serde::{Deserialize, Serialize};
 use crate::load::yaml::{FromYaml, Value};
 use crate::load::report::{Failed, PathReporter};
 use super::list::List;
@@ -39,7 +38,7 @@ fn stand_in_dates(key: &str) -> Option<Date> {
 //------------ Precision -----------------------------------------------------
 
 /// The precision of a date.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Precision {
     /// Exactly the given date.
     ///
@@ -84,7 +83,7 @@ impl PartialOrd for Precision {
 //------------ Date ----------------------------------------------------------
 
 /// A date.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Date {
     year: i16,
     month: Option<u8>,
@@ -314,7 +313,7 @@ impl str::FromStr for Date {
 
 //------------ EventDate -----------------------------------------------------
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct EventDate(List<Marked<Date>>);
 
 impl EventDate {

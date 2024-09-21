@@ -1,7 +1,6 @@
 
 use std::{borrow, fmt, ops, str};
 use derive_more::Display;
-use serde::{Deserialize, Serialize};
 use crate::load::report::{Failed, PathReporter};
 use crate::load::yaml::{FromYaml, Value};
 use super::marked::Marked;
@@ -9,9 +8,7 @@ use super::marked::Marked;
 
 //------------ Key -----------------------------------------------------------
 
-#[derive(
-    Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize
-)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Key(String);
 
 impl Key {

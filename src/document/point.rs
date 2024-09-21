@@ -1,7 +1,6 @@
 
 use std::collections::{HashSet, HashMap};
 use derive_more::Display;
-use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
 use crate::document::path::Coord;
 use crate::load::report::{Failed, Origin, PathReporter};
@@ -32,7 +31,7 @@ impl<'a> Document<'a> {
 
 //------------ Data ----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Data {
     link: point::Link,
 
@@ -265,7 +264,7 @@ impl Data {
 
 //------------ Xrefs ---------------------------------------------------------
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct Xrefs {
     pub lines: List<line::Link>,
     pub source_regards: Set<source::Link>,
@@ -283,7 +282,7 @@ impl Xrefs {
 
 //------------ Meta ----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Meta {
     pub junction: bool,
     pub coord: Option<Coord>,
@@ -420,7 +419,7 @@ pub type EventList = List<Event>;
 
 //------------ Event ---------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Event {
     pub date: EventDate,
     pub records: List<EventRecord>,
@@ -510,7 +509,7 @@ impl FromYaml<StoreLoader> for Event {
 
 //------------ EventRecord ---------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct EventRecord {
     pub date: Option<EventDate>,
     pub document: List<Marked<source::Link>>,
@@ -586,7 +585,7 @@ pub type RecordList = List<Record>;
 
 //------------ Record --------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Record {
     pub document: List<Marked<source::Link>>,
     pub note: Option<LanguageText>,
@@ -621,7 +620,7 @@ impl FromYaml<StoreLoader> for Record {
 
 //------------ Properties ----------------------------------------------------
 
-#[derive(Clone, Default, Deserialize, Debug, Serialize)]
+#[derive(Clone, Default, Debug)]
 pub struct Properties {
     pub status: Option<Marked<Status>>,
 
@@ -897,7 +896,7 @@ impl Category {
 
 //------------ Location ------------------------------------------------------
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct Location(List<(Marked<line::Link>, Option<Marked<String>>)>);
 
 impl Location {
@@ -1101,7 +1100,7 @@ data_enum! {
 
 //------------ Site ----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Site(pub List<(Marked<path::Link>, Marked<String>)>);
 
 impl FromYaml<StoreLoader> for Site {
@@ -1202,7 +1201,7 @@ pub type DeName16 = Marked<String>;
 
 //------------ Codes ---------------------------------------------------------
 
-#[derive(Clone, Default, Deserialize, Debug, Serialize)]
+#[derive(Clone, Default, Debug)]
 pub struct Codes {
     codes: HashMap<CodeType, List<Marked<String>>>,
 }

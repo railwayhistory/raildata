@@ -1,7 +1,6 @@
 
 use std::{fmt, ops};
 use derive_more::Display;
-use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
@@ -32,7 +31,7 @@ impl<'a> Document<'a> {
 
 //------------ Data ----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Data {
     link: source::Link,
     pub common: Common,
@@ -207,7 +206,7 @@ impl Data {
 
 //------------ Xrefs ---------------------------------------------------------
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct Xrefs {
     source_also: Set<Link>,
     source_collection: List<Link>,
@@ -234,7 +233,7 @@ impl Xrefs {
 
 //------------ Meta ----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Meta;
 
 impl Meta {
@@ -272,7 +271,7 @@ data_enum! {
 //
 // XXX Temporary type. Replace with a type encoding the actual specification.
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Pages(Marked<String>);
 
 impl Pages {
@@ -313,7 +312,7 @@ impl fmt::Display for Pages {
 
 //------------ Isbn ----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Isbn(Marked<String>);
 
 impl Isbn {

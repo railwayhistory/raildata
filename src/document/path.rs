@@ -3,7 +3,6 @@ use std::f64::INFINITY;
 use std::str::FromStr;
 use derive_more::Display;
 use osmxml::elements::{MemberType, Osm, Relation};
-use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
 use crate::load::report;
 use crate::load::report::{Failed, Origin, PathReporter};
@@ -32,7 +31,7 @@ impl<'a> Document<'a> {
 
 //------------ Data ----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Data {
     pub common: Common,
 
@@ -309,7 +308,7 @@ impl Data {
 
 //------------ Xrefs ---------------------------------------------------------
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct Xrefs {
     source_regards: Set<source::Link>,
 }
@@ -326,7 +325,7 @@ impl Xrefs {
 
 //------------ Meta ----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Meta;
 
 impl Meta {
@@ -340,7 +339,7 @@ impl Meta {
 
 //------------ Node ----------------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug)]
 pub struct Node {
     pub lon: f64,
     pub lat: f64,
@@ -357,7 +356,7 @@ impl Node {
 
 //------------ Coord ---------------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug)]
 pub struct Coord {
     pub lon: f64,
     pub lat: f64,

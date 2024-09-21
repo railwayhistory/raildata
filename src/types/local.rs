@@ -3,7 +3,6 @@
 use std::{fmt, ops, str};
 use std::str::FromStr;
 use derive_more::Display;
-use serde::{Deserialize, Serialize};
 use crate::load::yaml::{FromYaml, Value};
 use crate::load::report::{Failed, Message, PathReporter};
 use super::marked::Marked;
@@ -11,10 +10,7 @@ use super::marked::Marked;
 
 //------------ CountryCode ---------------------------------------------------
 
-#[derive(
-    Clone, Copy, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
-    Serialize
-)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct CountryCode([u8; 2]);
 
 impl CountryCode {
@@ -91,10 +87,7 @@ impl fmt::Debug for CountryCode {
 
 //------------ LanguageCode --------------------------------------------------
 
-#[derive(
-    Clone, Copy, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
-    Serialize
-)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct LanguageCode([u8; 3]);
 
 impl LanguageCode {
@@ -178,10 +171,7 @@ impl fmt::Debug for LanguageCode {
 //
 //  Internal coding: if the last byte is 0u8, we have a country code,
 //  otherwise a language code.
-#[derive(
-    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
-    Serialize
-)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct LocalCode([u8; 3]);
 
 impl LocalCode {
@@ -265,10 +255,10 @@ impl fmt::Display for LocalCode {
 
 //------------ CodedText and friends -----------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CodedText<C: Ord>(CTInner<C>);
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum CTInner<C: Ord> {
     Plain(Marked<String>),
     Map(Vec<(Marked<C>, Marked<String>)>),

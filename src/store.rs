@@ -5,7 +5,6 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic;
 use std::sync::atomic::AtomicBool;
 use derive_more::Display;
-use serde::{Deserialize, Serialize};
 use crate::document::combined::{Data, Document, Meta, Xrefs};
 use crate::document::common::DocumentType;
 use crate::load::report::{
@@ -541,10 +540,7 @@ impl AsRef<XrefsStore> for FullStore {
 ///
 /// Links remain stable between all stores derived from the same
 /// [`StoreLoader`] instance.
-#[derive(
-    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
-    Serialize
-)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct DocumentLink {
     index: usize,
 }

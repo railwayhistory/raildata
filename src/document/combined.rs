@@ -1,6 +1,5 @@
 use derive_more::From;
 use paste::paste;
-use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter, StageReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
@@ -19,7 +18,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
 
     //------------ Data ------------------------------------------------------
 
-    #[derive(Clone, Debug, Deserialize, From, Serialize)]
+    #[derive(Clone, Debug, From)]
     pub enum Data {
         $(
             $vtype(super::$vattr::Data),
@@ -151,7 +150,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
 
     //------------ Xrefs -----------------------------------------------------
 
-    #[derive(Clone, Debug, Deserialize, From, Serialize)]
+    #[derive(Clone, Debug, From)]
     pub enum Xrefs {
         $(
             $vtype(super::$vattr::Xrefs),
@@ -181,7 +180,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
 
     //------------ Meta ------------------------------------------------------
 
-    #[derive(Clone, Debug, Deserialize, From, Serialize)]
+    #[derive(Clone, Debug, From)]
     pub enum Meta {
         $(
             $vtype(super::$vattr::Meta),
@@ -213,10 +212,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
     //------------ Links -----------------------------------------------------
 
     $(
-        #[derive(
-            Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq,
-            PartialOrd, Serialize
-        )]
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         pub struct $vlink(DocumentLink);
 
         impl $vlink {

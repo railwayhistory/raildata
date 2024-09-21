@@ -4,7 +4,6 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use derive_more::Display;
-use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
@@ -70,7 +69,7 @@ impl<'a> Document<'a> {
 
 //------------ Data ----------------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Data {
     link: LineLink,
 
@@ -240,7 +239,7 @@ impl Data {
 
 //------------ LineCode ------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct LineCode {
     code: String,
     region_end: usize,
@@ -346,7 +345,7 @@ data_enum! {
 
 //------------ Points --------------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Points {
     points: Vec<Marked<PointLink>>,
 }
@@ -476,7 +475,7 @@ impl<'a> ops::Deref for PointsContext<'a> {
 
 //------------ Current -------------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct Current {
     pub category: CurrentValue<Set<Category>>,
     pub course: CurrentValue<List<CourseSegment>>,
@@ -578,7 +577,7 @@ impl FromYaml<PointsContext<'_>> for Current {
 
 //------------ CurrentValue --------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct CurrentValue<T> {
     sections: List<(Section, T)>,
 }
@@ -737,7 +736,7 @@ impl<T> ops::Deref for CurrentValue<T> {
 
 //------------ EventList -----------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct EventList {
     events: List<Event>
 }
@@ -778,7 +777,7 @@ impl<'a> IntoIterator for &'a EventList {
 
 //------------ Event ---------------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Event {
     pub date: EventDate,
     pub sections: SectionList,
@@ -856,7 +855,7 @@ impl FromYaml<PointsContext<'_>> for Event {
 
 //------------ EventRecord ---------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct EventRecord {
     pub date: Option<EventDate>,
     pub document: Option<List<Marked<SourceLink>>>,
@@ -969,7 +968,7 @@ impl FromYaml<PointsContext<'_>> for EventRecord {
 
 //------------ RecordList ----------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct RecordList {
     documents: Vec<(SourceLink, List<Record>)>,
 }
@@ -1007,7 +1006,7 @@ impl FromYaml<PointsContext<'_>> for RecordList {
 
 //------------ Record --------------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Record {
     pub sections: SectionList,
     pub document: Marked<SourceLink>,
@@ -1046,7 +1045,7 @@ impl FromYaml<PointsContext<'_>> for Record {
 
 //------------ Properties ----------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Properties {
     pub category: Option<Set<Category>>,
     pub electrified: Option<Set<Marked<Electrified>>>,
@@ -1152,7 +1151,7 @@ impl Properties {
 
 //------------ SectionList ---------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SectionList {
     sections: List<Section>,
 }
@@ -1244,7 +1243,7 @@ impl<'a> IntoIterator for &'a SectionList {
 
 //------------ Section -------------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Section {
     pub start: Option<Marked<PointLink>>,
     pub end: Option<Marked<PointLink>>,
@@ -1427,7 +1426,7 @@ impl Category {
 
 //------------ Concession ----------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Concession {
     pub by: List<Marked<EntityLink>>,
     pub to: List<Marked<EntityLink>>,
@@ -1474,7 +1473,7 @@ data_enum! {
 
 //------------ CourseSegment -------------------------------------------------
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct CourseSegment {
     pub path: Marked<PathLink>,
     pub start: Marked<String>,
@@ -1658,26 +1657,6 @@ impl FromYaml<StoreLoader> for Marked<Electrified> {
     }
 }
 
-impl<'de> Deserialize<'de> for Electrified {
-    fn deserialize<D: serde::Deserializer<'de>>(
-        deserializer: D
-    ) -> Result<Self, D::Error> {
-        Self::from_str(
-            Deserialize::deserialize(deserializer)?
-        ).map_err(|err| {
-            serde::de::Error::custom(err)
-        })
-    }
-}
-
-impl Serialize for Electrified {
-    fn serialize<S: serde::Serializer>(
-        &self, serializer: S
-    ) -> Result<S::Ok, S::Error> {
-        serializer.collect_str(self)
-    }
-}
-
 
 //------------ GenericEl -----------------------------------------------------
 
@@ -1775,10 +1754,7 @@ impl fmt::Display for GenericEl {
 
 //------------ Gauge ---------------------------------------------------------
 
-#[derive(
-    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd,
-    Serialize
-)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Gauge(pub Marked<u16>);
 
 impl Gauge {

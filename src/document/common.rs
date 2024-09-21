@@ -1,7 +1,6 @@
 //! Attributes and attribute types common to all documents.
 
 use derive_more::Display;
-use serde::{Deserialize, Serialize};
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
 use crate::store::StoreLoader;
@@ -13,7 +12,7 @@ use super::{entity, source};
 
 //------------ Common --------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Common {
     //--- Attributes
     pub key: Marked<Key>,
@@ -84,7 +83,7 @@ impl Progress {
 
 //------------ Alternative ---------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Alternative {
     pub date: EventDate,
     pub document: List<Marked<source::Link>>,
@@ -114,7 +113,7 @@ impl FromYaml<StoreLoader> for Alternative {
 
 //------------ Basis ---------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Basis {
     pub date: EventDate,
     pub document: List<Marked<source::Link>>,
@@ -183,7 +182,7 @@ impl FromYaml<StoreLoader> for Basis {
 
 //------------ Agreement -----------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Agreement {
     pub agreement_type: AgreementType,
     pub parties: List<Marked<entity::Link>>,
@@ -221,7 +220,7 @@ data_enum! {
 
 //------------ Contract ------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Contract {
     pub parties: List<Marked<entity::Link>>,
     pub pos: Location,

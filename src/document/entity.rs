@@ -2,7 +2,6 @@
 use std::cmp;
 use std::collections::HashSet;
 use std::str::FromStr;
-use serde::{Deserialize, Serialize};
 use crate::catalogue::CatalogueBuilder;
 use crate::load::report::{Failed, Origin, PathReporter};
 use crate::load::yaml::{FromYaml, Mapping, Value};
@@ -32,7 +31,7 @@ impl<'a> Document<'a> {
 
 //------------ Data ----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Data {
     link: entity::Link,
 
@@ -252,7 +251,7 @@ impl Data {
 
 //------------ Xrefs ---------------------------------------------------------
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct Xrefs {
     pub line_regions: List<(line::Link, line::Section)>,
 
@@ -288,7 +287,7 @@ impl Xrefs {
 
 //------------ Meta ----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Meta {
     pub current: Properties,
 }
@@ -340,7 +339,7 @@ pub type EventList = List<Event>;
 
 //------------ Event ---------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Event {
     pub date: EventDate,
     pub records: List<EventRecord>,
@@ -403,7 +402,7 @@ impl FromYaml<StoreLoader> for Event {
 
 //------------ EventRecord ---------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct EventRecord {
     pub date: Option<EventDate>,
     pub document: List<Marked<source::Link>>,
@@ -460,7 +459,7 @@ impl FromYaml<StoreLoader> for EventRecord {
 
 //------------ Properties ----------------------------------------------------
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct Properties {
     /// The place of domicile of an organization.
     ///
@@ -528,7 +527,7 @@ impl  Properties {
 
 //------------ Property ------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Property {
     pub role: Marked<PropertyRole>,
     pub region: List<Marked<entity::Link>>,
@@ -580,27 +579,5 @@ data_enum! {
         { Open: "open" }
         { Closed: "closed" }
     }
-}
-
-
-//------------ Crosslinks ----------------------------------------------------
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Crosslink {
-    /// Lines related to this organization.
-    ///
-    /// The list is ordered by line code.
-    pub lines: Vec<LineCrossref>,
-}
-
-
-//------------ LineCrossref --------------------------------------------------
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct LineCrossref {
-    pub line: line::Link,
-    pub region: bool,
-    pub owned: bool,
-    pub operated: bool,
 }
 

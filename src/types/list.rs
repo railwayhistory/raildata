@@ -1,7 +1,6 @@
 //! A list with an optimization for holding a single item.
 
 use std::{cmp, fmt, mem, ops, slice};
-use serde::{Deserialize, Serialize};
 use crate::load::report::{Failed, PathReporter};
 use crate::load::yaml::{FromYaml, Value};
 use super::marked::IntoMarked;
@@ -9,12 +8,12 @@ use super::marked::IntoMarked;
 
 //------------ List ----------------------------------------------------------
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct List<T> {
     inner: Inner<T, Vec<T>>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 enum Inner<O, M> {
     Empty,
     One(O),
