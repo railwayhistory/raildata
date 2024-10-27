@@ -1587,6 +1587,7 @@ impl Electrified {
             "hu"      => Ole, 25000, Ac50;
             "it.3"    => Ole,  3000, Dc;
             "it.25"   => Ole, 25000, Ac50;
+            "lt"      => Ole, 25000, Ac50;
             "lu.25"   => Ole, 25000, Ac50;
             "nl"      => Ole,  1500, Dc;
             "nl.25"   => Ole, 25000, Ac50;
