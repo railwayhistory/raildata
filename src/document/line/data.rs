@@ -1579,6 +1579,8 @@ impl Electrified {
             "de.hmb"  => Rail, 1200, Dc;
             "de.hmb-alt" => Ole, 6300, Ac25;
             "dk"      => Ole, 25000, Ac50;
+            "ee.ac"   => Ole, 25000, Ac50;
+            "ee.dc"   => Ole,  3000, Dc;
             "gb.25"   => Ole, 25000, Ac50;
             "gb.rail" => Rail,  750, Dc;
             "fr.15"   => Ole,  1500, Dc;
@@ -1589,6 +1591,7 @@ impl Electrified {
             "it.25"   => Ole, 25000, Ac50;
             "lt"      => Ole, 25000, Ac50;
             "lu.25"   => Ole, 25000, Ac50;
+            "lv"      => Ole,  3300, Dc;
             "nl"      => Ole,  1500, Dc;
             "nl.25"   => Ole, 25000, Ac50;
             "pl"      => Ole,  3000, Dc;
