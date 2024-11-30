@@ -12,6 +12,7 @@ use raildata::store::DataStore;
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Path to the data directory.
+    #[arg(default_value = ".")]
     path: PathBuf,
 
     /// Do a quick parse and exit.
