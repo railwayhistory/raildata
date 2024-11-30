@@ -16,6 +16,6 @@ by simply running:
 cargo install -f --git https://github.com/railwayhistory/raildata.git
 ```
 
-After installing, you should be able to just run `raildata` in the
+After installing, you should be able to simply run `raildata` in the
 directory with your local copy of the database.
 
