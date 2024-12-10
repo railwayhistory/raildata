@@ -1581,6 +1581,7 @@ impl Electrified {
             "dk"      => Ole, 25000, Ac50;
             "ee.ac"   => Ole, 25000, Ac50;
             "ee.dc"   => Ole,  3000, Dc;
+            "fi"      => Ole, 25000, Ac50;
             "gb.25"   => Ole, 25000, Ac50;
             "gb.rail" => Rail,  750, Dc;
             "fr.15"   => Ole,  1500, Dc;
