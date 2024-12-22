@@ -1595,8 +1595,10 @@ impl Electrified {
             "lv"      => Ole,  3300, Dc;
             "nl"      => Ole,  1500, Dc;
             "nl.25"   => Ole, 25000, Ac50;
+            "no"      => Ole, 15000, Ac16;
             "pl"      => Ole,  3000, Dc;
             "ru"      => Ole,  3000, Dc;
+            "se"      => Ole, 15000, Ac16;
             "si"      => Ole,  3000, Dc;
         );
         None
