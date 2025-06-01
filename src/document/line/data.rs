@@ -74,6 +74,7 @@ pub struct Data {
     link: LineLink,
 
     pub common: Common,
+    pub title: Option<LanguageText>,
     pub label: Set<Label>,
     pub note: Option<LanguageText>,
     pub current: Current,
@@ -142,6 +143,7 @@ impl Data {
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         let common = Common::from_yaml(key, &mut doc, context, report);
+        let title = doc.take_opt("title", context, report);
         let label = doc.take_default("label", context, report);
         let note = doc.take_opt("note", context, report);
         let points: Points = doc.take("points", context, report)?;
@@ -157,6 +159,7 @@ impl Data {
             link: link.into(),
             code: LineCode::from_key(common.key.as_value()),
             common,
+            title: title?,
             label: label?,
             note: note?,
             current: current?,
@@ -1595,10 +1598,13 @@ impl Electrified {
             "lv"      => Ole,  3300, Dc;
             "nl"      => Ole,  1500, Dc;
             "nl.25"   => Ole, 25000, Ac50;
+            "nl.60"   => Ole,   600, Dc;
             "no"      => Ole, 15000, Ac16;
             "pl"      => Ole,  3000, Dc;
             "ru"      => Ole,  3000, Dc;
             "se"      => Ole, 15000, Ac16;
+            "se.15"   => Ole,  1500, Dc;
+            "se.75"   => Ole,   750, Dc;
             "si"      => Ole,  3000, Dc;
         );
         None
