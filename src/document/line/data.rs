@@ -1599,6 +1599,7 @@ impl Electrified {
             "nl"      => Ole,  1500, Dc;
             "nl.25"   => Ole, 25000, Ac50;
             "nl.60"   => Ole,   600, Dc;
+            "nl.ams.metro"  => Rail,  750, Dc;
             "no"      => Ole, 15000, Ac16;
             "pl"      => Ole,  3000, Dc;
             "ru"      => Ole,  3000, Dc;
