@@ -64,7 +64,7 @@ impl Data {
             }
         }
         for event in self.events.iter().rev() {
-            if let Some(ref name) = event.name(LanguageCode::ENG) {
+            if let Some(name) = event.name(LanguageCode::ENG) {
                 return name
             }
         }
@@ -73,12 +73,12 @@ impl Data {
 
     pub fn local_short_name(&self, lang: LanguageCode) -> &str {
         for event in self.events.iter().rev() {
-            if let Some(ref name) = event.short_name(lang) {
+            if let Some(name) = event.short_name(lang) {
                 return name
             }
         }
         for event in self.events.iter().rev() {
-            if let Some(ref name) = event.short_name(LanguageCode::ENG) {
+            if let Some(name) = event.short_name(LanguageCode::ENG) {
                 return name
             }
         }
@@ -92,7 +92,7 @@ impl Data {
         let mut default = None;
         for event in self.events.iter().rev() {
             if date.sort_cmp(&event.date) == cmp::Ordering::Greater {
-                if let Some(ref name) = event.prop(|record| {
+                if let Some(name) = event.prop(|record| {
                     record.properties.name.as_ref()
                 }) {
                     if let Some(name) = name.for_language(lang) {
@@ -104,10 +104,10 @@ impl Data {
                 }
                 continue
             }
-            if let Some(ref name) = event.prop(|record| {
+            if let Some(name) = event.prop(|record| {
                 record.properties.name.as_ref()
             }) {
-                if let Some(ref name) = name.for_language(lang) {
+                if let Some(name) = name.for_language(lang) {
                     return name
                 }
                 else {
@@ -133,7 +133,7 @@ impl Data {
         let mut default = None;
         for event in self.events.iter().rev() {
             if date.sort_cmp(&event.date) == cmp::Ordering::Greater {
-                if let Some(ref name) = event.prop(|record| {
+                if let Some(name) = event.prop(|record| {
                     record.properties.short_name.as_ref()
                 }) {
                     if let Some(name) = name.for_language(lang) {
@@ -145,10 +145,10 @@ impl Data {
                 }
                 continue
             }
-            if let Some(ref name) = event.prop(|record| {
+            if let Some(name) = event.prop(|record| {
                 record.properties.short_name.as_ref()
             }) {
-                if let Some(ref name) = name.for_language(lang) {
+                if let Some(name) = name.for_language(lang) {
                     return name
                 }
                 else {
@@ -168,7 +168,7 @@ impl Data {
     }
 
     fn event_records(&self) -> impl Iterator<Item = &EventRecord> + '_ {
-        self.events.iter().map(|ev| ev.records.iter()).flatten()
+        self.events.iter().flat_map(|ev| ev.records.iter())
     }
 
     /*
@@ -278,7 +278,7 @@ impl Xrefs {
 
     pub fn finalize(&mut self, store: &DataStore) {
         self.line_regions.sort_by(|left, right| {
-            left.0.data(store).code().cmp(&right.0.data(store).code())
+            left.0.data(store).code().cmp(right.0.data(store).code())
         })
     }
 }
@@ -367,7 +367,7 @@ impl Event {
     fn prop<F: Fn(&EventRecord) -> Option<&T>, T: ?Sized>(
         &self, op: F
     ) -> Option<&T> {
-        self.records.iter().find_map(|record| op(&record))
+        self.records.iter().find_map(op)
     }
 }
 

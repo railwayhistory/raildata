@@ -278,7 +278,7 @@ impl<C: Ord> CodedText<C> {
         }
     }
 
-    pub fn iter(&self) -> CodedTextIter<C> {
+    pub fn iter(&self) -> CodedTextIter<'_, C> {
         CodedTextIter {
             text: self,
             pos: 0
@@ -326,7 +326,7 @@ impl<C: Ord + From<CountryCode>> CodedText<C> {
         match self.0 {
             CTInner::Plain(_) => None,
             CTInner::Map(ref inner) => {
-                for &(ref code, ref text) in inner.iter() {
+                for (code, text) in inner.iter() {
                     if *code.as_value() == jurisdiction {
                         return Some(text.as_str());
                     }
@@ -345,7 +345,7 @@ impl<C: Ord + From<LanguageCode>> CodedText<C> {
         match self.0 {
             CTInner::Plain(ref inner) => Some(inner.as_ref()),
             CTInner::Map(ref inner) => {
-                for &(ref code, ref text) in inner.iter() {
+                for (code, text) in inner.iter() {
                     if *code.as_value() == language {
                         return Some(text.as_str());
                     }
@@ -368,7 +368,7 @@ impl<C: Ord + From<LanguageCode>> CodedText<C> {
             match item.0 {
                 CTInner::Plain(ref inner) => return Some(inner.as_ref()),
                 CTInner::Map(ref inner) => {
-                    for &(ref code, ref text) in inner.iter() {
+                    for (code, text) in inner.iter() {
                         if *code.as_value() == language {
                             return Some(text.as_str());
                         }
@@ -450,7 +450,7 @@ impl<'a, C: Ord> Iterator for CodedTextIter<'a, C> {
             CTInner::Plain(ref inner) => {
                 if self.pos == 0 {
                     self.pos = 1;
-                    Some((None, &inner))
+                    Some((None, inner))
                 }
                 else {
                     None
@@ -514,7 +514,7 @@ impl From<String> for LocalCodeError {
 
 fn to_code_byte(s: &str, idx: usize) -> Result<u8, String> {
     let c = s.as_bytes()[idx];
-    if c < b'A' || c > b'z' {
+    if !(b'A'..=b'z').contains(&c) {
         Err(s.into())
     }
     else if c <= b'Z' {

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::f64::INFINITY;
 use std::str::FromStr;
 use derive_more::Display;
 use osmxml::elements::{MemberType, Osm, Relation};
@@ -124,10 +123,10 @@ impl Data {
             }
         };
         let mut path = Data::new(key.clone(), report.path());
-        if let Err(_) = path.load_nodes(&mut relation, osm, report) {
+        if path.load_nodes(&mut relation, osm, report).is_err() {
             return Err(Some(key))
         }
-        if let Err(_) = path.load_source(&mut relation, context, report) {
+        if path.load_source(&mut relation, context, report).is_err() {
             return Err(Some(key))
         }
         path.name = relation.tags_mut().remove("name");
@@ -162,7 +161,7 @@ impl Data {
                 None => 1.,
                 Some("arc") => 1.,
                 Some("curved") => 1.,
-                Some("straight") => INFINITY,
+                Some("straight") => f64::INFINITY,
                 Some(value) => {
                     report.unmarked_warning(
                         IllegalWayType { way: way.id(), value: value.into() }

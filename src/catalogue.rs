@@ -50,11 +50,11 @@ impl Catalogue {
         let report = Reporter::new();
         let mut ok = true;
         let builder = {
-            let mut stage_report = report.clone().stage(Stage::Catalogue);
+            let stage_report = report.clone().stage(Stage::Catalogue);
             let mut builder = CatalogueBuilder::default();
             for link in store.links() {
                 if link.data(store).catalogue(
-                    &mut builder, store, &mut stage_report
+                    &mut builder, store, &stage_report
                 ).is_err() {
                     ok = false;
                 }
@@ -74,7 +74,7 @@ impl Catalogue {
     fn finalize(&mut self, store: &FullStore) {
         self.lines.sort_by(|left, right| {
             left.data(store).code().cmp(
-                &right.data(store).code()
+                right.data(store).code()
             )
         })
     }

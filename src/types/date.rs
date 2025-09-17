@@ -114,7 +114,7 @@ impl Date {
 
     pub fn is_valid(&self) -> bool {
         if let Some(month) = self.month {
-            if month < 1 || month > 12 { return false }
+            if !(1..=12).contains(&month) { return false }
             if let Some(day) = self.day {
                 if day < 1 { return false }
                 match month {
@@ -125,9 +125,7 @@ impl Date {
                         if self.is_leap() {
                             if day > 29 { return false }
                         }
-                        else {
-                            if day > 28 { return false }
-                        }
+                        else if day > 28 { return false }
                     }
                     _ => {
                         if day > 30 { return false }
@@ -156,8 +154,8 @@ impl<C> FromYaml<C> for Marked<Date> {
         let value = match value.try_into_integer() {
             Ok(year) => {
                 return year.try_map(|year| {
-                    if year <= ::std::u16::MAX as i64
-                    && year >= ::std::u16::MIN as i64 {
+                    if year <= u16::MAX as i64
+                    && year >= u16::MIN as i64 {
                         Ok(Date::from_year(year as i16))
                     }
                     else { Err(FromStrError) }

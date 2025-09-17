@@ -20,10 +20,6 @@ impl Key {
         self.0.as_ref()
     }
 
-    pub fn to_string(&self) -> String {
-        self.0.clone()
-    }
-
     pub fn country(&self) -> Option<&str> {
         self.0.split('.').nth(1)
     }

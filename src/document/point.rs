@@ -161,7 +161,7 @@ impl Data {
     }
 
     fn event_records_rev(&self) -> impl Iterator<Item = &EventRecord> + '_ {
-        self.events_rev().map(|ev| ev.records.iter()).flatten()
+        self.events_rev().flat_map(|ev| ev.records.iter())
     }
 
     fn events_then_records<'a, F, R>(&'a self, mut op: F) -> Option<(R, bool)>
@@ -352,9 +352,9 @@ impl Meta {
     fn fix_current_status(
         &mut self, data: &Data, xrefs: &Xrefs, store: &XrefsStore
     ) {
-        if let Some(status) = xrefs.lines.iter().map(|line| {
+        if let Some(status) = xrefs.lines.iter().flat_map(|line| {
                 line.data(store).current_status_at(data.link)
-            }).filter_map(|x| x).max().map(Into::into)
+            }).max().map(Into::into)
         {
             match self.current.status {
                 Some(current) => {
@@ -447,9 +447,9 @@ impl Event {
     pub fn location(
         &self
     ) -> impl Iterator<Item = (line::Link, Option<&str>)> {
-        self.records.iter().map(|record| {
+        self.records.iter().flat_map(|record| {
             record.properties.location.iter()
-        }).flatten()
+        })
     }
 
     pub fn line_location(
@@ -457,7 +457,7 @@ impl Event {
         line: line::Link,
     ) -> Option<Option<&str>> {
         self.location().find_map(|(link, location)| {
-            (link == line).then(|| location)
+            (link == line).then_some(location)
         })
     }
 
@@ -474,7 +474,7 @@ impl Event {
     fn prop<F: Fn(&EventRecord) -> Option<&T>, T: ?Sized>(
         &self, op: F
     ) -> Option<&T> {
-        self.records.iter().find_map(|record| op(&record))
+        self.records.iter().find_map(op)
     }
 }
 
@@ -697,7 +697,7 @@ impl Properties {
             de_name16: de_name16?,
             category: category?,
             de_rang: de_rang?,
-            superior: superior,
+            superior,
             codes: codes?,
             location: location?,
             staff: staff?,
@@ -734,7 +734,7 @@ impl Properties {
             self.category = Some(value.clone())
         }
         if let Some(value) = other.de_rang.as_ref() {
-            self.de_rang = Some(value.clone())
+            self.de_rang = Some(*value)
         }
         if let Some(value) = other.superior.as_ref() {
             self.superior = Some(value.clone())
@@ -744,22 +744,22 @@ impl Properties {
         self.location.merge(&other.location);
 
         if let Some(value) = other.staff.as_ref() {
-            self.staff = Some(value.clone())
+            self.staff = Some(*value)
         }
         if let Some(value) = other.service.as_ref() {
-            self.service = Some(value.clone())
+            self.service = Some(*value)
         }
         if let Some(value) = other.passenger.as_ref() {
-            self.passenger = Some(value.clone())
+            self.passenger = Some(*value)
         }
         if let Some(value) = other.luggage.as_ref() {
-            self.luggage = Some(value.clone())
+            self.luggage = Some(*value)
         }
         if let Some(value) = other.express.as_ref() {
-            self.express = Some(value.clone())
+            self.express = Some(*value)
         }
         if let Some(value) = other.goods.as_ref() {
-            self.goods = Some(value.clone())
+            self.goods = Some(*value)
         }
     }
 }
@@ -922,7 +922,7 @@ impl Location {
 
     pub fn find(&self, line: line::Link) -> Option<Option<&str>> {
         self.iter().find_map(|(link, value)| {
-            (link == line).then(|| value)
+            (link == line).then_some(value)
         })
     }
 
@@ -1063,9 +1063,9 @@ impl From<Service> for ServiceSet {
 
 impl<'a> From<&'a Properties> for ServiceSet {
     fn from(properties: &'a Properties) -> ServiceSet {
-        let mut res = properties.service.map(|s|
+        let mut res: ServiceSet = properties.service.map(|s|
             s.into_value().into()
-        ).unwrap_or_else(ServiceSet::default);
+        ).unwrap_or_default();
         
         if let Some(rate) = properties.passenger {
             res.passenger = Some(rate.into_value())
@@ -1217,7 +1217,7 @@ impl Codes {
 
     fn merge(&mut self, other: &Self) {
         self.codes.extend(other.codes.iter().map(|item| {
-            (item.0.clone(), item.1.clone())
+            (*item.0, item.1.clone())
         }));
     }
 }

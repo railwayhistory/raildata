@@ -1,4 +1,4 @@
-use std::{borrow, mem};
+use std::borrow;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Bound;
 use std::sync::{Arc, Mutex};
@@ -17,7 +17,7 @@ use crate::types::{IntoMarked, Key, Location, Marked};
 //------------ StoreLoader ---------------------------------------------------
 
 /// The store during loading.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct StoreLoader {
     data: Mutex<Vec<Option<Data>>>,
     keys: Mutex<HashMap<Key, DocumentInfo>>,
@@ -51,11 +51,7 @@ struct DocumentInfo {
 
 impl StoreLoader {
     pub fn new() -> Self {
-        StoreLoader {
-            data: Mutex::new(Vec::new()),
-            keys: Mutex::new(HashMap::new()),
-            failed: AtomicBool::new(false),
-        }
+        StoreLoader::default()
     }
 
     pub fn from_yaml(
@@ -158,10 +154,7 @@ impl StoreLoader {
         info.origin = Some(document.origin().clone());
         info.broken = false;
 
-        let old = mem::replace(
-            &mut self.data.lock().unwrap()[link.index],
-            Some(document)
-        );
+        let old = self.data.lock().unwrap()[link.index].replace(document);
         assert!(old.is_none());
         Ok(())
     }
@@ -242,7 +235,7 @@ impl StoreLoader {
             // If origin is None, we have a missing document. All links are
             // errors.
             if info.origin.is_none() {
-                for &(_, ref origin) in &info.linked_from {
+                for (_, origin) in &info.linked_from {
                     report.error_at(
                         origin.clone(), MissingDocument(key.clone())
                     );
@@ -324,6 +317,10 @@ impl DataStore {
         self.data.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
     pub fn get<Q>(&self, key: &Q) -> Option<DocumentLink>
     where Key: borrow::Borrow<Q>, Q: Ord + ?Sized {
         self.keys.get(key).cloned()
@@ -369,7 +366,7 @@ impl XrefsBuilder {
     }
 
     fn finalize(&mut self, store: &DataStore) {
-        self.xrefs.iter_mut().for_each(|item| item.finalize(&store));
+        self.xrefs.iter_mut().for_each(|item| item.finalize(store));
     }
 
 }
@@ -483,6 +480,10 @@ impl FullStore {
         self.xrefs.data.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.xrefs.data.is_empty()
+    }
+
     pub fn get<Q>(&self, key: &Q) -> Option<DocumentLink>
     where Key: borrow::Borrow<Q>, Q: Ord + ?Sized {
         self.xrefs.data.keys.get(key).cloned()
@@ -550,7 +551,7 @@ impl DocumentLink {
         DocumentLink { index }
     }
 
-    pub fn document(self, store: &FullStore) -> Document {
+    pub fn document(self, store: &FullStore) -> Document<'_> {
         Document::new(self.data(store), self.xrefs(store), self.meta(store))
     }
 

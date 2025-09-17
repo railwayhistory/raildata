@@ -254,8 +254,8 @@ impl LineCode {
         let key = key.as_str();
 
         // Drop "line."
-        let key = if key.starts_with("line.") {
-            &key[5..]
+        let key = if let Some(key) = key.strip_prefix("line.") {
+            key
         }
         else {
             return Self {
@@ -356,7 +356,7 @@ pub struct Points {
 impl Points {
     pub fn iter_documents<'s>(
         &'s self, store: &'s FullStore
-    ) -> impl Iterator<Item = point::Document<'s>> + DoubleEndedIterator + 's {
+    ) -> impl DoubleEndedIterator<Item = point::Document<'s>> + 's {
         self.points.iter().map(move |link| link.document(store))
     }
 
@@ -390,7 +390,7 @@ impl Points {
 
     pub fn index_of(&self, point: PointLink) -> Option<usize> {
         self.points.iter().enumerate().find_map(|(idx, val)| {
-            val.as_value().eq(&point).then(|| idx)
+            val.as_value().eq(&point).then_some(idx)
         })
     }
 
@@ -471,7 +471,7 @@ impl<'a> ops::Deref for PointsContext<'a> {
     type Target = StoreLoader;
 
     fn deref(&self) -> &Self::Target {
-        &self.context
+        self.context
     }
 }
 
@@ -811,7 +811,7 @@ impl Event {
     fn prop<F: Fn(&EventRecord) -> Option<&T>, T>(
         &self, op: F
     ) -> Option<&T> {
-        self.records.iter().find_map(|record| op(&record))
+        self.records.iter().find_map(op)
     }
 }
 
@@ -935,11 +935,8 @@ impl EventRecord {
             }
             Some(contract.into_agreement(AgreementType::Contract))
         }
-        else if let Some(treaty) = treaty {
-            Some(treaty.into_agreement(AgreementType::Treaty))
-        }
         else {
-            None
+            treaty.map(|treaty| treaty.into_agreement(AgreementType::Treaty))
         };
         
         Ok(Self {
@@ -1331,8 +1328,8 @@ impl Section {
         }
         else {
             Ok(Section {
-                start: start,
-                end: end,
+                start,
+                end,
                 start_idx,
                 end_idx,
             })

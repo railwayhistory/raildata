@@ -18,10 +18,10 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
 
     //------------ Data ------------------------------------------------------
 
-    #[derive(Clone, Debug, From)]
+    #[derive(Clone, Debug)]
     pub enum Data {
         $(
-            $vtype(super::$vattr::Data),
+            $vtype(Box<super::$vattr::Data>),
         )*
     }
 
@@ -90,7 +90,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                     DocumentType::$vtype => {
                         super::$vattr::Data::from_yaml(
                             key, doc, link, context, report
-                        ).map(Data::$vtype)
+                        ).map(|res| Data::$vtype(Box::new(res)))
                     }
                 )*
             }
@@ -100,7 +100,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
             match *self {
                 $(
                     Data::$vtype(_) => {
-                        Xrefs::$vtype(super::$vattr::Xrefs::default())
+                        Xrefs::$vtype(super::$vattr::Xrefs::default().into())
                     }
                 )*
             }
@@ -147,13 +147,21 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
         }
     }
 
+    $(
+        impl From<super::$vattr::Data> for Data {
+            fn from(src: super::$vattr::Data) -> Self {
+                Self::$vtype(Box::new(src))
+            }
+        }
+    )*
+
 
     //------------ Xrefs -----------------------------------------------------
 
     #[derive(Clone, Debug, From)]
     pub enum Xrefs {
         $(
-            $vtype(super::$vattr::Xrefs),
+            $vtype(Box<super::$vattr::Xrefs>),
         )*
     }
 
@@ -183,7 +191,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
     #[derive(Clone, Debug, From)]
     pub enum Meta {
         $(
-            $vtype(super::$vattr::Meta),
+            $vtype(Box<super::$vattr::Meta>),
         )*
     }
 
@@ -201,7 +209,7 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                             &mut report.clone().with_path(
                                 inner.origin().path().clone()
                             ),
-                        ).map(Meta::$vtype)
+                        ).map(|meta| Meta::$vtype(meta.into()))
                     }
                 )*
             }
@@ -261,9 +269,9 @@ macro_rules! document { ( $( ($vattr:ident, $vtype:ident,
                 }
             }
 
-            pub fn document(
-                self, store: &FullStore,
-            ) -> super::$vattr::Document {
+            pub fn document<'a>(
+                self, store: &'a FullStore,
+            ) -> super::$vattr::Document<'a> {
                 match self.0.document(store) {
                     Document::$vtype(inner) => inner,
                     _ => panic!("link to wrong document type")
