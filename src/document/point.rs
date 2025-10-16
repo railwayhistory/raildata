@@ -801,8 +801,8 @@ data_enum! {
         { DeRBGr: "de.RBGr" }
 
         { DkB: "dk.B" }         // Billetssalgssted
-        { DkH: "dk.H" }         // Holdeplads
         { DkGr: "dk.Gr" }       // Grænse
+        { DkH: "dk.H" }         // Holdeplads
         { DkSmd: "dk.Smd" }     // Sidespor med dækningssignal
         { DkSud: "dk.Sud" }     // Sidespor uden dækningssignal
         { DkSt: "dk.St" }       // Station
@@ -867,6 +867,7 @@ impl Category {
 
             DkB => "B",
             DkGr => "Gr",
+            DkH => "H",
             DkSmd => "Smd",
             DkSud => "Sud",
             DkSt => "St",
