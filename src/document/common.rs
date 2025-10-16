@@ -40,7 +40,7 @@ impl Common {
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         Ok(Common {
-            key: key,
+            key,
             progress: doc.take_default("progress", context, report)?,
             origin: Origin::new(report.path().clone(), doc.location()),
         })
@@ -162,11 +162,8 @@ impl FromYaml<StoreLoader> for Basis {
             }
             Some(contract.into_agreement(AgreementType::Contract))
         }
-        else if let Some(treaty) = treaty {
-            Some(treaty.into_agreement(AgreementType::Treaty))
-        }
         else {
-            None
+            treaty.map(|treaty| treaty.into_agreement(AgreementType::Treaty))
         };
 
         Ok(Basis {

@@ -274,8 +274,7 @@ impl Value {
     }
 
     pub fn is_null(&self) -> bool {
-        if let Value::Scalar(Scalar::Null(_)) = *self { true }
-        else { false }
+        matches!(*self, Value::Scalar(Scalar::Null(_)))
     }
 
     pub fn try_into_boolean(self) -> Result<Marked<bool>, Self> {
@@ -367,7 +366,7 @@ impl Mapping {
                 return
             }
         };
-        if self.items.iter().find(|item| item.0 == key).is_some() {
+        if self.items.iter().any(|item| item.0 == key) {
             self.errors.push(
                 ValueError::DuplicateMappingKey.marked(
                     key.location()
@@ -433,7 +432,7 @@ impl Mapping {
         let mut failed = self.check(report).is_err();
         for (key, value) in self.items.into_iter() {
             if value.is_some() {
-                report.error(key.map(|key| UnexpectedKey(key)));
+                report.error(key.map(UnexpectedKey));
                 failed = true;
             }
         }
@@ -464,6 +463,7 @@ impl Mapping {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn into_iter(self) -> impl Iterator<Item = (Marked<String>, Value)> {
         self.items.into_iter().filter_map(|(key, value)| {
             value.map(|value| (key, value))
@@ -574,18 +574,18 @@ impl Scalar {
         }
         else {
             // Untagged plain: Follow rules of core schema.
-            if value.starts_with("0x") {
-                if let Ok(n) = i64::from_str_radix(&value[2..], 16) {
+            if let Some(value) = value.strip_prefix("0x") {
+                if let Ok(n) = i64::from_str_radix(value, 16) {
                     return Ok(Scalar::Integer(n.marked(location)));
                 }
             }
-            if value.starts_with("0o") {
-                if let Ok(n) = i64::from_str_radix(&value[2..], 8) {
+            if let Some(value) = value.strip_prefix("0o") {
+                if let Ok(n) = i64::from_str_radix(value, 8) {
                     return Ok(Scalar::Integer(n.marked(location)));
                 }
             }
-            if value.starts_with('+') {
-                if let Ok(n) = value[1..].parse::<i64>() {
+            if let Some(value) = value.strip_prefix('+') {
+                if let Ok(n) = value.parse::<i64>() {
                     return Ok(Scalar::Integer(n.marked(location)));
                 }
             }
@@ -729,8 +729,8 @@ impl<C> FromYaml<C> for Marked<u8> {
         report: &mut PathReporter
     ) -> Result<Self, Failed> {
         value.into_integer(report)?.try_map(|int| {
-            if int < 0 || int > ::std::u8::MAX as i64 {
-                Err(RangeError::new(0, ::std::u8::MAX as i64, int))
+            if int < 0 || int > u8::MAX as i64 {
+                Err(RangeError::new(0, u8::MAX as i64, int))
             }
             else {
                 Ok(int as u8)

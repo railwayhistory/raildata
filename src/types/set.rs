@@ -80,7 +80,7 @@ impl<T: Hash + Eq> Set<T> {
         }
     }
 
-    pub fn iter(&self) -> Iter<T> {
+    pub fn iter(&self) -> Iter<'_, T> {
         Iter::new(self)
     }
 
@@ -155,9 +155,9 @@ impl<T: Hash + Eq> PartialEq for Set<T> {
         use self::Inner::*;
 
         match (&self.inner, &other.inner) {
-            (&Empty, &Empty) => true,
-            (&One(ref left), &One(ref right)) => left.eq(right),
-            (&Many(ref left), &Many(ref right)) => left.eq(right),
+            (Empty, Empty) => true,
+            (One(left), One(right)) => left.eq(right),
+            (Many(left), Many(right)) => left.eq(right),
             _ => false,
         }
     }

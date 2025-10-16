@@ -105,7 +105,7 @@ static UTF8_CHAR_WIDTH: [u8; 256] = [
 /// Given a first byte, determines how many bytes are in this UTF-8 character.
 #[inline]
 fn utf8_char_width(b: u8) -> usize {
-    return UTF8_CHAR_WIDTH[b as usize] as usize;
+    UTF8_CHAR_WIDTH[b as usize] as usize
 }
 
 

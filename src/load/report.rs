@@ -191,7 +191,7 @@ impl Notice {
         self.origin.as_ref()
     }
 
-    pub fn message(&self) -> &Box<dyn Message> {
+    pub fn message(&self) -> &dyn Message {
         &self.message
     }
 }
@@ -211,6 +211,7 @@ impl Display for Notice {
 //------------ Report --------------------------------------------------------
 
 /// A report is a collection of notices.
+#[derive(Default)]
 pub struct Report {
     notices: Vec<Notice>,
     stage_count: [usize; 4],
@@ -218,10 +219,7 @@ pub struct Report {
 
 impl Report {
     pub fn new() -> Self {
-        Report {
-            notices: Vec::new(),
-            stage_count: [0; 4],
-        }
+        Self::default()
     }
 
     pub fn notice(&mut self, notice: Notice) {
@@ -257,16 +255,14 @@ impl ops::Deref for Report {
 ///
 /// This type doesn’t allow adding notices to the report just yet. You need
 /// to convert it into a `StageReporter` first.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Reporter {
     report: Arc<Mutex<Report>>,
 }
 
 impl Reporter {
     pub fn new() -> Self {
-        Reporter {
-            report: Arc::new(Mutex::new(Report::new()))
-        }
+        Self::default()
     }
 
     /// Unwraps the report from the reporter.

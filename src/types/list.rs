@@ -98,11 +98,11 @@ impl<T> List<T> {
         }
     }
 
-    pub fn iter(&self) -> Iter<T> {
+    pub fn iter(&self) -> Iter<'_, T> {
         Iter::new(self)
     }
 
-    pub fn iter_mut(&mut self) -> IterMut<T> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, T> {
         IterMut::new(self)
     }
 
@@ -155,7 +155,7 @@ impl<T> List<T> {
     }
 
     /// Returns an iterator if there are at least two items in the list.
-    pub fn many(&self) -> Option<Iter<T>> {
+    pub fn many(&self) -> Option<Iter<'_, T>> {
         if matches!(self.inner, Inner::Many(_)) {
             Some(self.iter())
         }
@@ -173,10 +173,7 @@ impl<T> Default for List<T> {
 
 impl<T> From<Option<List<T>>> for List<T> {
     fn from(list: Option<List<T>>) -> Self {
-        match list {
-            Some(list) => list,
-            None => List::default()
-        }
+        list.unwrap_or_default()
     }
 }
 
@@ -258,9 +255,9 @@ impl<T: PartialEq> PartialEq for List<T> {
         use self::Inner::*;
 
         match (&self.inner, &other.inner) {
-            (&Empty, &Empty) => true,
-            (&One(ref left), &One(ref right)) => left.eq(right),
-            (&Many(ref left), &Many(ref right)) => left.eq(right),
+            (Empty, Empty) => true,
+            (One(left), One(right)) => left.eq(right),
+            (Many(left), Many(right)) => left.eq(right),
             _ => false,
         }
     }
