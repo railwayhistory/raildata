@@ -1582,6 +1582,7 @@ impl Electrified {
             "de.hmb"  => Rail, 1200, Dc;
             "de.hmb-alt" => Ole, 6300, Ac25;
             "dk"      => Ole, 25000, Ac50;
+            "dk.s"    => Ole, 1650, Dc;
             "ee.ac"   => Ole, 25000, Ac50;
             "ee.dc"   => Ole,  3000, Dc;
             "fi"      => Ole, 25000, Ac50;
