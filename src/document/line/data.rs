@@ -1603,6 +1603,7 @@ impl Electrified {
             "ru"      => Ole,  3000, Dc;
             "se"      => Ole, 15000, Ac16;
             "se.15"   => Ole,  1500, Dc;
+            "se.60"   => Ole,   600, Dc;
             "se.75"   => Ole,   750, Dc;
             "si"      => Ole,  3000, Dc;
         );
