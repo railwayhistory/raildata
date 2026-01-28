@@ -807,6 +807,7 @@ data_enum! {
         { DkSud: "dk.Sud" }     // Sidespor uden dækningssignal
         { DkSt: "dk.St" }       // Station
         { DkT: "dk.T" }         // Trinbræt
+        { DkTms: "dk.Tms" }     // Trinbræt med sidespor
         { DkTs: "dk.Ts" }       // Teknisk station
         { DkVm: "dk.VM" }       // VM-station
 
@@ -872,6 +873,7 @@ impl Category {
             DkSud => "Sud",
             DkSt => "St",
             DkT => "T",
+            DkTms => "Tms",
             DkTs => "Ts",
             DkVm => "VM",
 
